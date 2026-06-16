@@ -1,0 +1,10 @@
+1. From Claude:
+
+Key Livewire 4 differences from the v3 plan
+
+  - Single-file components are the default (make:livewire generates one .blade.php with
+  an inline anonymous class), not separate class + view.
+  - Full-page routing uses the Route::livewire('/uri', 'name') macro, since SFCs have
+  no addressable class.
+  - Layout location must be resources/views/layouts/app.blade.php (the layouts::app
+  namespace), not components/layouts/ — this was the one snag I hit and fixed.
