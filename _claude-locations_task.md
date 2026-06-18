@@ -10,7 +10,7 @@ before proceeding.
 1. Check that you can connect to the 'vision_summit' database.
 
 2. Read the table structures from 'vision_summit' for ONLY these tables:
-   Province, DistrictMunicipality, LocalMunicipality, City, UrbanPlace, Location
+   Province, DistrictMunicipality, LocalMunicipality, City, UrbanPlace, CoordinateData, Location
 
 3. Create Laravel migrations for 'platform2027' with proper naming:
    Province             → provinces
@@ -18,6 +18,7 @@ before proceeding.
    LocalMunicipality    → local_municipalities
    City                 → cities
    UrbanPlace           → urban_places (suburbs of large cities)
+   CoordinateData       → coordinate_data
    Location             → locations
 
    Locations belong to:
@@ -34,14 +35,16 @@ before proceeding.
     - ClassName: exclude this field entirely
     - LastEdited → updated_at (fill with current datetime)
     - Created → created_at (fill with current datetime)
+    - Exclude these fields from Location: Count,SubsiteID,Demo,DemoCount
 
    Migration order (to respect foreign key constraints):
     1. provinces
     2. district_municipalities
-    3. local_municipalities
-    4. cities
+    3. locations
+    4. local_municipalities
+    5. cities
     5. urban_places
-    6. locations
+   
 
 4. Create Eloquent models for each table in app/Models/Demography
 
