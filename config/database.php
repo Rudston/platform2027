@@ -64,6 +64,20 @@ return [
             ]) : [],
         ],
 
+        'vision_summit' => [
+            'driver'   => 'mysql',
+            'host'     => env('DB_VISION_HOST', 'localhost'),
+            'port'     => env('DB_VISION_PORT', '8889'),
+            'database' => env('DB_VISION_DATABASE', 'vision_summit'),
+            'username' => env('DB_VISION_USERNAME', 'root'),
+            'password' => env('DB_VISION_PASSWORD', 'password'),
+            'charset'  => 'utf8mb4',
+            'collation'=> 'utf8mb4_unicode_ci',
+            'prefix'   => '',
+            'strict'   => true,
+            'engine'   => null,
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),
