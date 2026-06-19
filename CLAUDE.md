@@ -96,6 +96,38 @@ Critical constraints when touching this import:
 - `created_at`/`updated_at` are set to `now()` at import time (legacy `Created`/`LastEdited` are intentionally not carried over).
 - Requires the MAMP MySQL (`vision_summit`) to be running. The import is **read-only** against `vision_summit`.
 
+## Circles & Services
+
+A **Circle** is a polymorphic, self-nesting collaborative container that wraps any *community* type (Organisation, LocationCommunity, ThemeCommunity, Campaign, Course). A **Service** is a functional module (e.g. Manage Events) that Circles attach via a many-to-many pivot.
+
+**Tables** (migrations `2026_06_19_000001`–`000003`, run & live):
+- `circles` — `morphs('circleable')` owner, self-ref `parent_id`, `depth`, `path` (materialised path)
+- `services` — `name`, unique `key`, `handler_class`, `is_active`
+- `circle_service` — pivot with `config` (json), `is_active`, unique `(circle_id, service_id)`
+
+**Key classes:**
+| File | Role |
+|------|------|
+| `app/Models/Circles/Circle.php` | morphTo `circleable`, `parent`/`children`, `services` (m2m), `ancestors()`/`descendants()`, `isNestedIn()` |
+| `app/Models/Circles/Service.php` | `circles` (m2m) |
+| `app/Contracts/Circleable.php` | contract for circle-owning models |
+| `app/Contracts/CircleServiceContract.php` | contract for service handlers (`boot`, `getKey`, `getPermissions`) |
+| `app/Traits/HasCircle.php` | implements `Circleable`; gives a model `circle()`, `hasService()`, `defaultServices()`, `isNestedIn()` |
+| `app/Models/Communities/*.php` | Organisation, Campaign, Course, LocationCommunity, ThemeCommunity — each `implements Circleable` + `use HasCircle` |
+| `app/Services/Circles/*.php` | 9 `CircleServiceContract` handler stubs |
+
+**How the hierarchy works** (`Circle::booted()`):
+- On `creating`: `depth = parent->depth + 1`.
+- On `created`: `path` is set to `parent->path . '/' . id` (or `(string) id` for a root), then `saveQuietly()`. Nesting queries rely on this path — `isNestedIn()` is `str_starts_with($this->path, $circle->path.'/')`, `descendants()` is a `path LIKE "{path}/%"` query, `ancestors()` parses the path ids.
+- Also on `created`: the owner's `defaultServices()` (array of service **keys**) are attached to the new circle. **Currently every community returns `[]`**, so nothing auto-attaches — override `defaultServices()` per community model to change this.
+
+**Seeding services:** `database/seeders/Circles/ServicesSeeder.php` populates all 9 services (idempotent via `updateOrCreate` on `key`; `handler_class` set via `::class`). Run with:
+```bash
+php artisan db:seed --class="Database\Seeders\Circles\ServicesSeeder"
+```
+
+**⚠️ Community tables are minimal and PENDING.** Migrations `2026_06_19_000004`–`000008` create `organisations`, `campaigns`, `courses`, `location_communities`, `theme_communities` with **only `id` + `timestamps`** (no `name` or relations yet) — and as of writing they have **not been run** (`migrate:status` shows them Pending). Until they're migrated, creating a `Circle` whose `circleable` is a community model **throws** (the `created` hook resolves `circleable`, hitting a missing table). The community models have no `$table` override and rely on Laravel's inferred names (`Organisation` → `organisations`, `ThemeCommunity` → `theme_communities`, etc.).
+
 ## Environment gotcha
 
 Because the committed `.env` sets `SESSION_DRIVER=database` against MySQL on `localhost:8889`, if that MAMP MySQL is not running **every browser request 500s** in `StartSession` middleware before any view renders — this looks like an app bug but is purely the unreachable DB. To view pages locally without MAMP, start MySQL or set `SESSION_DRIVER=file` in `.env`.
