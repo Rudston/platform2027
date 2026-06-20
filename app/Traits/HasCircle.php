@@ -33,4 +33,19 @@ trait HasCircle
     {
         return $this->circle->isNestedIn($circle);
     }
+
+    /**
+     * Run a callback within this model's circle (team) permission context,
+     * resetting the team context afterwards.
+     */
+    public function withCirclePermissions(callable $callback): mixed
+    {
+        setPermissionsTeamId($this->circle->id);
+
+        $result = $callback();
+
+        setPermissionsTeamId(null); // reset after
+
+        return $result;
+    }
 }

@@ -128,6 +128,30 @@ php artisan db:seed --class="Database\Seeders\Circles\ServicesSeeder"
 
 **⚠️ Community tables are minimal and PENDING.** Migrations `2026_06_19_000004`–`000008` create `organisations`, `campaigns`, `courses`, `location_communities`, `theme_communities` with **only `id` + `timestamps`** (no `name` or relations yet) — and as of writing they have **not been run** (`migrate:status` shows them Pending). Until they're migrated, creating a `Circle` whose `circleable` is a community model **throws** (the `created` hook resolves `circleable`, hitting a missing table). The community models have no `$table` override and rely on Laravel's inferred names (`Organisation` → `organisations`, `ThemeCommunity` → `theme_communities`, etc.).
 
+## Roles & Permissions (spatie/laravel-permission, teams mode)
+
+Uses **`spatie/laravel-permission` with teams enabled**, where the **team key is `circle_id`** — i.e. a role can be assigned to a user *globally* or *scoped to a specific Circle*. Config in `config/permission.php`: `'teams' => true`, `'column_names.team_foreign_key' => 'circle_id'`. `App\Models\User` uses the `HasRoles` trait.
+
+**Roles** (seeded by `database/seeders/RolesAndPermissionsSeeder.php`, all defined with `circle_id = null` so they're reusable in any context):
+- **Global** (assigned with no team context): `new_user, full_member, curator, trainer, admin, superadmin`
+- **Circle** (assigned within a circle's team context): `circle_admin, circle_full_member, circle_visitor`
+
+Run the seeder with:
+```bash
+php artisan db:seed --class="Database\Seeders\RolesAndPermissionsSeeder"
+```
+
+**The team-context rule — this is the easy thing to get wrong:**
+- A **global** assignment needs **no** team context: `$user->assignRole('admin')` (with `setPermissionsTeamId(null)`, which is the default).
+- A **circle-scoped** assignment needs the team id set first: `setPermissionsTeamId($circle->id)` → `$user->assignRole('circle_admin')` → **reset with `setPermissionsTeamId(null)`**.
+- Always reset the team context after a scoped operation, or later global calls silently inherit the stale circle id.
+
+**Two helpers exist so you rarely call `setPermissionsTeamId()` by hand:**
+- `App\Services\Circles\CircleMembershipService::assignCircleRole(User $user, Circle $circle, string $role)` — sets team context, clears any existing circle role for that circle, assigns the new one, resets context.
+- `HasCircle::withCirclePermissions(callable $cb)` — runs a callback inside the model's circle context and resets afterward: `$organisation->withCirclePermissions(fn () => $user->assignRole('circle_admin'))`.
+
+**⚠️ Custom pivot schema — do not re-run the stock spatie migration over this.** Spatie's teams migration makes `circle_id` **`NOT NULL`** on `model_has_roles` / `model_has_permissions`, which **breaks global assignment** (`assignRole('admin')` with a null team id fails the constraint). A follow-up migration (`2026_06_20_140000_make_circle_id_nullable_on_permission_pivots`) fixes this by making `circle_id` **nullable** on both pivots. Because a MySQL `PRIMARY KEY` cannot contain a nullable column, it **drops the composite PKs and rebuilds them as UNIQUE indexes** (`model_has_roles_role_model_type_unique`, `model_has_permissions_permission_model_type_unique`) over the same columns. Side effect: MySQL treats `NULL`s as distinct in a unique index, so the DB won't block a duplicate *global* assignment — spatie prevents that at the application layer.
+
 ## Environment gotcha
 
 Because the committed `.env` sets `SESSION_DRIVER=database` against MySQL on `localhost:8889`, if that MAMP MySQL is not running **every browser request 500s** in `StartSession` middleware before any view renders — this looks like an app bug but is purely the unreachable DB. To view pages locally without MAMP, start MySQL or set `SESSION_DRIVER=file` in `.env`.
