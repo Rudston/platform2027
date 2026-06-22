@@ -98,7 +98,7 @@ Critical constraints when touching this import:
 
 ## Circles & Services
 
-A **Circle** is a polymorphic, self-nesting collaborative container that wraps any *community* type (Organisation, LocationCommunity, ThemeCommunity, Campaign, Course). A **Service** is a functional module (e.g. Manage Events) that Circles attach via a many-to-many pivot.
+A **Circle** is a polymorphic, self-nesting collaborative container that wraps any *community* type (Organisation, Campaign, Course, Event, LocationCommunity, ThemeCommunity). A **Service** is a functional module (e.g. Manage Events) that Circles attach via a many-to-many pivot.
 
 **Tables** (migrations `2026_06_19_000001`–`000003`, run & live):
 - `circles` — `morphs('circleable')` owner, self-ref `parent_id`, `depth`, `path` (materialised path)
@@ -110,23 +110,41 @@ A **Circle** is a polymorphic, self-nesting collaborative container that wraps a
 |------|------|
 | `app/Models/Circles/Circle.php` | morphTo `circleable`, `parent`/`children`, `services` (m2m), `ancestors()`/`descendants()`, `isNestedIn()` |
 | `app/Models/Circles/Service.php` | `circles` (m2m) |
-| `app/Contracts/Circleable.php` | contract for circle-owning models |
+| `app/Contracts/Circleable.php` | contract for circle-owning models (`circle`, `hasService`, `isNestedIn`, `getCircleName`, `getCircleDescription`) |
 | `app/Contracts/CircleServiceContract.php` | contract for service handlers (`boot`, `getKey`, `getPermissions`) |
-| `app/Traits/HasCircle.php` | implements `Circleable`; gives a model `circle()`, `hasService()`, `defaultServices()`, `isNestedIn()` |
-| `app/Models/Communities/*.php` | Organisation, Campaign, Course, LocationCommunity, ThemeCommunity — each `implements Circleable` + `use HasCircle` |
+| `app/Traits/HasCircle.php` | implements `Circleable`; gives a model `circle()`, `hasService()`, `defaultServices()`, `isNestedIn()`, `withCirclePermissions()`, `getCircleName()`/`getCircleDescription()` |
+| `app/Enums/CommunityType.php` | string enum mapping each community type → its model FQCN (`->value` / `->modelClass()`) |
+| `app/Services/Circles/CircleCreationService.php` | **the entry point** for creating a community + its Circle (see below) |
+| `app/Models/Communities/*.php` | Organisation, Campaign, Course, Event, LocationCommunity, ThemeCommunity — each `implements Circleable` + `use HasCircle` |
 | `app/Services/Circles/*.php` | 9 `CircleServiceContract` handler stubs |
 
+**Adding a new community type** requires three things in lockstep: a model in `app/Models/Communities/` (`implements Circleable` + `use HasCircle`), a matching `case` in `CommunityType`, and its table migration (e.g. `Event` → `events`). Models have no `$table` override — they rely on Laravel's inferred names.
+
 **How the hierarchy works** (`Circle::booted()`):
-- On `creating`: `depth = parent->depth + 1`.
+- On `creating`: `depth = parent->depth + 1`; and if `name` is blank, it is auto-populated from `circleable->getCircleName()` (+ `getCircleDescription()`). This is why a circle's `circleable_type` **must** be set at create time — see the gotcha below.
 - On `created`: `path` is set to `parent->path . '/' . id` (or `(string) id` for a root), then `saveQuietly()`. Nesting queries rely on this path — `isNestedIn()` is `str_starts_with($this->path, $circle->path.'/')`, `descendants()` is a `path LIKE "{path}/%"` query, `ancestors()` parses the path ids.
-- Also on `created`: the owner's `defaultServices()` (array of service **keys**) are attached to the new circle. **Currently every community returns `[]`**, so nothing auto-attaches — override `defaultServices()` per community model to change this.
+- Also on `created`: the owner's `defaultServices()` (array of service **keys**) are attached to the new circle. **This hook is the SINGLE owner of default-service attachment** — do not also attach in callers (a duplicate `attach` would hit the `unique(circle_id, service_id)` constraint). **Currently every community returns `[]`**, so nothing auto-attaches — override `defaultServices()` per community model to change this.
+
+**Creating circles — use `CircleCreationService::create()`:**
+```php
+app(CircleCreationService::class)->create(
+    type: CommunityType::Event,
+    data: ['name' => 'Launch Rally', 'description' => '...'],
+    parentCircle: $optionalParent,
+);
+```
+It creates the community row, then the `Circle` (whose `booted()` hook fills name/description + attaches default services). **Two gotchas that previously broke this** (now fixed — keep them in mind):
+- `Circle::$fillable` **must** include `circleable_id` and `circleable_type`. Because the model sets `$fillable`, it overrides `$guarded = []`; if the morph columns are missing they're silently dropped on `Circle::create([...])`, leaving `circleable_type` null → name can't populate → NOT NULL failure.
+- Pass `$type->value` (the FQCN string), **not** the `CommunityType` enum instance, as `circleable_type` — a raw enum object breaks morph resolution.
 
 **Seeding services:** `database/seeders/Circles/ServicesSeeder.php` populates all 9 services (idempotent via `updateOrCreate` on `key`; `handler_class` set via `::class`). Run with:
 ```bash
 php artisan db:seed --class="Database\Seeders\Circles\ServicesSeeder"
 ```
 
-**⚠️ Community tables are minimal and PENDING.** Migrations `2026_06_19_000004`–`000008` create `organisations`, `campaigns`, `courses`, `location_communities`, `theme_communities` with **only `id` + `timestamps`** (no `name` or relations yet) — and as of writing they have **not been run** (`migrate:status` shows them Pending). Until they're migrated, creating a `Circle` whose `circleable` is a community model **throws** (the `created` hook resolves `circleable`, hitting a missing table). The community models have no `$table` override and rely on Laravel's inferred names (`Organisation` → `organisations`, `ThemeCommunity` → `theme_communities`, etc.).
+**Community tables** (`organisations`, `campaigns`, `courses`, `location_communities`, `theme_communities`, `events`) each hold `id`, `name`, `description` (nullable), `timestamps` — minimal, no relations to other entities yet. The original five (`2026_06_19_000004`–`000008`) are migrated; `events` (`2026_06_22_000001`) is migrated too.
+
+**⚠️ Migration hold:** the user has asked that **Claude not run community-table migrations** on their behalf — they run them manually. When invoking `php artisan migrate`, scope it (e.g. `--path=`) so any pending community migration is not applied as a side effect.
 
 ## Roles & Permissions (spatie/laravel-permission, teams mode)
 

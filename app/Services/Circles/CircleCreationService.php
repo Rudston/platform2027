@@ -14,7 +14,6 @@
 namespace App\Services\Circles;
 
 use App\Models\Circles\Circle;
-use App\Models\Circles\Service;
 use Illuminate\Support\Facades\DB;
 use App\Enums\CommunityType;
 
@@ -30,18 +29,14 @@ class CircleCreationService
             $modelClass = $type->modelClass();
             $community  = app($modelClass)->create($data);
 
-            // 2. Create its Circle (name/description auto-populated
-            //    from getCircleName() via booted())
+            // 2. Create its Circle. Circle::booted() auto-populates
+            //    name/description from getCircleName() and attaches the
+            //    owner's defaultServices() — so we do NOT re-attach here.
             $circle = Circle::create([
                 'circleable_id'   => $community->id,
-                'circleable_type' => $type,
+                'circleable_type' => $type->value,
                 'parent_id'       => $parentCircle?->id,
             ]);
-
-            // 3. Attach default services automatically
-            $serviceIds = Service::whereIn('key', $community->defaultServices())
-                ->pluck('id');
-            $circle->services()->attach($serviceIds, ['is_active' => true]);
 
             return $circle;
         });

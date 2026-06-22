@@ -23,6 +23,8 @@ class Circle extends Model
         'parent_id',
         'depth',
         'path',
+        'circleable_id',
+        'circleable_type',
     ];
 
     /*
