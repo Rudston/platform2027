@@ -6,18 +6,26 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
-        Schema::create('theme_communities', function (Blueprint $table) {
+        Schema::create('main_places', function (Blueprint $table) {
             $table->id();
+            $table->string('code');
+            $table->string('stats_sa_code');
             $table->string('name');
-            $table->text('description')->nullable();
+            $table->integer('population');
             $table->timestamps();
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
-        Schema::dropIfExists('theme_communities');
+        Schema::dropIfExists('main_places');
     }
 };

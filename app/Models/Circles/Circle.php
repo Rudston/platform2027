@@ -17,6 +17,14 @@ class Circle extends Model
         'depth' => 'integer',
     ];
 
+    protected $fillable = [
+        'name',
+        'description',
+        'parent_id',
+        'depth',
+        'path',
+    ];
+
     /*
     |--------------------------------------------------------------------------
     | Relationships
@@ -99,6 +107,10 @@ class Circle extends Model
         static::creating(function (Circle $circle) {
             if ($circle->parent_id && $parent = static::find($circle->parent_id)) {
                 $circle->depth = $parent->depth + 1;
+            }
+            if (!$circle->name && $circle->circleable) {
+                $circle->name = $circle->circleable->getCircleName();
+                $circle->description = $circle->circleable->getCircleDescription();
             }
         });
 

@@ -48,4 +48,14 @@ trait HasCircle
 
         return $result;
     }
+
+    public function getCircleName(): string
+    {
+        return $this->name ?? class_basename($this) . ' Circle';
+    }
+
+    public function getCircleDescription(): string
+    {
+        return $this->description ?? '';
+    }
 }

@@ -1,0 +1,24 @@
+Data from Adrian Frith:
+
+https://stuff.adrianfrith.com/
+
+Surprisingly useful for this. The Wikipedia page for each South African province lists all municipalities with both their MDB codes and Stats SA codes in a clean table:
+Search: "Local municipalities of Western Cape" etc. for each province — the tables are scrapable or copy-pasteable directly.
+
+Most reliable data source — OpenAfrica:
+africaopendata.org or data.humdata.org
+Search "South Africa municipalities" — these humanitarian data platforms often have clean CSVs of SA municipal data with multiple code systems already joined, specifically because NGOs and researchers face exactly your problem.
+
+South African Government data portal:
+data.gov.za
+Search "municipal codes" or "demarcation" — Statistics SA publishes boundary and code correspondence files here in non-shapefile formats.
+
+====
+Solving the mapping stats sa municipal code in main places  -> municipal demarcation board code:
+
+"The root problem was that Stats SA municipal numeric codes have no consistent mathematical relationship to MDB alphanumeric codes — they're two completely independent classification systems.
+The only reliable solution was always going to be an authoritative crosswalk file,
+which turned out to be hiding in MN_SA_2011.dbf all along.
+===
+Note: urban_places might be irrelevant - they are all contained in the main_places where the
+ code is a city code like CPT.
