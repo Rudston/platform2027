@@ -49,7 +49,7 @@ Test Livewire components with `Livewire::test('component-name')->call('method')-
 
 ## Databases
 
-The app uses **two separate MySQL connections**, both defined in `config/database.php` and pointed at a MAMP instance on `localhost:8889` by the committed `.env`:
+The app uses **two separate MySQL connections**, both defined in `config/database.php` and served by the local **MAMP MySQL**:
 
 | Connection | Database | Env prefix | Role |
 |------------|----------|------------|------|
@@ -62,17 +62,21 @@ Other contexts use different drivers:
 - **Tests**: `phpunit.xml` overrides to `DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:`, `SESSION_DRIVER=array` — no MySQL needed, which is why tests pass even when the browser 500s.
 - **`.env.example`**: defaults to `DB_CONNECTION=sqlite` (a `database/database.sqlite` file exists), diverging from the committed `.env`'s MySQL setup.
 
+**⚠️ Connecting from the CLI — the socket / port gotcha.** MAMP MySQL actually listens on a Unix **socket** and on **TCP 3306** (not 8889). With `DB_HOST=localhost`, PHP connects via the **socket and ignores `DB_PORT`** entirely — so the committed `DB_PORT=8889` is effectively unused and misleading (`localhost` ≠ TCP). The browser app works because MAMP's PHP knows MAMP's socket, but `php artisan` from a normal terminal uses a *different* default socket and fails with `MySQL server has gone away`. **Fix in place:** `.env` sets `DB_SOCKET=/Applications/MAMP/tmp/mysql/mysql.sock`, which points both connections at MAMP's server (a set `DB_SOCKET` overrides host/port). `.env` is gitignored, so set this locally if connecting via a fresh checkout. Alternative: `DB_HOST=127.0.0.1` + `DB_PORT=3306` to force TCP.
+
 ## Demography (South African geography data)
 
 A geography hierarchy imported from the legacy `vision_summit` database into `platform2027`. Models live in `app/Models/Demography/` (namespace `App\Models\Demography`).
 
 | Model | Table | Belongs to | Has many |
 |-------|-------|------------|----------|
-| `Province` | `provinces` | — | districtMunicipalities, localMunicipalities, cities |
+| `Country` | `countries` | — | provinces |
+| `Province` | `provinces` | **country** | districtMunicipalities, localMunicipalities, cities |
 | `DistrictMunicipality` | `district_municipalities` | province, **mainCity** (`main_city_id`) | cities, localMunicipalities |
-| `LocalMunicipality` | `local_municipalities` | province, districtMunicipality | — |
-| `City` | `cities` | province, districtMunicipality | urbanPlaces |
+| `LocalMunicipality` | `local_municipalities` | province, districtMunicipality | **mainPlaces** |
+| `City` | `cities` | province, districtMunicipality | urbanPlaces, **mainPlaces** |
 | `UrbanPlace` | `urban_places` | city | — |
+| `MainPlace` | `main_places` | localMunicipality, city | — |
 | `CoordinateData` | `coordinate_data` | province *(loose, no FK constraint)* | — |
 
 Notes on the schema:
@@ -80,6 +84,8 @@ Notes on the schema:
 - **Circular FK** between `cities` and `district_municipalities` (a city belongs to a district; a district has a main city) is resolved by adding `main_city_id` in a *separate later migration* (`..._add_main_city_to_district_municipalities_table`) after `cities` exists. Replicate this split-migration pattern for any future circular FK.
 - All FK columns are **nullable** to tolerate the legacy `0` sentinel (converted to `NULL` on import).
 - The legacy `Location` table and its `ClassName` columns were deliberately **excluded**; do not reintroduce them without reason.
+- **`main_places`** (~14k rows) links to `local_municipalities` and `cities` by **matching `code`** (codes are unique in both). The `local_municipality_id` / `city_id` FKs are populated by a one-off command **after** the columns migration: `php artisan demography:link-main-places` (`app/Console/Commands/LinkMainPlaces.php`, uses `UPDATE … JOIN` on `code`, idempotent). Every place matches exactly one — 13,390 local-muni, 649 city, 0 both, 0 unlinked.
+- **`countries`** was imported externally (no Laravel migration). The `Country` model sets `$timestamps = false` (the table has none). `provinces.country_id` was added by migration and backfilled to **191** (South Africa) for all rows — no permanent column default, so future provinces must set it explicitly.
 
 ### Re-importing from vision_summit
 
@@ -172,4 +178,4 @@ php artisan db:seed --class="Database\Seeders\RolesAndPermissionsSeeder"
 
 ## Environment gotcha
 
-Because the committed `.env` sets `SESSION_DRIVER=database` against MySQL on `localhost:8889`, if that MAMP MySQL is not running **every browser request 500s** in `StartSession` middleware before any view renders — this looks like an app bug but is purely the unreachable DB. To view pages locally without MAMP, start MySQL or set `SESSION_DRIVER=file` in `.env`.
+Because the committed `.env` sets `SESSION_DRIVER=database` against the MAMP MySQL, if that server is not running (or unreachable — see the **socket / port gotcha** under Databases) **every browser request 500s** in `StartSession` middleware before any view renders — this looks like an app bug but is purely the unreachable DB. To view pages locally without MAMP, start MySQL or set `SESSION_DRIVER=file` in `.env`.

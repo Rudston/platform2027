@@ -18,4 +18,9 @@ class MainPlace extends Model
     {
         return $this->belongsTo(LocalMunicipality::class);
     }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
+    }
 }

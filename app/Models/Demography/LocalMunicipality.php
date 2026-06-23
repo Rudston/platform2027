@@ -4,6 +4,7 @@ namespace App\Models\Demography;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LocalMunicipality extends Model
 {
@@ -23,5 +24,10 @@ class LocalMunicipality extends Model
     public function districtMunicipality(): BelongsTo
     {
         return $this->belongsTo(DistrictMunicipality::class);
+    }
+
+    public function mainPlaces(): HasMany
+    {
+        return $this->hasMany(MainPlace::class);
     }
 }
