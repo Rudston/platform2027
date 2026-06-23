@@ -107,24 +107,27 @@ Critical constraints when touching this import:
 A **Circle** is a polymorphic, self-nesting collaborative container that wraps any *community* type (Organisation, Campaign, Course, Event, LocationCommunity, ThemeCommunity). A **Service** is a functional module (e.g. Manage Events) that Circles attach via a many-to-many pivot.
 
 **Tables** (migrations `2026_06_19_000001`–`000003`, run & live):
-- `circles` — `morphs('circleable')` owner, self-ref `parent_id`, `depth`, `path` (materialised path)
+- `circles` — `morphs('circleable')` owner, **`morphs('locatable')` (NOT NULL — every circle has a location)**, self-ref `parent_id`, `depth`, `path` (materialised path). The `locatable` columns were added by `2026_06_23_000003_add_locatable_to_circles_table`.
 - `services` — `name`, unique `key`, `handler_class`, `is_active`
 - `circle_service` — pivot with `config` (json), `is_active`, unique `(circle_id, service_id)`
 
 **Key classes:**
 | File | Role |
 |------|------|
-| `app/Models/Circles/Circle.php` | morphTo `circleable`, `parent`/`children`, `services` (m2m), `ancestors()`/`descendants()`, `isNestedIn()` |
+| `app/Models/Circles/Circle.php` | morphTo `circleable` + `locatable`, `parent`/`children`, `services` (m2m), `ancestors()`/`descendants()`, `isNestedIn()` |
 | `app/Models/Circles/Service.php` | `circles` (m2m) |
 | `app/Contracts/Circleable.php` | contract for circle-owning models (`circle`, `hasService`, `isNestedIn`, `getCircleName`, `getCircleDescription`) |
+| `app/Contracts/Locatable.php` | contract for located models (`location`, `locatedIn`, `setLocation`) |
 | `app/Contracts/CircleServiceContract.php` | contract for service handlers (`boot`, `getKey`, `getPermissions`) |
 | `app/Traits/HasCircle.php` | implements `Circleable`; gives a model `circle()`, `hasService()`, `defaultServices()`, `isNestedIn()`, `withCirclePermissions()`, `getCircleName()`/`getCircleDescription()` |
+| `app/Traits/HasLocation.php` | implements `Locatable` by **delegating to `$this->circle`** (location is stored on the circle, not the community) |
 | `app/Enums/CommunityType.php` | string enum mapping each community type → its model FQCN (`->value` / `->modelClass()`) |
+| `app/Enums/LocatableType.php` | string enum of place types (Country, Province, DistrictMunicipality, LocalMunicipality, MainPlace, City) → demography model FQCN; `modelClass()`, `label()` |
 | `app/Services/Circles/CircleCreationService.php` | **the entry point** for creating a community + its Circle (see below) |
-| `app/Models/Communities/*.php` | Organisation, Campaign, Course, Event, LocationCommunity, ThemeCommunity — each `implements Circleable` + `use HasCircle` |
+| `app/Models/Communities/*.php` | Organisation, Campaign, Course, Event, LocationCommunity, ThemeCommunity — each `implements Circleable, Locatable` + `use HasCircle, HasLocation` |
 | `app/Services/Circles/*.php` | 9 `CircleServiceContract` handler stubs |
 
-**Adding a new community type** requires three things in lockstep: a model in `app/Models/Communities/` (`implements Circleable` + `use HasCircle`), a matching `case` in `CommunityType`, and its table migration (e.g. `Event` → `events`). Models have no `$table` override — they rely on Laravel's inferred names.
+**Adding a new community type** requires three things in lockstep: a model in `app/Models/Communities/` (`implements Circleable, Locatable` + `use HasCircle, HasLocation`), a matching `case` in `CommunityType`, and its table migration (e.g. `Event` → `events`). Models have no `$table` override — they rely on Laravel's inferred names.
 
 **How the hierarchy works** (`Circle::booted()`):
 - On `creating`: `depth = parent->depth + 1`; and if `name` is blank, it is auto-populated from `circleable->getCircleName()` (+ `getCircleDescription()`). This is why a circle's `circleable_type` **must** be set at create time — see the gotcha below.
@@ -137,11 +140,16 @@ app(CircleCreationService::class)->create(
     type: CommunityType::Event,
     data: ['name' => 'Launch Rally', 'description' => '...'],
     parentCircle: $optionalParent,
+    // location is optional; omit for the default (South Africa):
+    locatableType: LocatableType::Province,
+    locatableId: 3,
 );
 ```
 It creates the community row, then the `Circle` (whose `booted()` hook fills name/description + attaches default services). **Two gotchas that previously broke this** (now fixed — keep them in mind):
-- `Circle::$fillable` **must** include `circleable_id` and `circleable_type`. Because the model sets `$fillable`, it overrides `$guarded = []`; if the morph columns are missing they're silently dropped on `Circle::create([...])`, leaving `circleable_type` null → name can't populate → NOT NULL failure.
-- Pass `$type->value` (the FQCN string), **not** the `CommunityType` enum instance, as `circleable_type` — a raw enum object breaks morph resolution.
+- `Circle::$fillable` **must** include `circleable_id`, `circleable_type`, `locatable_id`, `locatable_type`. Because the model sets `$fillable`, it overrides `$guarded = []`; if a morph column is missing it's silently dropped on `Circle::create([...])` → the corresponding NOT NULL morph fails.
+- Pass `$type->value` / `$locatableType->value` (the FQCN strings), **not** the enum instances, as the morph `*_type` columns — a raw enum object breaks morph resolution.
+
+**Location (every circle has one).** The `circles.locatable` morph is **NOT NULL** — each circle is located in a demography place (`Country` / `Province` / `DistrictMunicipality` / `LocalMunicipality` / `MainPlace` / `City`, per `LocatableType`). `CircleCreationService::create()` takes `?LocatableType $locatableType` + `?int $locatableId`; when omitted it **defaults to `LocatableType::Country` id `191` (South Africa)** — see `CircleCreationService::DEFAULT_COUNTRY_ID`. Passing a non-Country type without an id throws. The location lives **only on the circle**; community models are `Locatable` via `HasLocation`, which **delegates to `$this->circle`** — so `$community->location()` returns the circle's `locatable`, and `setLocation()`/`locatedIn()` operate through the circle. For eager loading use `$community->circle->locatable`. `locatedIn()` is an **exact** place match (same type + id), not hierarchical containment.
 
 **Seeding services:** `database/seeders/Circles/ServicesSeeder.php` populates all 9 services (idempotent via `updateOrCreate` on `key`; `handler_class` set via `::class`). Run with:
 ```bash

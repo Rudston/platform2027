@@ -3,12 +3,14 @@
 namespace App\Models\Communities;
 
 use App\Contracts\Circleable;
+use App\Contracts\Locatable;
 use App\Traits\HasCircle;
+use App\Traits\HasLocation;
 use Illuminate\Database\Eloquent\Model;
 
-class ThemeCommunity extends Model implements Circleable
+class ThemeCommunity extends Model implements Circleable, Locatable
 {
-    use HasCircle;
+    use HasCircle, HasLocation;
 
     protected $guarded = [];
 }

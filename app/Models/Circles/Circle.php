@@ -25,6 +25,8 @@ class Circle extends Model
         'path',
         'circleable_id',
         'circleable_type',
+        'locatable_id',
+        'locatable_type',
     ];
 
     /*
@@ -34,6 +36,11 @@ class Circle extends Model
     */
 
     public function circleable(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    public function locatable(): MorphTo
     {
         return $this->morphTo();
     }
