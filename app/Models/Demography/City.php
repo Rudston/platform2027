@@ -35,4 +35,14 @@ class City extends Model
     {
         return $this->hasMany(MainPlace::class);
     }
+
+    public function circleName(): string
+    {
+        return "Community for the City of ".$this->name;
+    }
+
+    public function circleDescription(): string
+    {
+        return "This is where you will find all the communities belonging to the municipal area of the City of ".$this->name;
+    }
 }

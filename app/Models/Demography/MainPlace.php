@@ -23,4 +23,14 @@ class MainPlace extends Model
     {
         return $this->belongsTo(City::class);
     }
+
+    public function circleName(): string
+    {
+        return "Local Community for the ".$this->name;
+    }
+
+    public function circleDescription(): string
+    {
+        return "This is where you will find all the communities belonging to ".$this->name;
+    }
 }

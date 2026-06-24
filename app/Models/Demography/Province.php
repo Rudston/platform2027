@@ -31,4 +31,23 @@ class Province extends Model
     {
         return $this->hasMany(City::class);
     }
+
+    public function circleName(): string
+    {
+       if ($this->article) {
+           return "Provincial Level Community for ".$this->article.$this->name;
+       } else {
+           return "Provincial Level Community for ".$this->name;
+       }
+    }
+
+
+    public function circleDescription(): string
+    {
+        if ($this->article) {
+            return "This is where you will find everything relating to the top level of the province of ".$this->article." ".$this->name;
+        } else {
+            return "This is where you will find everything relating to the top level of the province of ".$this->name;
+        }
+    }
 }

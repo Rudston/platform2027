@@ -31,4 +31,22 @@ class DistrictMunicipality extends Model
     {
         return $this->hasMany(LocalMunicipality::class);
     }
+
+    public function circleName(): string
+    {
+        if (str_contains($this->name, 'Metropolitan Municipality')) {
+            return "Community for the ".trim(str_replace('Metropolitan Municipality', 'Metro', $this->name));
+        } else {
+            return "Community for the ".$this->name." District";
+        }
+    }
+
+    public function circleDescription(): string
+    {
+        if (str_contains($this->name, 'Metropolitan Municipality')) {
+            return "This is where you will find everything relating to the ".trim(str_replace('Metropolitan Municipality', 'Metro', $this->name));
+        } else {
+            return "This is where you will find everything relating to the district of ".$this->name;
+        }
+    }
 }

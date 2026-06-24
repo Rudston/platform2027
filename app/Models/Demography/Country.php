@@ -18,4 +18,12 @@ class Country extends Model
     {
         return $this->hasMany(Province::class);
     }
+    public function circleName(): string
+    {
+        return "National Level Community for ".$this->name;
+    }
+    public function circleDescription(): string
+    {
+        return "This is where you will find everything that belongs to the top level of the platform for ".$this->name;
+    }
 }

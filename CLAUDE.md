@@ -156,6 +156,13 @@ It creates the community row, then the `Circle` (whose `booted()` hook fills nam
 php artisan db:seed --class="Database\Seeders\Circles\ServicesSeeder"
 ```
 
+**Seeding the location-community hierarchy:** `database/seeders/Circles/LocationCommunitiesSeeder.php` builds a nested tree of `LocationCommunity` circles mirroring the demography hierarchy — **Country (191, South Africa) → Provinces → DistrictMunicipalities → LocalMunicipalities**, plus **Provinces → Cities**. Produces **296** circles (1 + 9 + 52 + 226 + 8), each located in its place via `locatableType`/`locatableId`.
+```bash
+php artisan db:seed --class="Database\Seeders\Circles\LocationCommunitiesSeeder"
+```
+- **Naming pattern (important):** each circle's name/description come from the **locatable place's** `circleName()`/`circleDescription()` — methods defined on the demography models (`Country`, `Province`, `DistrictMunicipality`, `LocalMunicipality`, `City`, `MainPlace`). These are **distinct** from the Circleable contract's `getCircleName()`/`getCircleDescription()`. They are wired in by the seeder passing them into `create()`'s **`data`** arg (which names the `LocationCommunity`, which then flows to the circle via `getCircleName()`). Nothing calls the place `circleName()` automatically — if you build location circles another way, pass these yourself, or `LocationCommunity::create([])` fails (its `name` is NOT NULL).
+- **Not idempotent:** it inserts fresh rows each run (no `updateOrCreate`); re-running duplicates the tree. Clear `circles` + `location_communities` first if re-seeding.
+
 **Community tables** (`organisations`, `campaigns`, `courses`, `location_communities`, `theme_communities`, `events`) each hold `id`, `name`, `description` (nullable), `timestamps` — minimal, no relations to other entities yet. The original five (`2026_06_19_000004`–`000008`) are migrated; `events` (`2026_06_22_000001`) is migrated too.
 
 **⚠️ Migration hold:** the user has asked that **Claude not run community-table migrations** on their behalf — they run them manually. When invoking `php artisan migrate`, scope it (e.g. `--path=`) so any pending community migration is not applied as a side effect.

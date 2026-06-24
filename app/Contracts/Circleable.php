@@ -12,7 +12,6 @@ interface Circleable
     public function hasService(string $serviceKey): bool;
 
     public function isNestedIn(Circle $circle): bool;
-
     public function getCircleName(): string;
     public function getCircleDescription(): string;
 }
