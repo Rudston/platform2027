@@ -191,6 +191,42 @@ php artisan db:seed --class="Database\Seeders\RolesAndPermissionsSeeder"
 
 **⚠️ Custom pivot schema — do not re-run the stock spatie migration over this.** Spatie's teams migration makes `circle_id` **`NOT NULL`** on `model_has_roles` / `model_has_permissions`, which **breaks global assignment** (`assignRole('admin')` with a null team id fails the constraint). A follow-up migration (`2026_06_20_140000_make_circle_id_nullable_on_permission_pivots`) fixes this by making `circle_id` **nullable** on both pivots. Because a MySQL `PRIMARY KEY` cannot contain a nullable column, it **drops the composite PKs and rebuilds them as UNIQUE indexes** (`model_has_roles_role_model_type_unique`, `model_has_permissions_permission_model_type_unique`) over the same columns. Side effect: MySQL treats `NULL`s as distinct in a unique index, so the DB won't block a duplicate *global* assignment — spatie prevents that at the application layer.
 
+## Explore Communities UI (Livewire 4)
+
+Public page at **`GET /explore`** (`routes/web.php` → `App\Livewire\Explore\ExploreCommunities::class`, a full-page Livewire 4 class component). Lets users browse the Circle tree by geography and (later) by community type. **No auth** — fully public. Built in Phase 1 (see scope note below).
+
+**Components** (`app/Livewire/Explore/`, multi-file class-based; views in `resources/views/livewire/explore/`):
+| Component | Type | Role |
+|-----------|------|------|
+| `ExploreCommunities` | Livewire (full-page) | Parent: holds all state + computeds + actions |
+| `CommunityTypeFilter` | Livewire | Pill bar; `#[Reactive] selectedType`; pills call `$parent.selectType(@js(value))` |
+| `Breadcrumb` | Livewire | Location trail + type label; `$parent.navigateToBreadcrumb` |
+| `CommunityCard` | Livewire | One card per non-location community; "View" → opens modal |
+| `CommunityDetail` | Livewire (`extends ModalComponent`) | Detail modal (services, placeholder join) |
+| `SearchOverlay` | Livewire | Live `name LIKE` search; `#[On('open-search')]`; result → `navigate-to-circle` + `openModal` |
+| `column-browser` | **Blade component** (`resources/views/components/explore/`) | Renders the `communities` Collection (list or cards) |
+| `empty-state` | **Blade component** | 3-state empty UI |
+
+**Why two Blade components, not Livewire:** `column-browser` receives the `communities` **Collection** and `empty-state` is pure presentation. Passing a Collection between Livewire components serializes/re-queries it every request — so these are Blade components rendered in the parent's view, where `wire:click="selectCircle(id)"` / `"startCommunity"` call the parent directly (no `$parent`). Reserve nested Livewire components for stateful islands.
+
+**Parent state & key behaviours:**
+- `selectedType` = a **`CommunityType` enum value (FQCN string)** or `null` (= All/Locations). `selectedCircleId` = current circle or `null` (= national). `viewMode` (`browse`/`map`). `breadcrumb` = array of `['id'=>?int,'name'=>string]`, starts at `['id'=>null,'name'=>'South Africa']`.
+- **National level shows provinces** (the country's children), not the single Country circle.
+- **Breadcrumbs use place names** — `selectCircle`/`navigateToCircle` store `$circle->locatable->name` ("Gauteng"), not the verbose circle name.
+- Computeds (`#[Computed]`): `communities` (location-tree children, or non-location circles by exact `locatable` match), `communitiesCountBelow` (path-descendant count, drives the empty-state "in sub-regions"), `currentLevel`, `selectedType{Label,Singular,Icon}`.
+- `Event` is included as a pill (the enum has it) even though the task's list omitted it.
+
+**Modal:** uses **`wire-elements/modal`** (the one added dependency; Livewire-4 compatible). The host tag is **`<livewire:wire-elements-modal />`** (not `<livewire:modal />`). Open via `$dispatch('openModal', { component: 'explore.community-detail', arguments: { circleId } })`; close via the `ModalComponent::closeModal()` method.
+
+**Conventions:**
+- Reuses `layouts/app.blade.php` (Vite + Tailwind 4); **no** Tailwind CDN, **no** `@livewireStyles/@livewireScripts` (Livewire 4 auto-injects).
+- Livewire **views** carry a top `@php /** @var ... */ @endphp` docblock so PhpStorm resolves the injected public properties (it can't infer them). Don't add `@props` to a Livewire view — that's Blade-component-only and would clobber the injected property.
+
+**⚠️ Phase 1 scope (current state):**
+- **Map (Step 8) not built** — the `🗺 Map` toggle is visible but **disabled** with a "Coming soon" tooltip.
+- Only **LocationCommunity** circles are seeded (~296), so non-location types render **empty states**; the card→modal path has no live data yet (each piece renders in isolation).
+- **Placeholders:** member counts are `0`; "Join Community" / "Start a …" dispatch events only (no membership system yet).
+
 ## Environment gotcha
 
 Because the committed `.env` sets `SESSION_DRIVER=database` against the MAMP MySQL, if that server is not running (or unreachable — see the **socket / port gotcha** under Databases) **every browser request 500s** in `StartSession` middleware before any view renders — this looks like an app bug but is purely the unreachable DB. To view pages locally without MAMP, start MySQL or set `SESSION_DRIVER=file` in `.env`.

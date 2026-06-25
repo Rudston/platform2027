@@ -10,13 +10,13 @@ use Illuminate\Support\Str;
 class Theme extends Model
 {
     protected $table = 'themes';
-    protected $fillable = ['label', 'parent_id', 'slug'];
+    protected $fillable = ['name', 'parent_id', 'slug'];
 
     protected static function booted(): void
     {
         static::creating(function (Theme $theme): void {
-            if (empty($theme->slug) && ! empty($theme->label)) {
-                $theme->slug = Str::slug($theme->label);
+            if (empty($theme->slug) && ! empty($theme->name)) {
+                $theme->slug = Str::slug($theme->name);
             }
         });
     }
