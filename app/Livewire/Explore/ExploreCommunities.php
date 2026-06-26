@@ -174,8 +174,9 @@ class ExploreCommunities extends Component
 
     public function selectType(?string $type): void
     {
+        // Switching type changes WHAT is shown at the current location, not
+        // WHERE the user is — so it must NOT touch selectedCircleId/breadcrumb.
         $this->selectedType = $type;
-        $this->resetToNational();
     }
 
     public function selectCircle(int $circleId): void
@@ -268,12 +269,6 @@ class ExploreCommunities extends Component
     */
 
     private const SOUTH_AFRICA_ID = 191;
-
-    private function resetToNational(): void
-    {
-        $this->selectedCircleId = null;
-        $this->breadcrumb = [['id' => null, 'name' => 'South Africa']];
-    }
 
     private function countryCircleId(): ?int
     {
