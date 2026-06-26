@@ -36,6 +36,10 @@ class LocalMunicipality extends Model
         return "Community for the ".trim(str_replace("Local Municipality", '', $this->name))." Municipal Area";
     }
 
+    public function circleNameShort() {
+        return trim(str_replace("Local Municipality", '', $this->name))." Municipal Area";
+    }
+
     public function circleDescription(): string
     {
         return "This is where you will find all the communities belonging to the municipal area of ".trim(str_replace("Local Municipality", '', $this->name));

@@ -41,6 +41,11 @@ class City extends Model
         return "Community for the City of ".$this->name;
     }
 
+    public function circleNameShort()
+    {
+        return $this->name;
+    }
+
     public function circleDescription(): string
     {
         return "This is where you will find all the communities belonging to the municipal area of the City of ".$this->name;

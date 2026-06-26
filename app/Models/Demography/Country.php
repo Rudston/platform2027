@@ -22,6 +22,10 @@ class Country extends Model
     {
         return "National Level Community for ".$this->name;
     }
+
+    public function circleNameShort() {
+        return "National";
+    }
     public function circleDescription(): string
     {
         return "This is where you will find everything that belongs to the top level of the platform for ".$this->name;

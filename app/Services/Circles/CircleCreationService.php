@@ -18,6 +18,7 @@ namespace App\Services\Circles;
 use App\Enums\CommunityType;
 use App\Enums\LocatableType;
 use App\Models\Circles\Circle;
+use App\Models\Theme;
 use Illuminate\Support\Facades\DB;
 
 class CircleCreationService
@@ -44,6 +45,20 @@ class CircleCreationService
                 );
             }
             $locatableId = self::DEFAULT_COUNTRY_ID;
+        }
+
+        // ThemeCommunity names/describes from BOTH its theme and its location.
+        // The community model can't self-derive this at creation time, so set it here.
+        if ($type === CommunityType::ThemeCommunity) {
+            if (empty($data['theme_id'])) {
+                throw new \InvalidArgumentException('theme_id is required for ThemeCommunity.');
+            }
+
+            $theme     = Theme::findOrFail($data['theme_id']);
+            $locatable = app($locatableType->value)->findOrFail($locatableId);
+
+            $data['name']        ??= $theme->name.' ('.$locatable->circleNameShort().')';
+            $data['description'] ??= 'This community based in '.$locatable->circleNameShort().' focuses on '.$theme->name;
         }
 
         return DB::transaction(function () use ($type, $data, $parentCircle, $locatableType, $locatableId) {

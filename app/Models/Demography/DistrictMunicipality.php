@@ -41,6 +41,14 @@ class DistrictMunicipality extends Model
         }
     }
 
+    public function circleNameShort() {
+        if (str_contains($this->name, 'Metropolitan Municipality')) {
+            return trim(str_replace('Metropolitan Municipality', 'Metro', $this->name));
+        } else {
+            return $this->name." DM";
+        }
+    }
+
     public function circleDescription(): string
     {
         if (str_contains($this->name, 'Metropolitan Municipality')) {

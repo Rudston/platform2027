@@ -29,6 +29,10 @@ class MainPlace extends Model
         return "Local Community for the ".$this->name;
     }
 
+    public function circleNameShort() {
+        return $this->name." Community";
+    }
+
     public function circleDescription(): string
     {
         return "This is where you will find all the communities belonging to ".$this->name;
