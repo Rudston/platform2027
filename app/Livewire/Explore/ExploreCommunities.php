@@ -79,12 +79,34 @@ class ExploreCommunities extends Component
                 return collect();
             }
 
-            return Circle::query()
+            // Native children of the selected circle.
+            $children = Circle::query()
                 ->where('circleable_type', CommunityType::LocationCommunity->value)
                 ->where('parent_id', $parentId)
                 ->with(['circleable', 'locatable', 'services'])
                 ->orderBy('name')
                 ->get();
+
+            $children->each(fn (Circle $c) => $c->also_here = false);
+
+            // Merge in circles that have approved-associated themselves to the
+            // current circle, badged as "also here" so the UI can distinguish
+            // them from native children. Dedupe by id — native children win.
+            $current = $circle ?? Circle::find($parentId);
+
+            $associated = $current
+                ? $current->approvedAssociatedBy()
+                    ->with(['circleable', 'locatable', 'services'])
+                    ->orderBy('circles.name')
+                    ->get()
+                : collect();
+
+            $associated->each(fn (Circle $c) => $c->also_here = true);
+
+            $childIds = $children->pluck('id')->all();
+            $extra = $associated->reject(fn (Circle $c) => in_array($c->id, $childIds, true));
+
+            return $children->concat($extra)->values();
         }
 
         // Non-location type: communities of the selected type located at the
@@ -133,7 +155,7 @@ class ExploreCommunities extends Component
             CommunityType::Campaign->value          => 'Campaigns',
             CommunityType::Course->value            => 'Courses',
             CommunityType::Event->value             => 'Events',
-            CommunityType::ThemeCommunity->value    => 'Themes',
+            CommunityType::ThemeCommunity->value    => 'Theme Communities',
             default                                 => 'Communities',
         };
     }

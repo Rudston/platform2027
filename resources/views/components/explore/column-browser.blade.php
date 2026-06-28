@@ -42,6 +42,11 @@
                         <span class="flex min-w-0 items-center gap-2">
                             <span class="text-gray-300" aria-hidden="true">▸</span>
                             <span class="truncate text-gray-800">{{ $circle->locatable?->name ?? $circle->name }}</span>
+                            @if ($circle->also_here ?? false)
+                                <span class="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
+                                    Also here
+                                </span>
+                            @endif
                         </span>
                         <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                             {{ $badgeFor($circle) }}

@@ -63,6 +63,57 @@ class Circle extends Model
     }
 
     /**
+     * Communities this circle is additionally linked to (beyond its parent).
+     */
+    public function associations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Circle::class,
+            'circle_associations',
+            'circle_id',
+            'associated_circle_id'
+        )->withPivot(
+            'association_type',
+            'approved',
+            'approved_at',
+            'approved_by_user_id'
+        )->withTimestamps();
+    }
+
+    /**
+     * Circles that have linked themselves to this circle.
+     */
+    public function associatedBy(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Circle::class,
+            'circle_associations',
+            'associated_circle_id',
+            'circle_id'
+        )->withPivot(
+            'association_type',
+            'approved',
+            'approved_at',
+            'approved_by_user_id'
+        )->withTimestamps();
+    }
+
+    /**
+     * Approved-only convenience scopes over the association relationships.
+     */
+    public function approvedAssociations(): BelongsToMany
+    {
+        return $this->associations()
+            ->wherePivot('approved', true);
+    }
+
+    public function approvedAssociatedBy(): BelongsToMany
+    {
+        return $this->associatedBy()
+            ->wherePivot('approved', true);
+    }
+
+    /**
      * Ancestor circles, resolved from the materialised path (excludes self).
      */
     public function ancestors(): Collection
