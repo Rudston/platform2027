@@ -8,3 +8,35 @@ Key Livewire 4 differences from the v3 plan
   no addressable class.
   - Layout location must be resources/views/layouts/app.blade.php (the layouts::app
   namespace), not components/layouts/ — this was the one snag I hit and fixed.
+
+2.
+Real examples from your platform:
+CircleAssociates with
+Section27 (Org)Human Rights (National)Primary theme homeSection27 (Org)Education (National)Also relevantSection27 (Org)Health (National)Also relevantUCT Climate CourseEnvironment WC (Theme)Course relevant to this themeUCT Climate CourseGarden Route DM (Location)Course running in this areaLoad Shedding CampaignEnergy (National) (Theme)Primary themeLoad Shedding CampaignGovernance (National) (Theme)Also relevant
+
+The parent_id vs associations distinction stays clean:
+MechanismMeaning Who controls it
+parent_id Where this circle lives in the hierarchyPlatform admin at creationcircle_associationsWhat other circles it connects toThe circle's own admin, subject to approval
+
+User creates an OrganisationCommunity
+       → chooses primary location/theme as parent  (parent_id)
+       → then browses other communities and clicks
+         "Associate with this community"           (circle_associations)
+       → target community admin approves/rejects   (approved flag)
+
+For later: a general circle membership approval
+When you're ready to implement circle membership properly, a separate circle_user table will need the same pattern:
+php// Future — do not build yet
+Schema::create('circle_user', function (Blueprint $table) {
+    $table->foreignId('circle_id')->constrained();
+    $table->foreignId('user_id')->constrained();
+    $table->string('status')->default('pending');
+    // 'pending' | 'approved' | 'rejected'
+    $table->boolean('approved')->default(false);
+    $table->timestamp('approved_at')->nullable();
+    $table->foreignId('approved_by_user_id')
+          ->nullable()
+          ->constrained('users')
+          ->nullOnDelete();
+    $table->timestamps();
+});
