@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Models\Communities;
+
+use App\Contracts\Circleable;
+use App\Contracts\Locatable;
+use App\Models\Course;
+use App\Traits\HasCircle;
+use App\Traits\HasLocation;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class CourseCommunity extends Model implements Circleable, Locatable
+{
+    use HasCircle, HasLocation;
+
+    protected $table = 'course_communities';
+
+    protected $guarded = [];
+
+    public function courses(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Course::class,
+            'course_course_community'
+        )->withTimestamps();
+    }
+
+    public function circleName(): string
+    {
+        return $this->name ?? 'Unnamed Course Community';
+    }
+}

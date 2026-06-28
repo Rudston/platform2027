@@ -36,6 +36,7 @@ class CircleCreationService
         ?LocatableType $locatableType = null,
         ?int $locatableId = null,
         ?Organisation $organisation = null,
+        array $courseIds = [],
     ): Circle {
         // Default location: country level, South Africa.
         $locatableType ??= LocatableType::Country;
@@ -63,7 +64,7 @@ class CircleCreationService
             $data['description'] ??= 'This community based in '.$locatable->circleNameShort().' focuses on '.$theme->name;
         }
 
-        return DB::transaction(function () use ($type, $data, $parentCircle, $locatableType, $locatableId, $organisation) {
+        return DB::transaction(function () use ($type, $data, $parentCircle, $locatableType, $locatableId, $organisation, $courseIds) {
             $modelClass = $type->modelClass();
             $community  = app($modelClass)->create($data);
 
@@ -71,6 +72,12 @@ class CircleCreationService
             // OrganisationCommunity (organisation_id is nullable).
             if ($type === CommunityType::Organisation && $organisation) {
                 $community->update(['organisation_id' => $organisation->id]);
+            }
+
+            // Optionally attach plain Course entities to the CourseCommunity
+            // (many-to-many; attaching no courses is valid).
+            if ($type === CommunityType::Course && ! empty($courseIds)) {
+                $community->courses()->attach($courseIds);
             }
 
             // Circle::booted() auto-populates name/description from
