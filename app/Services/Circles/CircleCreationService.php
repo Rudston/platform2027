@@ -18,6 +18,7 @@ namespace App\Services\Circles;
 use App\Enums\CommunityType;
 use App\Enums\LocatableType;
 use App\Models\Circles\Circle;
+use App\Models\Organisation;
 use App\Models\Theme;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +35,7 @@ class CircleCreationService
         ?Circle $parentCircle = null,
         ?LocatableType $locatableType = null,
         ?int $locatableId = null,
+        ?Organisation $organisation = null,
     ): Circle {
         // Default location: country level, South Africa.
         $locatableType ??= LocatableType::Country;
@@ -61,9 +63,15 @@ class CircleCreationService
             $data['description'] ??= 'This community based in '.$locatable->circleNameShort().' focuses on '.$theme->name;
         }
 
-        return DB::transaction(function () use ($type, $data, $parentCircle, $locatableType, $locatableId) {
+        return DB::transaction(function () use ($type, $data, $parentCircle, $locatableType, $locatableId, $organisation) {
             $modelClass = $type->modelClass();
             $community  = app($modelClass)->create($data);
+
+            // Optionally link a plain Organisation entity to the
+            // OrganisationCommunity (organisation_id is nullable).
+            if ($type === CommunityType::Organisation && $organisation) {
+                $community->update(['organisation_id' => $organisation->id]);
+            }
 
             // Circle::booted() auto-populates name/description from
             // getCircleName() and attaches the owner's defaultServices().

@@ -4,7 +4,7 @@ namespace App\Enums;
 
 enum CommunityType: string
 {
-    case Organisation        = 'App\Models\Communities\Organisation';
+    case Organisation        = 'App\Models\Communities\OrganisationCommunity';
     case Campaign            = 'App\Models\Communities\Campaign';
     case Course              = 'App\Models\Communities\Course';
     case Event               = 'App\Models\Communities\Event';
