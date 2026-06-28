@@ -26,10 +26,10 @@ class CommunityCard extends Component
     public function levelBadge(): string
     {
         return match (class_basename((string) $this->circle->locatable_type)) {
-            'Country'              => 'Country',
-            'Province'            => 'Province',
+            'Country'              => 'National',
+            'Province'            => 'Provincial',
             'DistrictMunicipality' => 'DM',
-            'LocalMunicipality'   => 'Local Muni',
+            'LocalMunicipality'   => 'LM',
             'City'                => ($this->circle->locatable?->metropolis ? 'Metro' : 'City'),
             default               => class_basename((string) $this->circle->locatable_type),
         };

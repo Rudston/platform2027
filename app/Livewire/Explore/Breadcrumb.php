@@ -26,7 +26,7 @@ class Breadcrumb extends Component
             CommunityType::Campaign->value       => 'Campaigns',
             CommunityType::Course->value         => 'Courses',
             CommunityType::Event->value          => 'Events',
-            CommunityType::ThemeCommunity->value => 'Themes',
+            CommunityType::ThemeCommunity->value => 'Theme Communities',
             default                              => null,
         };
     }

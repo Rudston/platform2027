@@ -20,11 +20,11 @@ class CommunityTypeFilter extends Component
         return [
             ['value' => null,                                       'label' => 'All',           'icon' => '🌍'],
             ['value' => CommunityType::LocationCommunity->value,    'label' => 'Locations',     'icon' => '📍'],
+            ['value' => CommunityType::ThemeCommunity->value,       'label' => 'Theme Communities',        'icon' => '💡'],
             ['value' => CommunityType::Organisation->value,         'label' => 'Organisations', 'icon' => '🏛'],
             ['value' => CommunityType::Campaign->value,             'label' => 'Campaigns',     'icon' => '📢'],
             ['value' => CommunityType::Course->value,               'label' => 'Courses',       'icon' => '🎓'],
             ['value' => CommunityType::Event->value,                'label' => 'Events',        'icon' => '📅'],
-            ['value' => CommunityType::ThemeCommunity->value,       'label' => 'Themes',        'icon' => '💡'],
         ];
     }
 
