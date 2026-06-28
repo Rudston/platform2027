@@ -42,11 +42,7 @@ class Province extends Model
     }
 
     public function circleNameShort() {
-        if ($this->article) {
-            return "Province of ".$this->article.$this->name;
-        } else {
-            return "Province of ".$this->name;
-        }
+        return $this->name;
     }
 
     public function circleDescription(): string
