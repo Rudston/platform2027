@@ -40,3 +40,5 @@ Schema::create('circle_user', function (Blueprint $table) {
           ->nullOnDelete();
     $table->timestamps();
 });
+
+===== first Claude chat -> https://claude.ai/chat/c64ce6a0-4b91-44e6-ba22-27bf165575ed
