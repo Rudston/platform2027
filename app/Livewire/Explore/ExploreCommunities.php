@@ -19,8 +19,9 @@ class ExploreCommunities extends Component
 
     /**
      * Bottom section type filter — Organisation / Campaign / Course /
-     * ThemeCommunity / Event (FQCN); null = none selected yet. Independent of
-     * $selectedType; both share the geographic selection below.
+     * ThemeCommunity / Event (FQCN). Defaults to ThemeCommunity (set in
+     * mount()). Independent of $selectedType; both share the geographic
+     * selection below.
      */
     public ?string $selectedCommunityType = null;
 
@@ -38,6 +39,9 @@ class ExploreCommunities extends Component
         $this->breadcrumb = [
             ['id' => null, 'name' => 'South Africa'],
         ];
+
+        // Default the bottom section to Theme Communities for the current location.
+        $this->selectedCommunityType = CommunityType::ThemeCommunity->value;
     }
 
     /*
@@ -52,6 +56,22 @@ class ExploreCommunities extends Component
         return $this->selectedCircleId
             ? Circle::find($this->selectedCircleId)
             : null;
+    }
+
+    /**
+     * Circle shown in the top section's right-column card: the selected
+     * circle, or the national (country) circle when nothing is selected.
+     */
+    #[Computed]
+    public function rightColumnCircle(): ?Circle
+    {
+        if ($this->selectedCircle) {
+            return $this->selectedCircle;
+        }
+
+        $countryId = $this->countryCircleId();
+
+        return $countryId ? Circle::find($countryId) : null;
     }
 
     #[Computed]

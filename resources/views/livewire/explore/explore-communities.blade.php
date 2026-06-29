@@ -101,12 +101,16 @@
         </div>
 
         {{-- RIGHT COLUMN — LocationCommunity card for the selected location --}}
-        <div>
-            @if ($this->selectedCircle)
+        {{-- (defaults to the national circle). Bottom-aligned so the card's --}}
+        {{-- bottom sits level with the bottom of the left column. --}}
+        <div class="flex flex-col">
+            @if ($this->rightColumnCircle)
                 {{-- Same card component/styling used for other community types. --}}
-                <livewire:explore.community-card :circle="$this->selectedCircle" :key="'location-card-'.$selectedCircleId" />
+                <div class="mt-auto">
+                    <livewire:explore.community-card :circle="$this->rightColumnCircle" :key="'location-card-'.$this->rightColumnCircle->id" />
+                </div>
             @else
-                <div class="flex h-full min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-400">
+                <div class="mt-auto flex min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-400">
                     Select a location to explore its community.
                 </div>
             @endif

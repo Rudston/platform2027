@@ -15,18 +15,24 @@ GET /explore — fully public, no auth required.
 
 The page is split into TWO vertically stacked sections that SHARE the
 geographic selection (selectedCircleId + breadcrumb) but have INDEPENDENT
-type filters.
+type filters. The TOP section is itself a two-column layout (50/50 on
+desktop, stacked on mobile).
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  EXPLORE COMMUNITIES                          [🔍 Search]      │
-├──────────────────────────────────────────────────────────────┤
-│  TOP SECTION — geographic / location explorer                  │
-│                                                                │
-│  [🌍 All]  [📍 Locations]                                      │
-│  📍 South Africa › Western Cape › Eden DM   [🗺 Map] [☰ Browse]│
-│                                                                │
-│  [ location column browser ]                                   │
+│  TOP SECTION — geographic explorer (two columns)               │
+│  ┌───────────────────────────────┬──────────────────────────┐ │
+│  │ LEFT — geographic drill-down  │ RIGHT — selected location │ │
+│  │                               │                           │ │
+│  │ EXPLORE COMMUNITIES [🔍]      │   LocationCommunity card  │ │
+│  │ [🌍 All]  [📍 Locations]      │   for the selected place  │ │
+│  │ 📍 SA › W Cape › Eden DM      │   (📍 icon, level badge,  │ │
+│  │              [🗺 Map][☰ Brws] │    name, [ View → ])      │ │
+│  │ [ location column browser ]   │                           │ │
+│  │                               │   …or a neutral prompt:   │ │
+│  │                               │   "Select a location to   │ │
+│  │                               │    explore its community" │ │
+│  └───────────────────────────────┴──────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤  ← divider
 │  BOTTOM SECTION — community types at the selected location     │
 │                                                                │
@@ -38,6 +44,9 @@ type filters.
 └──────────────────────────────────────────────────────────────┘
 ```
 
+On mobile the top two columns collapse to a single column (left/explorer
+on top, right/selected-location card below).
+
 ---
 
 ## Page Structure & State Model
@@ -47,7 +56,18 @@ type filters.
   sections:
   - `selectedCircleId` (?int) — current circle, null = national
   - `breadcrumb` (array) — geographic trail, always starts at South Africa
-- The breadcrumb + Map/Browse toggle sit in the TOP section.
+- The breadcrumb + Map/Browse toggle sit in the TOP section's LEFT column.
+
+### TOP section is two columns
+- LEFT column = the geographic drill-down (header + search, All/Locations
+  filter, breadcrumb + Map/Browse toggle, location column browser).
+- RIGHT column = the LocationCommunity card for the currently selected
+  location, driven by the SAME `selectedCircleId` (via the `selectedCircle`
+  computed) — no extra state. It reuses the standard `CommunityCard`
+  (📍 icon, level badge, name, "View →" opening the CommunityDetail modal),
+  keyed by `selectedCircleId` so it swaps when a different location is
+  clicked. When nothing is selected (national level) it shows a neutral
+  placeholder: "Select a location to explore its community."
 
 ### Two independent type filters
 - `selectedType` (TOP) — null (All) or LocationCommunity. Drives the
@@ -407,6 +427,8 @@ Each province path needs data-province="{name}" attribute.
 
 ## Mobile Behaviour
 
+- Top section: the two columns collapse to one — geographic explorer on
+  top, selected-location card below
 - Both filter bars: scroll horizontally
 - Column browser: single column with back button
   (instead of three side-by-side panels)
