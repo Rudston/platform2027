@@ -13,34 +13,85 @@ GET /explore — fully public, no auth required.
 
 ## Overall Page Layout
 
+The page is split into TWO vertically stacked sections that SHARE the
+geographic selection (selectedCircleId + breadcrumb) but have INDEPENDENT
+type filters.
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  EXPLORE COMMUNITIES                        [🔍 Search]      │
-├─────────────────────────────────────────────────────────────┤
-│  [🌍 All] [📍 Locations] [💡 Theme Communities]              │
-│  [🏛 Organisations] [📢 Campaigns] [🎓 Courses] [📅 Events]  │
-├─────────────────────────────────────────────────────────────┤
-│  📍 South Africa › Western Cape › Eden DM › Theme Communities │
-│                                    [🗺 Map] [☰ Browse]       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   [Main content area — column browser OR map view]          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  EXPLORE COMMUNITIES                          [🔍 Search]      │
+├──────────────────────────────────────────────────────────────┤
+│  TOP SECTION — geographic / location explorer                  │
+│                                                                │
+│  [🌍 All]  [📍 Locations]                                      │
+│  📍 South Africa › Western Cape › Eden DM   [🗺 Map] [☰ Browse]│
+│                                                                │
+│  [ location column browser ]                                   │
+├──────────────────────────────────────────────────────────────┤  ← divider
+│  BOTTOM SECTION — community types at the selected location     │
+│                                                                │
+│  Communities in Eden DM                                        │
+│  [💡 Theme Communities] [🏛 Organisations] [📢 Campaigns]      │
+│  [🎓 Courses] [📅 Events]                                      │
+│                                                                │
+│  [ card grid for the selected type  /  "Pick a type" prompt ]  │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Community Type Filter Bar
+## Page Structure & State Model
 
-A horizontal pill/tab bar. Order (left → right):
+### Two sections, shared geography
+- The geographic selection lives on the parent and is shared by both
+  sections:
+  - `selectedCircleId` (?int) — current circle, null = national
+  - `breadcrumb` (array) — geographic trail, always starts at South Africa
+- The breadcrumb + Map/Browse toggle sit in the TOP section.
+
+### Two independent type filters
+- `selectedType` (TOP) — null (All) or LocationCommunity. Drives the
+  location column browser. Set by `selectType()`.
+- `selectedCommunityType` (BOTTOM) — Theme / Organisation / Campaign /
+  Course / Event (FQCN), or null = none picked yet. Drives the bottom
+  card grid. Set by `selectCommunityType()`.
+
+### Independence guarantees (enforced in the component)
+- `selectType()` sets ONLY `selectedType` — never the geography or the
+  bottom `selectedCommunityType`.
+- `selectCommunityType()` sets ONLY `selectedCommunityType` — never the
+  geography or the top `selectedType`.
+- `selectCircle()` / `navigateToBreadcrumb()` change ONLY the geography —
+  both type selections survive, and the bottom grid refreshes for the new
+  location.
+
+---
+
+## Top Filter Bar (location explorer)
+
+A horizontal pill bar, rendered by `CommunityTypeFilter` with `group="location"`.
 
 ```
-[🌍 All]  [📍 Locations]  [💡 Theme Communities]
-[🏛 Organisations]  [📢 Campaigns]  [🎓 Courses]  [📅 Events]
+[🌍 All]  [📍 Locations]
 ```
 
-Theme Communities sits immediately after Locations.
+- Both pills drive the location column browser (location mode).
+- Clicking a pill calls `$parent.selectType(value)`.
+
+---
+
+## Bottom Filter Bar (community types)
+
+Same `CommunityTypeFilter` component with `group="community"`.
+Order (left → right):
+
+```
+[💡 Theme Communities]  [🏛 Organisations]  [📢 Campaigns]
+[🎓 Courses]  [📅 Events]
+```
+
+Theme Communities is the FIRST tab. Clicking a pill calls
+`$parent.selectCommunityType(value)`.
 
 ### Icons per type
 - null (All):          🌍
@@ -51,7 +102,7 @@ Theme Communities sits immediately after Locations.
 - Course:              🎓
 - Event:               📅
 
-### Labels (plural, for filter bar)
+### Labels (plural, for filter bars)
 - null:                "All"
 - LocationCommunity:   "Locations"
 - ThemeCommunity:      "Theme Communities"
@@ -68,54 +119,56 @@ Theme Communities sits immediately after Locations.
 - Course:              "Course"
 - Event:               "Event"
 
-### Behaviour
+### Behaviour (both bars)
 - Active pill is highlighted (brand colour fill)
-- Clicking a pill sets selectedType
-- CRITICAL: switching type NEVER resets the geographic
-  selection (selectedCircleId) or breadcrumb
 - On mobile: scrolls horizontally
+- The `CommunityTypeFilter` component is parameterised by `group`
+  ('location' | 'community') + a generic reactive `active` value; it
+  derives the parent action (`selectType` vs `selectCommunityType`).
 
 ---
 
 ## Breadcrumb Component
 
+Lives in the TOP section. It is now a PURELY GEOGRAPHIC trail — the top
+filter is only ever All / Locations, so no community-type label is
+appended (the type context now lives in the bottom section heading
+instead). The component still supports a type label, but it resolves to
+null for All/Locations.
+
 ### Format
 ```
-📍 South Africa  ›  Western Cape  ›  Eden DM  ›  Theme Communities
+📍 South Africa  ›  Western Cape  ›  Eden DM
 ```
 
 ### Rules
 - "South Africa" is ALWAYS the first crumb (id = null)
 - Each geographic crumb is clickable — jumps back to that level
 - Last geographic crumb is NOT a link (current location)
-- Type label appended when a non-Location type is selected
-- Type label removed when switching back to All/Locations
 - Clicking any crumb trims the breadcrumb back to that point
-- Geographic crumbs are PRESERVED when switching type
+- Both type selections (top and bottom) are PRESERVED when navigating crumbs
 
 ### Examples
 ```
-No type selected:
+National:
   📍 South Africa
 
-Province selected, no type:
+Province selected:
   📍 South Africa  ›  Western Cape
 
-Province selected, Theme Communities type:
-  📍 South Africa  ›  Western Cape  ›  Theme Communities
-
-DM selected, Campaigns type:
-  📍 South Africa  ›  Western Cape  ›  Eden DM  ›  Campaigns
-
-Switch to Courses (same geographic level):
-  📍 South Africa  ›  Western Cape  ›  Eden DM  ›  Courses
+DM selected:
+  📍 South Africa  ›  Western Cape  ›  Eden DM
 ```
 
 ---
 
 ## Column Browser (Browse View)
 
-### When selectedType is null or LocationCommunity
+The same `x-explore.column-browser` Blade component renders BOTH:
+- the TOP location list (when `selectedType` is null / LocationCommunity), and
+- the BOTTOM card grid (when given a non-location `selectedCommunityType`).
+
+### Location list (top section)
 
 File-browser style list that drills down. Each click on a
 location loads its children.
@@ -139,32 +192,55 @@ location loads its children.
 - Clicking an item loads its children in the next column
 - Columns scroll independently if content overflows
 
-### "Also here" badge (location browse mode)
+### "Also here" badge (location list only)
 
 Circles linked in via APPROVED `circle_associations`
-(i.e. not direct children) are merged into this location
+(i.e. not direct children) are merged into the location
 list and carry a subtle "Also here" badge, distinguishing
 them from circles whose primary home is the current circle.
 
-NOTE: the badge currently lives ONLY in the location
-column-browser list, because that is where the association
-merge happens (children + approvedAssociatedBy, deduped by
-id, native children winning). It is NOT on the non-location
-cards — passing a Circle into the child CommunityCard
-Livewire component re-serialises it and drops the transient
+NOTE: the badge lives ONLY in the location column-browser
+list, because that is where the association merge happens
+(children + approvedAssociatedBy, deduped by id, native
+children winning). It is NOT on the bottom-section cards —
+passing a Circle into the child CommunityCard Livewire
+component re-serialises it and drops the transient
 `also_here` flag. Surfacing it on cards is future work.
 
-### When selectedType is a non-Location type
+### Card grid (bottom section)
 
-The browser switches to a card grid in the main area.
-Communities of the selected type at the selected geographic
-level are shown as cards.
+When the bottom `selectedCommunityType` is set, the browser renders a card
+grid of communities of that type at the selected geographic level.
+
+---
+
+## Bottom Section Content
+
+```
+Communities in {current place}
+{Organisations, campaigns, courses, theme communities and events ...}
+
+[💡 Theme Communities] [🏛 Organisations] [📢 Campaigns] [🎓 Courses] [📅 Events]
+
+[ content ]
+```
+
+Content states:
+- No type picked yet (`selectedCommunityType === null`): a dashed prompt
+  "Pick a community type above to see what's here."
+- Type picked, communities exist: card grid (x-explore.column-browser).
+- Type picked, none here but some below: State 2 empty state with the
+  sub-region count (typeCommunitiesCountBelow).
+- Type picked, none anywhere in branch: State 3 empty state.
+
+The heading uses the current breadcrumb location name (e.g. "Eden DM" or
+"South Africa" at national level).
 
 ---
 
 ## Community Card
 
-Displayed in the card grid when a non-Location type is selected.
+Displayed in the bottom-section card grid.
 
 ```
 ┌─────────────────────────────────┐
@@ -221,7 +297,8 @@ Opens when "View" is clicked on a card.
 
 ## Empty States
 
-Three distinct states when communities() returns empty.
+Both sections use the same `x-explore.empty-state` Blade component.
+Three distinct states when the relevant communities query returns empty.
 
 ### State 1: Communities exist → show cards/column browser
 (not an empty state — normal display)
@@ -273,7 +350,8 @@ x-explore.empty-state accepts:
 - $heading     — main message
 - $subheading  — supporting text
 - $ctaLabel    — button text
-- $ctaAction   — wire:click action
+- $ctaAction   — wire:click action (startCommunity for the top section,
+                 startCommunityType for the bottom section)
 - $belowCount  — int, communities in sub-regions
 - $belowLabel  — e.g. "Campaigns in sub-regions"
 (hide below section if $belowCount === 0)
@@ -288,7 +366,7 @@ Overlays the full page.
 ### Behaviour
 - Minimum 2 characters before results appear
 - Searches circle.name (LIKE %term%)
-- Optionally filtered by selectedType if one is active
+- Optionally filtered by the TOP selectedType if one is active
 - Results show: name + geographic breadcrumb + type badge
   (type badge uses the singular label: Location, Theme,
   Organisation, Campaign, Course, Event)
@@ -307,14 +385,14 @@ Overlays the full page.
 ## Map View (DEFERRED — Phase 2)
 
 ### Current state
-The [🗺 Map] toggle button is visible but disabled
+The [🗺 Map] toggle button (top section) is visible but disabled
 with a "Coming soon" tooltip.
 No SVG map is loaded yet.
 
 ### Planned behaviour (for when implemented)
 - Clickable SVG map of SA provinces
 - Clicking a province highlights it and shows sidebar
-- Sidebar lists communities of selectedType at that level
+- Sidebar lists communities at that level
 - Shows count of communities in sub-regions
 - "Browse this province →" button
 - Alpine.js handles hover/highlight on SVG
@@ -329,7 +407,7 @@ Each province path needs data-province="{name}" attribute.
 
 ## Mobile Behaviour
 
-- Type filter bar: scrolls horizontally
+- Both filter bars: scroll horizontally
 - Column browser: single column with back button
   (instead of three side-by-side panels)
 - Map view: full width with bottom sheet for results
@@ -344,27 +422,29 @@ Each province path needs data-province="{name}" attribute.
 [🗺 Map]  [☰ Browse]
 ```
 
-- Browse is the default
+- Browse is the default; lives in the top section's breadcrumb row, right-aligned
 - Map is disabled with "Coming soon" tooltip
-- Toggle sits in the breadcrumb row, right-aligned
-- Switching view mode preserves both selectedType
+- Switching view mode preserves selectedType, selectedCommunityType
   and selectedCircleId
 
 ---
 
 ## Key Interaction Rules (Summary)
 
-1. Switching community TYPE → preserves geographic selection
-2. Clicking geographic item → preserves selected type
-3. Clicking breadcrumb crumb → preserves selected type,
-   trims geographic trail back to that crumb
-4. "South Africa" crumb always present and always clickable
-5. Type label in breadcrumb is display-only — not clickable
-6. "Also here" circles (approved circle_associations) are
-   merged into the location browse list and badged "Also here"
-7. Join/Start buttons are placeholders — emit Livewire events
-8. All queries use eager loading: with(['circleable','locatable','services'])
-9. Path column used for all ancestor/descendant queries
-   (no recursive CTEs needed)
-10. Map view disabled until SVG sourced and integrated
+1. Switching the TOP type (All / Locations) → preserves geography AND the
+   bottom section's selected type
+2. Switching the BOTTOM type → preserves geography AND the top type
+3. Clicking a geographic item → preserves BOTH type selections
+4. Clicking a breadcrumb crumb → preserves both type selections, trims the
+   geographic trail back to that crumb; the bottom grid re-queries the new
+   location
+5. "South Africa" crumb always present and always clickable
+6. Breadcrumb is geographic-only (no community-type label appended)
+7. "Also here" circles (approved circle_associations) are merged into the
+   location list and badged "Also here" (top section only)
+8. Join/Start buttons are placeholders — emit Livewire events
+9. All queries use eager loading: with(['circleable','locatable','services'])
+10. Path column used for all ancestor/descendant queries
+    (no recursive CTEs needed)
+11. Map view disabled until SVG sourced and integrated
 ```
