@@ -14,8 +14,15 @@ use Livewire\Component;
 #[Title('Explore Communities')]
 class ExploreCommunities extends Component
 {
-    /** CommunityType enum value (FQCN); null = All / Locations. */
+    /** CommunityType enum value (FQCN); null = All / Locations. Top section (location explorer). */
     public ?string $selectedType = null;
+
+    /**
+     * Bottom section type filter — Organisation / Campaign / Course /
+     * ThemeCommunity / Event (FQCN); null = none selected yet. Independent of
+     * $selectedType; both share the geographic selection below.
+     */
+    public ?string $selectedCommunityType = null;
 
     /** Currently selected geographic circle id; null = national level. */
     public ?int $selectedCircleId = null;
@@ -149,43 +156,91 @@ class ExploreCommunities extends Component
     #[Computed]
     public function selectedTypeLabel(): string
     {
-        return match ($this->selectedType) {
-            CommunityType::LocationCommunity->value => 'Locations',
-            CommunityType::Organisation->value      => 'Organisations',
-            CommunityType::Campaign->value          => 'Campaigns',
-            CommunityType::Course->value            => 'Courses',
-            CommunityType::Event->value             => 'Events',
-            CommunityType::ThemeCommunity->value    => 'Theme Communities',
-            default                                 => 'Communities',
-        };
+        return $this->labelFor($this->selectedType);
     }
 
     #[Computed]
     public function selectedTypeSingular(): string
     {
-        return match ($this->selectedType) {
-            CommunityType::LocationCommunity->value => 'Location',
-            CommunityType::Organisation->value      => 'Organisation',
-            CommunityType::Campaign->value          => 'Campaign',
-            CommunityType::Course->value            => 'Course',
-            CommunityType::Event->value             => 'Event',
-            CommunityType::ThemeCommunity->value    => 'Theme',
-            default                                 => 'Community',
-        };
+        return $this->singularFor($this->selectedType);
     }
 
     #[Computed]
     public function selectedTypeIcon(): string
     {
-        return match ($this->selectedType) {
-            CommunityType::LocationCommunity->value => '📍',
-            CommunityType::Organisation->value      => '🏛',
-            CommunityType::Campaign->value          => '📢',
-            CommunityType::Course->value            => '🎓',
-            CommunityType::Event->value             => '📅',
-            CommunityType::ThemeCommunity->value    => '💡',
-            default                                 => '🌍',
-        };
+        return $this->iconFor($this->selectedType);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bottom section: non-location community types at the selected location
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Communities of the bottom-section type located at the current place
+     * (or Country/South Africa at national level). Empty until a type is picked.
+     */
+    #[Computed]
+    public function typeCommunities(): Collection
+    {
+        if ($this->selectedCommunityType === null) {
+            return collect();
+        }
+
+        $circle = $this->selectedCircle;
+
+        [$locatableType, $locatableId] = $circle
+            ? [(string) $circle->locatable_type, (int) $circle->locatable_id]
+            : [LocatableType::Country->value, self::SOUTH_AFRICA_ID];
+
+        return Circle::query()
+            ->where('circleable_type', $this->selectedCommunityType)
+            ->where('locatable_type', $locatableType)
+            ->where('locatable_id', $locatableId)
+            ->with(['circleable', 'locatable', 'services'])
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Count of bottom-section-type communities in descendants of the selected circle.
+     */
+    #[Computed]
+    public function typeCommunitiesCountBelow(): int
+    {
+        if ($this->selectedCircleId === null || $this->selectedCommunityType === null) {
+            return 0;
+        }
+
+        $circle = $this->selectedCircle;
+
+        if (! $circle || ! $circle->path) {
+            return 0;
+        }
+
+        return Circle::query()
+            ->where('circleable_type', $this->selectedCommunityType)
+            ->where('path', 'like', $circle->path.'/%')
+            ->count();
+    }
+
+    #[Computed]
+    public function communityTypeLabel(): string
+    {
+        return $this->labelFor($this->selectedCommunityType);
+    }
+
+    #[Computed]
+    public function communityTypeSingular(): string
+    {
+        return $this->singularFor($this->selectedCommunityType);
+    }
+
+    #[Computed]
+    public function communityTypeIcon(): string
+    {
+        return $this->iconFor($this->selectedCommunityType);
     }
 
     /*
@@ -198,7 +253,15 @@ class ExploreCommunities extends Component
     {
         // Switching type changes WHAT is shown at the current location, not
         // WHERE the user is — so it must NOT touch selectedCircleId/breadcrumb.
+        // It also must NOT touch the bottom section's selectedCommunityType.
         $this->selectedType = $type;
+    }
+
+    public function selectCommunityType(?string $type): void
+    {
+        // Bottom section's type filter. Must NOT touch the geographic selection
+        // (selectedCircleId/breadcrumb) or the top section's selectedType.
+        $this->selectedCommunityType = $type;
     }
 
     public function selectCircle(int $circleId): void
@@ -279,6 +342,12 @@ class ExploreCommunities extends Component
         $this->dispatch('start-community', type: $this->selectedType, circleId: $this->selectedCircleId);
     }
 
+    public function startCommunityType(): void
+    {
+        // Placeholder — bottom-section equivalent of startCommunity().
+        $this->dispatch('start-community', type: $this->selectedCommunityType, circleId: $this->selectedCircleId);
+    }
+
     public function render()
     {
         return view('livewire.explore.explore-communities');
@@ -298,5 +367,49 @@ class ExploreCommunities extends Component
             ->whereNull('parent_id')
             ->where('circleable_type', CommunityType::LocationCommunity->value)
             ->value('id');
+    }
+
+    /*
+    | Shared label/singular/icon lookups (used by both the top section's
+    | selectedType* computeds and the bottom section's communityType* computeds).
+    */
+
+    private function labelFor(?string $type): string
+    {
+        return match ($type) {
+            CommunityType::LocationCommunity->value => 'Locations',
+            CommunityType::Organisation->value      => 'Organisations',
+            CommunityType::Campaign->value          => 'Campaigns',
+            CommunityType::Course->value            => 'Courses',
+            CommunityType::Event->value             => 'Events',
+            CommunityType::ThemeCommunity->value    => 'Theme Communities',
+            default                                 => 'Communities',
+        };
+    }
+
+    private function singularFor(?string $type): string
+    {
+        return match ($type) {
+            CommunityType::LocationCommunity->value => 'Location',
+            CommunityType::Organisation->value      => 'Organisation',
+            CommunityType::Campaign->value          => 'Campaign',
+            CommunityType::Course->value            => 'Course',
+            CommunityType::Event->value             => 'Event',
+            CommunityType::ThemeCommunity->value    => 'Theme',
+            default                                 => 'Community',
+        };
+    }
+
+    private function iconFor(?string $type): string
+    {
+        return match ($type) {
+            CommunityType::LocationCommunity->value => '📍',
+            CommunityType::Organisation->value      => '🏛',
+            CommunityType::Campaign->value          => '📢',
+            CommunityType::Course->value            => '🎓',
+            CommunityType::Event->value             => '📅',
+            CommunityType::ThemeCommunity->value    => '💡',
+            default                                 => '🌍',
+        };
     }
 }

@@ -1,5 +1,6 @@
 @php
     /** @var ?string $selectedType */
+    /** @var ?string $selectedCommunityType */
     /** @var ?int $selectedCircleId */
     /** @var string $viewMode */
     /** @var array $breadcrumb */
@@ -17,12 +18,16 @@
         </button>
     </div>
 
-    {{-- Type filter --}}
+    {{-- ===================================================================== --}}
+    {{-- TOP SECTION — geographic / location explorer                          --}}
+    {{-- ===================================================================== --}}
+
+    {{-- Location filter (All / Locations) --}}
     <div class="mt-2">
-        <livewire:explore.community-type-filter :selected-type="$selectedType" :key="'type-filter'" />
+        <livewire:explore.community-type-filter group="location" :active="$selectedType" :key="'type-filter-top'" />
     </div>
 
-    {{-- Breadcrumb + view toggle --}}
+    {{-- Breadcrumb + view toggle (shared geographic context) --}}
     <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
         <livewire:explore.breadcrumb :breadcrumb="$breadcrumb" :selected-type="$selectedType" :key="'breadcrumb'" />
 
@@ -49,7 +54,7 @@
         </div>
     </div>
 
-    {{-- Main content --}}
+    {{-- Location browser --}}
     <div class="mt-4">
         @if ($viewMode === 'browse')
             @php($current = collect($breadcrumb)->last())
@@ -86,6 +91,58 @@
                 🗺 Map view — coming soon.
             </div>
         @endif
+    </div>
+
+    {{-- ===================================================================== --}}
+    {{-- BOTTOM SECTION — community types at the selected location             --}}
+    {{-- ===================================================================== --}}
+    <div class="mt-10 border-t border-gray-200 pt-8">
+        @php($current = collect($breadcrumb)->last())
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">
+            Communities in {{ $current['name'] ?? 'South Africa' }}
+        </h2>
+        <p class="mt-0.5 text-sm text-gray-500">
+            Organisations, campaigns, courses, theme communities and events at this location.
+        </p>
+
+        {{-- Community-type filter (independent of the location filter above) --}}
+        <div class="mt-2">
+            <livewire:explore.community-type-filter group="community" :active="$selectedCommunityType" :key="'type-filter-bottom'" />
+        </div>
+
+        {{-- Community-type content --}}
+        <div class="mt-4">
+            @if ($selectedCommunityType === null)
+                <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
+                    Pick a community type above to see what's here.
+                </div>
+            @elseif ($this->typeCommunities->isNotEmpty())
+                <x-explore.column-browser
+                    :communities="$this->typeCommunities"
+                    :selected-type="$selectedCommunityType"
+                    :selected-circle-id="$selectedCircleId"
+                />
+            @elseif ($this->typeCommunitiesCountBelow > 0)
+                <x-explore.empty-state
+                    :icon="$this->communityTypeIcon"
+                    :heading="'No '.$this->communityTypeLabel.' at '.$this->currentLevel.' level yet'"
+                    subheading="Be the first to start one."
+                    :cta-label="'+ Start a '.$this->communityTypeSingular"
+                    cta-action="startCommunityType"
+                    :below-count="$this->typeCommunitiesCountBelow"
+                    :below-label="$this->communityTypeLabel"
+                />
+            @else
+                <x-explore.empty-state
+                    :icon="$this->communityTypeIcon"
+                    :heading="'No '.$this->communityTypeLabel.' here yet'"
+                    subheading="This is a fresh space waiting to grow."
+                    cta-label="+ Be the first"
+                    cta-action="startCommunityType"
+                    :below-count="0"
+                />
+            @endif
+        </div>
     </div>
 
     {{-- Search overlay --}}
