@@ -24,14 +24,12 @@ desktop, stacked on mobile).
 │  ┌───────────────────────────────┬──────────────────────────┐ │
 │  │ LEFT — geographic drill-down  │ RIGHT — selected location │ │
 │  │                               │                           │ │
-│  │ EXPLORE COMMUNITIES [🔍]      │   LocationCommunity card  │ │
-│  │ [🌍 All]  [📍 Locations]      │   for the selected place  │ │
-│  │ 📍 SA › W Cape › Eden DM      │   (📍 icon, level badge,  │ │
-│  │              [🗺 Map][☰ Brws] │    name, [ View → ])      │ │
-│  │ [ location column browser ]   │                           │ │
-│  │                               │   …or a neutral prompt:   │ │
-│  │                               │   "Select a location to   │ │
-│  │                               │    explore its community" │ │
+│  │ EXPLORE COMMUNITIES [🔍]      │  (card is bottom-aligned) │ │
+│  │ [🌍 All]  [📍 Locations]      │                           │ │
+│  │ 📍 SA › W Cape › Eden DM      │   LocationCommunity card  │ │
+│  │              [🗺 Map][☰ Brws] │   for the selected place  │ │
+│  │ [ location column browser ]   │   (📍 icon, level badge,  │ │
+│  │                               │    name, [ View → ])      │ │
 │  └───────────────────────────────┴──────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤  ← divider
 │  BOTTOM SECTION — community types at the selected location     │
@@ -40,12 +38,13 @@ desktop, stacked on mobile).
 │  [💡 Theme Communities] [🏛 Organisations] [📢 Campaigns]      │
 │  [🎓 Courses] [📅 Events]                                      │
 │                                                                │
-│  [ card grid for the selected type  /  "Pick a type" prompt ]  │
+│  [ card grid for the selected type (defaults to Themes) ]      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-On mobile the top two columns collapse to a single column (left/explorer
-on top, right/selected-location card below).
+The right-column card is bottom-aligned so its base sits level with the
+bottom of the left column. On mobile the top two columns collapse to a
+single column (left/explorer on top, right/selected-location card below).
 
 ---
 
@@ -62,19 +61,27 @@ on top, right/selected-location card below).
 - LEFT column = the geographic drill-down (header + search, All/Locations
   filter, breadcrumb + Map/Browse toggle, location column browser).
 - RIGHT column = the LocationCommunity card for the currently selected
-  location, driven by the SAME `selectedCircleId` (via the `selectedCircle`
-  computed) — no extra state. It reuses the standard `CommunityCard`
-  (📍 icon, level badge, name, "View →" opening the CommunityDetail modal),
-  keyed by `selectedCircleId` so it swaps when a different location is
-  clicked. When nothing is selected (national level) it shows a neutral
-  placeholder: "Select a location to explore its community."
+  location, driven by the SAME `selectedCircleId` (via the
+  `rightColumnCircle` computed) — no extra state. It reuses the standard
+  `CommunityCard` (📍 icon, level badge, name, "View →" opening the
+  CommunityDetail modal), keyed by the shown circle's id so it swaps when a
+  different location is clicked.
+  - When nothing is selected (national level) it shows the **national
+    circle's card** ("National Level Community for South Africa") rather
+    than a placeholder — `rightColumnCircle` falls back to the country
+    circle. (The "Select a location…" placeholder remains only as a
+    fallback if no country circle exists.)
+  - The card is **bottom-aligned** (the column is `flex flex-col` and the
+    card has `mt-auto`) so its base sits level with the bottom of the left
+    column.
 
 ### Two independent type filters
 - `selectedType` (TOP) — null (All) or LocationCommunity. Drives the
   location column browser. Set by `selectType()`.
 - `selectedCommunityType` (BOTTOM) — Theme / Organisation / Campaign /
-  Course / Event (FQCN), or null = none picked yet. Drives the bottom
-  card grid. Set by `selectCommunityType()`.
+  Course / Event (FQCN). **Defaults to ThemeCommunity** (set in `mount()`),
+  so the bottom section shows the current location's theme communities on
+  load. Drives the bottom card grid. Set by `selectCommunityType()`.
 
 ### Independence guarantees (enforced in the component)
 - `selectType()` sets ONLY `selectedType` — never the geography or the
@@ -110,8 +117,8 @@ Order (left → right):
 [🎓 Courses]  [📅 Events]
 ```
 
-Theme Communities is the FIRST tab. Clicking a pill calls
-`$parent.selectCommunityType(value)`.
+Theme Communities is the FIRST tab and is **selected by default** on page
+load. Clicking a pill calls `$parent.selectCommunityType(value)`.
 
 ### Icons per type
 - null (All):          🌍
@@ -245,13 +252,18 @@ Communities in {current place}
 [ content ]
 ```
 
+On load the bottom tab defaults to **Theme Communities**, so a type is
+always selected — the "Pick a community type" prompt below only appears in
+the edge case where `selectedCommunityType` is somehow null.
+
 Content states:
-- No type picked yet (`selectedCommunityType === null`): a dashed prompt
-  "Pick a community type above to see what's here."
-- Type picked, communities exist: card grid (x-explore.column-browser).
+- Type picked (default Theme Communities), communities exist: card grid
+  (x-explore.column-browser).
 - Type picked, none here but some below: State 2 empty state with the
   sub-region count (typeCommunitiesCountBelow).
 - Type picked, none anywhere in branch: State 3 empty state.
+- No type picked (`selectedCommunityType === null`, fallback only): a dashed
+  prompt "Pick a community type above to see what's here."
 
 The heading uses the current breadcrumb location name (e.g. "Eden DM" or
 "South Africa" at national level).
