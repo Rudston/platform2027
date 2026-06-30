@@ -9,39 +9,63 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Title('Explore Communities')]
 class ExploreCommunities extends Component
 {
-    /** CommunityType enum value (FQCN); null = All / Locations. Top section (location explorer). */
+    /**
+     * CommunityType enum value (FQCN); null = All / Locations. Top section
+     * (location explorer). Persisted to the URL via $topTypeParam (short name).
+     */
     public ?string $selectedType = null;
 
     /**
      * Bottom section type filter — Organisation / Campaign / Course /
      * ThemeCommunity / Event (FQCN). Defaults to ThemeCommunity (set in
      * mount()). Independent of $selectedType; both share the geographic
-     * selection below.
+     * selection below. Persisted to the URL via $bottomTypeParam (short name).
      */
     public ?string $selectedCommunityType = null;
 
     /** Currently selected geographic circle id; null = national level. */
+    #[Url(as: 'circle')]
     public ?int $selectedCircleId = null;
 
     /** 'browse' | 'map' */
+    #[Url(as: 'view')]
     public string $viewMode = 'browse';
+
+    /**
+     * URL-facing type params holding enum CASE NAMES (e.g. 'LocationCommunity',
+     * 'Campaign'), kept as short mirrors of $selectedType / $selectedCommunityType
+     * so the query string stays clean (?type=…&community=…) while the internal
+     * properties remain FQCNs used by the queries and child components.
+     */
+    #[Url(as: 'type')]
+    public ?string $topTypeParam = null;
+
+    #[Url(as: 'community')]
+    public ?string $bottomTypeParam = null;
 
     /** Array of ['id' => ?int, 'name' => string]; always starts at South Africa. */
     public array $breadcrumb = [];
 
     public function mount(): void
     {
-        $this->breadcrumb = [
-            ['id' => null, 'name' => 'South Africa'],
-        ];
+        // The URL-bound props (selectedCircleId, viewMode, topTypeParam,
+        // bottomTypeParam) are already hydrated from the query string here.
 
-        // Default the bottom section to Theme Communities for the current location.
-        $this->selectedCommunityType = CommunityType::ThemeCommunity->value;
+        // Resolve the internal FQCN type properties from the short URL params.
+        $this->selectedType = $this->fqcnForName($this->topTypeParam);
+
+        // Bottom section defaults to Theme Communities when no ?community param.
+        $this->selectedCommunityType = $this->fqcnForName($this->bottomTypeParam)
+            ?? CommunityType::ThemeCommunity->value;
+
+        // Rebuild the geographic breadcrumb from the (possibly URL-provided) circle.
+        $this->buildBreadcrumbForSelectedCircle();
     }
 
     /*
@@ -275,6 +299,7 @@ class ExploreCommunities extends Component
         // WHERE the user is — so it must NOT touch selectedCircleId/breadcrumb.
         // It also must NOT touch the bottom section's selectedCommunityType.
         $this->selectedType = $type;
+        $this->topTypeParam = $this->nameForFqcn($type);
     }
 
     public function selectCommunityType(?string $type): void
@@ -282,6 +307,7 @@ class ExploreCommunities extends Component
         // Bottom section's type filter. Must NOT touch the geographic selection
         // (selectedCircleId/breadcrumb) or the top section's selectedType.
         $this->selectedCommunityType = $type;
+        $this->bottomTypeParam = $this->nameForFqcn($type);
     }
 
     public function selectCircle(int $circleId): void
@@ -387,6 +413,71 @@ class ExploreCommunities extends Component
             ->whereNull('parent_id')
             ->where('circleable_type', CommunityType::LocationCommunity->value)
             ->value('id');
+    }
+
+    /**
+     * Rebuild the geographic breadcrumb from $selectedCircleId (e.g. on a
+     * direct URL load) by walking the circle's ancestor path. Mirrors the
+     * trail produced incrementally by selectCircle().
+     */
+    private function buildBreadcrumbForSelectedCircle(): void
+    {
+        $crumbs = [['id' => null, 'name' => 'South Africa']];
+
+        if ($this->selectedCircleId === null) {
+            $this->breadcrumb = $crumbs;
+
+            return;
+        }
+
+        $circle = Circle::with('locatable')->find($this->selectedCircleId);
+
+        if (! $circle) {
+            // Stale/invalid ?circle — fall back to national.
+            $this->selectedCircleId = null;
+            $this->breadcrumb = $crumbs;
+
+            return;
+        }
+
+        foreach ($circle->ancestors() as $ancestor) {
+            if ($ancestor->parent_id === null) {
+                continue; // the root country circle is represented by "South Africa" (null)
+            }
+            $ancestor->loadMissing('locatable');
+            $crumbs[] = ['id' => $ancestor->id, 'name' => $ancestor->locatable?->name ?? $ancestor->name];
+        }
+
+        if ($circle->parent_id === null) {
+            // Selected circle is the country root → national level (no extra crumb).
+            $this->selectedCircleId = null;
+        } else {
+            $crumbs[] = ['id' => $circle->id, 'name' => $circle->locatable?->name ?? $circle->name];
+        }
+
+        $this->breadcrumb = $crumbs;
+    }
+
+    /** FQCN from an enum case name (e.g. 'Campaign' → CommunityType::Campaign->value). */
+    private function fqcnForName(?string $name): ?string
+    {
+        if ($name === null || $name === '') {
+            return null;
+        }
+
+        foreach (CommunityType::cases() as $case) {
+            if ($case->name === $name) {
+                return $case->value;
+            }
+        }
+
+        return null;
+    }
+
+    /** Enum case name from an FQCN (e.g. CommunityType::Campaign->value → 'Campaign'). */
+    private function nameForFqcn(?string $fqcn): ?string
+    {
+        return $fqcn ? CommunityType::tryFrom($fqcn)?->name : null;
     }
 
     /*
