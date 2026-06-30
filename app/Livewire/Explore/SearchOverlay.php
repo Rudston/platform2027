@@ -16,6 +16,10 @@ class SearchOverlay extends Component
     #[Reactive]
     public ?string $selectedType = null;
 
+    /** Relative Explore URL to return to, passed through to the community page as ?from=. */
+    #[Reactive]
+    public ?string $from = null;
+
     public string $query = '';
 
     public bool $open = false;
@@ -48,12 +52,17 @@ class SearchOverlay extends Component
             ->get();
     }
 
-    public function selectResult(int $circleId): void
+    public function selectResult(int $circleId)
     {
-        // Move the browser to the result's location, then open its detail modal.
-        $this->dispatch('navigate-to-circle', circleId: $circleId)->to(ExploreCommunities::class);
-        $this->dispatch('openModal', component: 'explore.community-detail', arguments: ['circleId' => $circleId]);
+        // Navigate to the community's full page (the detail modal was retired),
+        // carrying ?from= so the page's back link restores this Explore view.
         $this->closeSearch();
+
+        $target = $this->from
+            ? route('communities.show', ['circle' => $circleId, 'from' => $this->from])
+            : route('communities.show', $circleId);
+
+        return $this->redirect($target, navigate: true);
     }
 
     public function badgeFor(?string $circleableType): string

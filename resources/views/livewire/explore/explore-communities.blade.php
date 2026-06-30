@@ -107,7 +107,7 @@
             @if ($this->rightColumnCircle)
                 {{-- Same card component/styling used for other community types. --}}
                 <div class="mt-auto">
-                    <livewire:explore.community-card :circle="$this->rightColumnCircle" :key="'location-card-'.$this->rightColumnCircle->id" />
+                    <livewire:explore.community-card :circle="$this->rightColumnCircle" :from="$this->exploreUrl" :key="'location-card-'.$this->rightColumnCircle->id" />
                 </div>
             @else
                 <div class="mt-auto flex min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-400">
@@ -145,6 +145,7 @@
                     :communities="$this->typeCommunities"
                     :selected-type="$selectedCommunityType"
                     :selected-circle-id="$selectedCircleId"
+                    :from="$this->exploreUrl"
                 />
             @elseif ($this->typeCommunitiesCountBelow > 0)
                 <x-explore.empty-state
@@ -170,8 +171,5 @@
     </div>
 
     {{-- Search overlay --}}
-    <livewire:explore.search-overlay :selected-type="$selectedType" :key="'search-overlay'" />
-
-    {{-- Modal host (wire-elements/modal) --}}
-    <livewire:wire-elements-modal />
+    <livewire:explore.search-overlay :selected-type="$selectedType" :from="$this->exploreUrl" :key="'search-overlay'" />
 </div>

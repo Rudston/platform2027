@@ -98,6 +98,24 @@ class ExploreCommunities extends Component
         return $countryId ? Circle::find($countryId) : null;
     }
 
+    /**
+     * The current Explore view as a relative URL (built from the #[Url] params),
+     * passed as ?from=… on community links so the page's back link can restore
+     * this exact view.
+     */
+    #[Computed]
+    public function exploreUrl(): string
+    {
+        $params = array_filter([
+            'circle'    => $this->selectedCircleId,
+            'type'      => $this->topTypeParam,
+            'community' => $this->bottomTypeParam,
+            'view'      => $this->viewMode !== 'browse' ? $this->viewMode : null,
+        ], static fn ($v) => $v !== null && $v !== '');
+
+        return route('explore', $params, absolute: false);
+    }
+
     #[Computed]
     public function currentLevel(): string
     {

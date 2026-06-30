@@ -5,6 +5,7 @@ use App\Livewire\Auth\ForgotPassword;
 use App\Livewire\Auth\Login;
 use App\Livewire\Auth\Register;
 use App\Livewire\Auth\ResetPassword;
+use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Explore\ExploreCommunities;
 use Illuminate\Support\Facades\Route;
 
@@ -15,6 +16,9 @@ Route::get('/', function () {
 Route::livewire('/counter', 'counter');
 
 Route::get('/explore', ExploreCommunities::class)->name('explore');
+
+// Single community (circle) full page. Public for now — permissions later.
+Route::get('/communities/{circle}', CommunityPage::class)->name('communities.show');
 
 /*
 |--------------------------------------------------------------------------

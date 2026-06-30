@@ -10,6 +10,9 @@ class CommunityCard extends Component
 {
     public Circle $circle;
 
+    /** Relative Explore URL to return to, passed through to the community page as ?from=. */
+    public ?string $from = null;
+
     public function icon(): string
     {
         return match ($this->circle->circleable_type) {
