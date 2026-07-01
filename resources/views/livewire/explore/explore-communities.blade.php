@@ -164,6 +164,18 @@
                     Pick a community type above to see what's here.
                 </div>
             @elseif ($this->typeCommunities->isNotEmpty())
+                {{-- Add bar above the card grid, right-aligned. --}}
+                {{-- TODO: guard this button with auth + permission check --}}
+                <div class="-mt-4 mb-4 flex justify-end">
+                    <button
+                        type="button"
+                        wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($selectedCommunityType), label: @js($this->addCommunityLabel) } })"
+                        class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                    >
+                        + Add {{ $this->addCommunityLabel }}
+                    </button>
+                </div>
+
                 <x-explore.column-browser
                     :communities="$this->typeCommunities"
                     :selected-type="$selectedCommunityType"
@@ -175,8 +187,8 @@
                     :icon="$this->communityTypeIcon"
                     :heading="'No '.$this->communityTypeLabel.' at '.$this->currentLevel.' level yet'"
                     subheading="Be the first to start one."
-                    :cta-label="'+ Start a '.$this->communityTypeSingular"
-                    cta-action="startCommunityType"
+                    :add-label="$this->addCommunityLabel"
+                    :add-modal-type="$selectedCommunityType"
                     :below-count="$this->typeCommunitiesCountBelow"
                     :below-label="$this->communityTypeLabel"
                 />
@@ -185,8 +197,8 @@
                     :icon="$this->communityTypeIcon"
                     :heading="'No '.$this->communityTypeLabel.' here yet'"
                     subheading="This is a fresh space waiting to grow."
-                    cta-label="+ Be the first"
-                    cta-action="startCommunityType"
+                    :add-label="$this->addCommunityLabel"
+                    :add-modal-type="$selectedCommunityType"
                     :below-count="0"
                 />
             @endif
@@ -195,4 +207,7 @@
 
     {{-- Search overlay --}}
     <livewire:explore.search-overlay :selected-type="$selectedType" :from="$this->exploreUrl" :key="'search-overlay'" />
+
+    {{-- Modal host (wire-elements/modal) — used by the Add-community modal. --}}
+    <livewire:wire-elements-modal />
 </div>

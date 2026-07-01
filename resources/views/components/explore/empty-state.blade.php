@@ -6,6 +6,12 @@
     'ctaAction' => 'startCommunity',
     'belowCount' => 0,
     'belowLabel' => '',
+    // When $addLabel is set, the CTA becomes a "+ Add {addLabel}" button that
+    // opens the Add-community modal for $addModalType (bottom section). When it
+    // is null the component falls back to the legacy $ctaLabel/$ctaAction button
+    // (still used by the top location browser).
+    'addLabel' => null,
+    'addModalType' => null,
 ])
 
 <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center">
@@ -17,7 +23,16 @@
         <p class="mt-1 text-sm text-gray-500">{{ $subheading }}</p>
     @endif
 
-    @if ($ctaLabel)
+    @if ($addLabel)
+        {{-- TODO: guard this button with auth + permission check --}}
+        <button
+            type="button"
+            wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($addModalType), label: @js($addLabel) } })"
+            class="mt-5 inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+        >
+            + Add {{ $addLabel }}
+        </button>
+    @elseif ($ctaLabel)
         <button
             type="button"
             wire:click="{{ $ctaAction }}"

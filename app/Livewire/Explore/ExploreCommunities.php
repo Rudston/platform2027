@@ -329,6 +329,24 @@ class ExploreCommunities extends Component
         return $this->iconFor($this->selectedCommunityType);
     }
 
+    /**
+     * Natural-language phrase for the "Add …" button/modal, with the correct
+     * article hardcoded per type (only five). Reads e.g. "Add an Organisation
+     * Community" / "Add a Theme Community".
+     */
+    #[Computed]
+    public function addCommunityLabel(): string
+    {
+        return match ($this->selectedCommunityType) {
+            CommunityType::Organisation->value   => 'an Organisation Community',
+            CommunityType::ThemeCommunity->value => 'a Theme Community',
+            CommunityType::Campaign->value       => 'a Campaign Community',
+            CommunityType::Course->value         => 'a Course Community',
+            CommunityType::Event->value          => 'an Event Community',
+            default                              => 'a Community',
+        };
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Wire actions

@@ -33,8 +33,9 @@ class CommunityCard extends Component
             'Province'            => 'Provincial',
             'DistrictMunicipality' => 'DM',
             'LocalMunicipality'   => 'LM',
+            'MainPlace'           => 'Main Place',
             'City'                => ($this->circle->locatable?->metropolis ? 'Metro' : 'City'),
-            default               => class_basename((string) $this->circle->locatable_type),
+             default               => class_basename((string) $this->circle->locatable_type),
         };
     }
 

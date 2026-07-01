@@ -16,7 +16,8 @@
             'Country'              => 'Country',
             'Province'            => 'Province',
             'DistrictMunicipality' => 'DM',
-            'LocalMunicipality'   => 'Local Muni',
+            'LocalMunicipality'   => 'Local Municipality',
+            'MainPlace'           => 'Main Place',
             'City'                => ($circle->locatable?->metropolis ? 'Metro' : 'City'),
             default               => class_basename((string) $circle->locatable_type),
         };
