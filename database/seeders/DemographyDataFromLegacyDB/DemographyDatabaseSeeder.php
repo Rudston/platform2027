@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Seeders\Demography;
+namespace Database\Seeders\DemographyDataFromLegacyDB;
 
 use Illuminate\Database\Seeder;
 

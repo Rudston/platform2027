@@ -1,8 +1,8 @@
 <?php
 
-namespace Database\Seeders\Demography;
+namespace Database\Seeders\DemographyDataFromLegacyDB;
 
-namespace Database\Seeders\Demography;
+namespace Database\Seeders\DemographyDataFromLegacyDB;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;

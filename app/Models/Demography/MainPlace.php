@@ -26,7 +26,7 @@ class MainPlace extends Model
 
     public function circleName(): string
     {
-        return "Local Community for the ".$this->name;
+        return "Local Community for ".$this->name;
     }
 
     public function circleNameShort() {
