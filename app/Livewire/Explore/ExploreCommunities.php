@@ -129,6 +129,17 @@ class ExploreCommunities extends Component
     }
 
     /**
+     * True when the selected location is a MainPlace — the terminal geographic
+     * level, with no deeper level to drill into (so the location browser shows
+     * a quiet "no further sub-areas" note rather than a "start one" empty state).
+     */
+    #[Computed]
+    public function isAtTerminalLevel(): bool
+    {
+        return $this->selectedCircle?->locatable_type === LocatableType::MainPlace->value;
+    }
+
+    /**
      * Circles at the EXACT selected level (not descendants).
      */
     #[Computed]

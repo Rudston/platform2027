@@ -71,6 +71,11 @@
                             :selected-circle-id="$selectedCircleId"
                             :heading="$current['name'] ?? 'South Africa'"
                         />
+                    @elseif ($this->isAtTerminalLevel)
+                        {{-- MainPlace is the terminal geographic level — no deeper level to drill into. --}}
+                        <div class="rounded-lg border border-gray-100 bg-white px-4 py-6 text-center text-sm text-gray-400">
+                            No further sub-areas.
+                        </div>
                     @elseif ($this->communitiesCountBelow > 0)
                         <x-explore.empty-state
                             :icon="$this->selectedTypeIcon"
