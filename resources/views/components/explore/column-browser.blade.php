@@ -10,6 +10,12 @@
     $isLocationMode = $selectedType === null
         || $selectedType === \App\Enums\CommunityType::LocationCommunity->value;
 
+    // True when this column is listing MainPlace-level results (the terminal
+    // geographic level) — used to show the "request a location" button below.
+    $isMainPlaceLevel = $isLocationMode
+        && $communities->isNotEmpty()
+        && (string) $communities->first()->locatable_type === \App\Enums\LocatableType::MainPlace->value;
+
     // Short geographic badge for a location circle.
     $badgeFor = function ($circle) {
         return match (class_basename((string) $circle->locatable_type)) {
@@ -57,6 +63,19 @@
                 </li>
             @endforeach
         </ul>
+
+        @if ($isMainPlaceLevel)
+            {{-- TODO: guard this button with auth + permission check --}}
+            <div class="border-t border-gray-100 px-4 py-3 text-center">
+                <button
+                    type="button"
+                    wire:click="$dispatch('openModal', { component: 'explore.request-location-modal', arguments: { parentLocationName: @js($heading), parentCircleId: @js($selectedCircleId) } })"
+                    class="text-sm text-indigo-600 hover:underline"
+                >
+                    Your location not listed? Click here to request us to add it
+                </button>
+            </div>
+        @endif
     </div>
 @else
     {{-- Non-location types render as cards, each opening the detail modal. --}}
