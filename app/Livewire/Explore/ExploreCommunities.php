@@ -5,6 +5,7 @@ namespace App\Livewire\Explore;
 use App\Enums\CommunityType;
 use App\Enums\LocatableType;
 use App\Models\Circles\Circle;
+use App\Models\Demography\CoordinateData;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
@@ -55,6 +56,14 @@ class ExploreCommunities extends Component
 
     /** Array of ['id' => ?int, 'name' => string]; always starts at South Africa. */
     public array $breadcrumb = [];
+
+    /** User's browser geolocation (set by Alpine via setUserLocation; NOT URL-synced). */
+    public ?float $userLatitude = null;
+
+    public ?float $userLongitude = null;
+
+    /** Explore URL for the MainPlace nearest the user; null hides the suggestion button. */
+    public ?string $suggestedCommunityUrl = null;
 
     public function mount(): void
     {
@@ -341,6 +350,21 @@ class ExploreCommunities extends Component
         // (selectedCircleId/breadcrumb) or the top section's selectedType.
         $this->selectedCommunityType = $type;
         $this->bottomTypeParam = $this->nameForFqcn($type);
+    }
+
+    /**
+     * Receive the user's browser coordinates (from Alpine x-init) and, if the
+     * nearest coordinate maps to a MainPlace with a circle, store that place's
+     * Explore URL. Any null in the chain leaves the button hidden.
+     */
+    public function setUserLocation(float $latitude, float $longitude): void
+    {
+        $this->userLatitude = $latitude;
+        $this->userLongitude = $longitude;
+
+        $this->suggestedCommunityUrl = CoordinateData::nearest($latitude, $longitude)
+            ?->getMainPlace()
+            ?->explorerLocationCommunityUrl();
     }
 
     public function selectCircle(int $circleId): void
