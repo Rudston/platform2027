@@ -13,8 +13,12 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Title('Explore Communities')]
+
 class ExploreCommunities extends Component
 {
+
+    public const MAX_HEIGHT_LOCATIONS_COLUMN = '400px';
+
     /**
      * CommunityType enum value (FQCN); null = All / Locations. Top section
      * (location explorer). Persisted to the URL via $topTypeParam (short name).

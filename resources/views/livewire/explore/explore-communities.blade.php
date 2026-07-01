@@ -60,8 +60,8 @@
                 </div>
             </div>
 
-            {{-- Location browser --}}
-            <div class="mt-4">
+            {{-- Location browser (scrollable content area; header/filter/breadcrumb above stay fixed) --}}
+            <div class="mt-4 overflow-y-auto" style="max-height: {{ \App\Livewire\Explore\ExploreCommunities::MAX_HEIGHT_LOCATIONS_COLUMN }}">
                 @if ($viewMode === 'browse')
                     @php($current = collect($breadcrumb)->last())
                     @if ($this->communities->isNotEmpty())
