@@ -7,10 +7,11 @@ use App\Contracts\Locatable;
 use App\Traits\HasCircle;
 use App\Traits\HasLocation;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Event extends Model implements Circleable, Locatable
 {
-    use HasCircle, HasLocation;
+    use HasCircle, HasLocation, SoftDeletes;
 
     protected $guarded = [];
 }

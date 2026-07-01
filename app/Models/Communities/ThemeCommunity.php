@@ -9,10 +9,11 @@ use App\Traits\HasCircle;
 use App\Traits\HasLocation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ThemeCommunity extends Model implements Circleable, Locatable
 {
-    use HasCircle, HasLocation;
+    use HasCircle, HasLocation, SoftDeletes;
 
     protected $guarded = [];
 

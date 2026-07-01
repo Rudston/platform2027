@@ -5,9 +5,12 @@ namespace App\Models\Demography;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class City extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'cities';
 
     protected $guarded = [];
