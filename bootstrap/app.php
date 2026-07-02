@@ -11,7 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Detect and apply the request locale on every web request (incl. Livewire XHR).
+        $middleware->web(append: [
+            \App\Http\Middleware\SetLocaleFromBrowser::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
