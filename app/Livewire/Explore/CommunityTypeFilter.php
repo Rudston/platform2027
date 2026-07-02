@@ -26,14 +26,14 @@ class CommunityTypeFilter extends Component
     {
         return match ($this->group) {
             'community' => [
-                ['value' => CommunityType::ThemeCommunity->value, 'label' => 'Theme Communities', 'icon' => '💡'],
-                ['value' => CommunityType::Organisation->value,   'label' => 'Organisations',     'icon' => '🏛'],
-                ['value' => CommunityType::Campaign->value,       'label' => 'Campaigns',         'icon' => '📢'],
-                ['value' => CommunityType::Course->value,         'label' => 'Courses',           'icon' => '🎓'],
-                ['value' => CommunityType::Event->value,          'label' => 'Events',            'icon' => '📅'],
+                ['value' => CommunityType::ThemeCommunity->value, 'label' => __('communities.plural.theme_communities'), 'icon' => '💡'],
+                ['value' => CommunityType::Organisation->value,   'label' => __('communities.plural.organisations'),     'icon' => '🏛'],
+                ['value' => CommunityType::Campaign->value,       'label' => __('communities.plural.campaigns'),         'icon' => '📢'],
+                ['value' => CommunityType::Course->value,         'label' => __('communities.plural.courses'),           'icon' => '🎓'],
+                ['value' => CommunityType::Event->value,          'label' => __('communities.plural.events'),            'icon' => '📅'],
             ],
             default => [
-                ['value' => null, 'label' => 'Locations', 'icon' => '📍'],
+                ['value' => null, 'label' => __('communities.plural.locations'), 'icon' => '📍'],
             ],
         };
     }

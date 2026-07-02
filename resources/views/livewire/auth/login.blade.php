@@ -2,13 +2,13 @@
     /** @var \App\Livewire\Auth\Login $this */
 @endphp
 <div>
-    <h1 class="mb-1 text-lg font-medium">Log in</h1>
-    <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">Welcome back. Please sign in to continue.</p>
+    <h1 class="mb-1 text-lg font-medium">{{ __('auth.login.heading') }}</h1>
+    <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">{{ __('auth.login.subtitle') }}</p>
 
     <form wire:submit="login" class="space-y-4">
         {{-- Email --}}
         <div>
-            <label for="email" class="block text-sm font-medium">Email</label>
+            <label for="email" class="block text-sm font-medium">{{ __('auth.shared.email') }}</label>
             <input
                 type="email"
                 id="email"
@@ -21,7 +21,7 @@
 
         {{-- Password --}}
         <div>
-            <label for="password" class="block text-sm font-medium">Password</label>
+            <label for="password" class="block text-sm font-medium">{{ __('auth.shared.password') }}</label>
             <input
                 type="password"
                 id="password"
@@ -41,11 +41,11 @@
                     wire:model="remember"
                     class="rounded border-[#19140035] text-indigo-600 focus:ring-indigo-500 dark:border-[#3E3E3A] dark:bg-[#0a0a0a]"
                 />
-                <span>Remember me</span>
+                <span>{{ __('auth.login.remember') }}</span>
             </label>
 
             <a href="{{ route('password.request') }}" class="text-sm text-[#706f6c] underline dark:text-[#A1A09A]">
-                Forgot your password?
+                {{ __('auth.login.forgot') }}
             </a>
         </div>
 
@@ -53,12 +53,12 @@
             type="submit"
             class="w-full rounded-md bg-[#1b1b18] px-4 py-2 text-sm font-medium text-white transition hover:bg-black dark:bg-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white"
         >
-            Log in
+            {{ __('auth.login.submit') }}
         </button>
     </form>
 
     <p class="mt-6 text-center text-sm text-[#706f6c] dark:text-[#A1A09A]">
-        Don't have an account?
-        <a href="{{ route('register') }}" class="font-medium text-[#1b1b18] underline dark:text-[#EDEDEC]">Register</a>
+        {{ __('auth.login.no_account') }}
+        <a href="{{ route('register') }}" class="font-medium text-[#1b1b18] underline dark:text-[#EDEDEC]">{{ __('auth.login.register') }}</a>
     </p>
 </div>

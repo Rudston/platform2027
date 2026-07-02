@@ -4,11 +4,9 @@ namespace App\Livewire\Auth;
 
 use Illuminate\Support\Facades\Password;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts.guest')]
-#[Title('Forgot password')]
 class ForgotPassword extends Component
 {
     public string $email = '';
@@ -31,6 +29,7 @@ class ForgotPassword extends Component
 
     public function render()
     {
-        return view('livewire.auth.forgot-password');
+        return view('livewire.auth.forgot-password')
+            ->title(__('auth.forgot.title'));
     }
 }

@@ -19,12 +19,12 @@ enum LocatableType: string
     public function label(): string
     {
         return match ($this) {
-            self::Country              => 'Country',
-            self::Province             => 'Province',
-            self::DistrictMunicipality => 'District Municipality',
-            self::LocalMunicipality    => 'Local Municipality',
-            self::MainPlace            => 'Main Place',
-            self::City                 => 'City',
+            self::Country              => __('geographic.level.country'),
+            self::Province             => __('geographic.level.province'),
+            self::DistrictMunicipality => __('geographic.level.district_municipality'),
+            self::LocalMunicipality    => __('geographic.level.local_municipality'),
+            self::MainPlace            => __('geographic.level.main_place'),
+            self::City                 => __('geographic.level.city'),
         };
     }
 

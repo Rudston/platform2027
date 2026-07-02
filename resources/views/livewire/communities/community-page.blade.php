@@ -6,7 +6,7 @@
      shell (public — no auth chrome). --}}
 <div class="mx-auto min-h-screen w-4/5 py-10">
     <a href="{{ $backUrl }}" wire:navigate class="text-sm text-indigo-600 hover:underline">
-        ← Explore Communities
+        {{ __('communities.page.back') }}
     </a>
 
     <div class="mt-4 rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
@@ -31,7 +31,7 @@
         @php($services = $circle->services->where('pivot.is_active', true))
         @if ($services->isNotEmpty())
             <div class="mt-6">
-                <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Services</h2>
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400">{{ __('communities.page.services') }}</h2>
                 <div class="mt-2 flex flex-wrap gap-2">
                     @foreach ($services as $service)
                         <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
@@ -43,7 +43,7 @@
         @endif
 
         {{-- Member count placeholder --}}
-        <div class="mt-6 text-sm text-gray-500">0 members</div>
+        <div class="mt-6 text-sm text-gray-500">{{ __('communities.page.members', ['count' => 0]) }}</div>
 
         {{-- Join (placeholder) --}}
         <div class="mt-6">
@@ -52,7 +52,7 @@
                 wire:click="joinCommunity"
                 class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
             >
-                Join Community
+                {{ __('communities.page.join') }}
             </button>
         </div>
 

@@ -30,7 +30,7 @@
             wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($addModalType), label: @js($addLabel) } })"
             class="mt-5 inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
         >
-            + Add {{ $addLabel }}
+            {{ __('explore.add_community', ['label' => $addLabel]) }}
         </button>
     @elseif ($ctaLabel)
         <button
@@ -45,7 +45,7 @@
     @if ((int) $belowCount > 0)
         <div class="mx-auto mt-8 max-w-xs border-t border-gray-100 pt-4 text-sm text-gray-500">
             <span class="font-semibold text-gray-700">{{ $belowCount }}</span> {{ $belowLabel }}
-            <div class="mt-0.5 text-gray-400">in sub-regions ›</div>
+            <div class="mt-0.5 text-gray-400">{{ __('explore.empty.in_sub_regions') }}</div>
         </div>
     @endif
 </div>

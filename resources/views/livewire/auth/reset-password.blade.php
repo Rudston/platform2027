@@ -2,13 +2,13 @@
     /** @var \App\Livewire\Auth\ResetPassword $this */
 @endphp
 <div>
-    <h1 class="mb-1 text-lg font-medium">Reset your password</h1>
-    <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">Choose a new password for your account.</p>
+    <h1 class="mb-1 text-lg font-medium">{{ __('auth.reset.heading') }}</h1>
+    <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">{{ __('auth.reset.subtitle') }}</p>
 
     <form wire:submit="resetPassword" class="space-y-4">
         {{-- Email --}}
         <div>
-            <label for="email" class="block text-sm font-medium">Email</label>
+            <label for="email" class="block text-sm font-medium">{{ __('auth.shared.email') }}</label>
             <input
                 type="email"
                 id="email"
@@ -21,7 +21,7 @@
 
         {{-- New password --}}
         <div>
-            <label for="password" class="block text-sm font-medium">New password</label>
+            <label for="password" class="block text-sm font-medium">{{ __('auth.reset.new_password') }}</label>
             <input
                 type="password"
                 id="password"
@@ -34,7 +34,7 @@
 
         {{-- Confirm new password --}}
         <div>
-            <label for="password_confirmation" class="block text-sm font-medium">Confirm new password</label>
+            <label for="password_confirmation" class="block text-sm font-medium">{{ __('auth.reset.confirm_password') }}</label>
             <input
                 type="password"
                 id="password_confirmation"
@@ -49,7 +49,7 @@
             type="submit"
             class="w-full rounded-md bg-[#1b1b18] px-4 py-2 text-sm font-medium text-white transition hover:bg-black dark:bg-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white"
         >
-            Reset password
+            {{ __('auth.reset.submit') }}
         </button>
     </form>
 </div>

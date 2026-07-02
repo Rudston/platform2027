@@ -4,14 +4,14 @@
 @endphp
 <div class="p-6">
     <div class="flex items-start justify-between gap-4">
-        <h2 class="text-xl font-bold text-gray-800">Add {{ $label }}</h2>
-        <button type="button" wire:click="closeModal" class="text-gray-400 transition hover:text-gray-600" aria-label="Close">
+        <h2 class="text-xl font-bold text-gray-800">{{ __('communities.add_modal.title', ['label' => $label]) }}</h2>
+        <button type="button" wire:click="closeModal" class="text-gray-400 transition hover:text-gray-600" aria-label="{{ __('ui.close') }}">
             ✕
         </button>
     </div>
 
     <p class="mt-4 text-sm text-gray-600">
-        The form for adding {{ $label }} will be added here.
+        {{ __('communities.add_modal.placeholder', ['label' => $label]) }}
     </p>
 
     <div class="mt-6 flex justify-end">
@@ -20,7 +20,7 @@
             wire:click="closeModal"
             class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
         >
-            Close
+            {{ __('ui.close') }}
         </button>
     </div>
 </div>

@@ -11,6 +11,7 @@
         "laravel/tinker": "^2.10.1",
         "livewire/livewire": "^4.3",
         "spatie/laravel-permission": "^6.25",
+        "spatie/laravel-translatable": "^6.11",
         "wire-elements/modal": "^3.0"
     },
     "require-dev": {

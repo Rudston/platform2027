@@ -23,13 +23,13 @@
         <div>
             {{-- Header --}}
             <div class="flex items-center justify-between gap-4">
-                <h1 class="text-xl font-bold tracking-tight text-gray-900">Explore Communities</h1>
+                <h1 class="text-xl font-bold tracking-tight text-gray-900">{{ __('explore.title') }}</h1>
                 <button
                     type="button"
                     wire:click="$dispatch('open-search')"
                     class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
                 >
-                    <span aria-hidden="true">🔍</span> Search
+                    <span aria-hidden="true">🔍</span> {{ __('ui.search') }}
                 </button>
             </div>
 
@@ -49,7 +49,7 @@
                         title="Coming soon"
                         class="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-gray-400 opacity-60"
                     >
-                        <span aria-hidden="true">🗺</span> Map
+                        <span aria-hidden="true">🗺</span> {{ __('explore.view_mode.map') }}
                     </button>
                     <button
                         type="button"
@@ -60,7 +60,7 @@
                             'text-gray-700 hover:bg-gray-50' => $viewMode !== 'browse',
                         ])
                     >
-                        <span aria-hidden="true">☰</span> Browse
+                        <span aria-hidden="true">☰</span> {{ __('explore.view_mode.browse') }}
                     </button>
                 </div>
             </div>
@@ -79,14 +79,14 @@
                     @elseif ($this->isAtTerminalLevel)
                         {{-- MainPlace is the terminal geographic level — no deeper level to drill into. --}}
                         <div class="rounded-lg border border-gray-100 bg-white px-4 py-6 text-center text-sm text-gray-400">
-                            No further sub-areas.
+                            {{ __('explore.no_further_subareas') }}
                         </div>
                     @elseif ($this->communitiesCountBelow > 0)
                         <x-explore.empty-state
                             :icon="$this->selectedTypeIcon"
-                            :heading="'No '.$this->selectedTypeLabel.' at '.$this->currentLevel.' level yet'"
-                            subheading="Be the first to start one."
-                            :cta-label="'+ Start a '.$this->selectedTypeSingular"
+                            :heading="__('explore.empty.none_at_level', ['type' => $this->selectedTypeLabel, 'level' => $this->currentLevel])"
+                            :subheading="__('explore.empty.be_first_text')"
+                            :cta-label="__('explore.empty.start_a', ['type' => $this->selectedTypeSingular])"
                             cta-action="startCommunity"
                             :below-count="$this->communitiesCountBelow"
                             :below-label="$this->selectedTypeLabel"
@@ -94,9 +94,9 @@
                     @else
                         <x-explore.empty-state
                             :icon="$this->selectedTypeIcon"
-                            :heading="'No '.$this->selectedTypeLabel.' here yet'"
-                            subheading="This is a fresh space waiting to grow."
-                            cta-label="+ Be the first"
+                            :heading="__('explore.empty.none_here', ['type' => $this->selectedTypeLabel])"
+                            :subheading="__('explore.empty.fresh_text')"
+                            :cta-label="__('explore.empty.be_first_cta')"
                             cta-action="startCommunity"
                             :below-count="0"
                         />
@@ -104,7 +104,7 @@
                 @else
                     {{-- Map view (Phase 1: disabled; toggle never activates this branch) --}}
                     <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
-                        🗺 Map view — coming soon.
+                        {{ __('explore.map_coming_soon') }}
                     </div>
                 @endif
             </div>
@@ -122,7 +122,7 @@
                         wire:navigate
                         class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-600 bg-white px-3 py-2 text-sm font-medium text-indigo-600 shadow-sm transition hover:bg-indigo-50"
                     >
-                        Could this be your home community?
+                        {{ __('explore.home_community') }}
                     </a>
                 </div>
             @endif
@@ -134,7 +134,7 @@
                 </div>
             @else
                 <div class="mt-auto flex min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-400">
-                    Select a location to explore its community.
+                    {{ __('explore.select_location') }}
                 </div>
             @endif
         </div>
@@ -146,10 +146,10 @@
     <div class="mt-10 border-t border-gray-200 pt-8">
         @php($current = collect($breadcrumb)->last())
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">
-            Communities in {{ $current['name'] ?? 'South Africa' }}
+            {{ __('explore.communities_in', ['place' => $current['name'] ?? 'South Africa']) }}
         </h2>
         <p class="mt-0.5 text-sm text-gray-500">
-            Organisations, campaigns, courses, theme communities and events at this location.
+            {{ __('explore.bottom_subtext') }}
         </p>
 
         {{-- Community-type filter (independent of the location filter above) --}}
@@ -161,7 +161,7 @@
         <div class="mt-4">
             @if ($selectedCommunityType === null)
                 <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
-                    Pick a community type above to see what's here.
+                    {{ __('explore.pick_type') }}
                 </div>
             @elseif ($this->typeCommunities->isNotEmpty())
                 {{-- Add bar above the card grid, right-aligned. --}}
@@ -172,7 +172,7 @@
                         wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($selectedCommunityType), label: @js($this->addCommunityLabel) } })"
                         class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
                     >
-                        + Add {{ $this->addCommunityLabel }}
+                        {{ __('explore.add_community', ['label' => $this->addCommunityLabel]) }}
                     </button>
                 </div>
 
@@ -185,8 +185,8 @@
             @elseif ($this->typeCommunitiesCountBelow > 0)
                 <x-explore.empty-state
                     :icon="$this->communityTypeIcon"
-                    :heading="'No '.$this->communityTypeLabel.' at '.$this->currentLevel.' level yet'"
-                    subheading="Be the first to start one."
+                    :heading="__('explore.empty.none_at_level', ['type' => $this->communityTypeLabel, 'level' => $this->currentLevel])"
+                    :subheading="__('explore.empty.be_first_text')"
                     :add-label="$this->addCommunityLabel"
                     :add-modal-type="$selectedCommunityType"
                     :below-count="$this->typeCommunitiesCountBelow"
@@ -195,8 +195,8 @@
             @else
                 <x-explore.empty-state
                     :icon="$this->communityTypeIcon"
-                    :heading="'No '.$this->communityTypeLabel.' here yet'"
-                    subheading="This is a fresh space waiting to grow."
+                    :heading="__('explore.empty.none_here', ['type' => $this->communityTypeLabel])"
+                    :subheading="__('explore.empty.fresh_text')"
                     :add-label="$this->addCommunityLabel"
                     :add-modal-type="$selectedCommunityType"
                     :below-count="0"

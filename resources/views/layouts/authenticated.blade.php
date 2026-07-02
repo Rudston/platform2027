@@ -23,8 +23,8 @@
 
             {{-- Centre: navigation --}}
             <div class="flex items-center gap-6">
-                <a href="{{ url('/') }}" class="hover:underline">Home</a>
-                <a href="{{ route('explore') }}" class="hover:underline">Explore Communities</a>
+                <a href="{{ url('/') }}" class="hover:underline">{{ __('navigation.home') }}</a>
+                <a href="{{ route('explore') }}" class="hover:underline">{{ __('navigation.explore_communities') }}</a>
             </div>
 
             {{-- Right: user + logout --}}
@@ -34,7 +34,7 @@
                     @csrf
                     <button type="submit"
                             class="rounded-sm border border-[#19140035] px-4 py-1.5 leading-normal hover:border-[#1915014a] dark:border-[#3E3E3A] dark:hover:border-[#62605b]">
-                        Log out
+                        {{ __('navigation.log_out') }}
                     </button>
                 </form>
             </div>

@@ -9,11 +9,8 @@ use App\Models\Demography\CoordinateData;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
-
-#[Title('Explore Communities')]
 
 class ExploreCommunities extends Component
 {
@@ -135,10 +132,10 @@ class ExploreCommunities extends Component
         $circle = $this->selectedCircle;
 
         if (! $circle) {
-            return 'National';
+            return __('geographic.level.national');
         }
 
-        return LocatableType::tryFrom((string) $circle->locatable_type)?->label() ?? 'National';
+        return LocatableType::tryFrom((string) $circle->locatable_type)?->label() ?? __('geographic.level.national');
     }
 
     /**
@@ -338,12 +335,12 @@ class ExploreCommunities extends Component
     public function addCommunityLabel(): string
     {
         return match ($this->selectedCommunityType) {
-            CommunityType::Organisation->value   => 'an Organisation Community',
-            CommunityType::ThemeCommunity->value => 'a Theme Community',
-            CommunityType::Campaign->value       => 'a Campaign Community',
-            CommunityType::Course->value         => 'a Course Community',
-            CommunityType::Event->value          => 'an Event Community',
-            default                              => 'a Community',
+            CommunityType::Organisation->value   => __('communities.add_label.organisation_community'),
+            CommunityType::ThemeCommunity->value => __('communities.add_label.theme_community'),
+            CommunityType::Campaign->value       => __('communities.add_label.campaign_community'),
+            CommunityType::Course->value         => __('communities.add_label.course_community'),
+            CommunityType::Event->value          => __('communities.add_label.event_community'),
+            default                              => __('communities.add_label.default'),
         };
     }
 
@@ -471,7 +468,8 @@ class ExploreCommunities extends Component
 
     public function render()
     {
-        return view('livewire.explore.explore-communities');
+        return view('livewire.explore.explore-communities')
+            ->title(__('explore.title'));
     }
 
     /*
@@ -564,26 +562,26 @@ class ExploreCommunities extends Component
     private function labelFor(?string $type): string
     {
         return match ($type) {
-            CommunityType::LocationCommunity->value => 'Locations',
-            CommunityType::Organisation->value      => 'Organisations',
-            CommunityType::Campaign->value          => 'Campaigns',
-            CommunityType::Course->value            => 'Courses',
-            CommunityType::Event->value             => 'Events',
-            CommunityType::ThemeCommunity->value    => 'Theme Communities',
-            default                                 => 'Communities',
+            CommunityType::LocationCommunity->value => __('communities.plural.locations'),
+            CommunityType::Organisation->value      => __('communities.plural.organisations'),
+            CommunityType::Campaign->value          => __('communities.plural.campaigns'),
+            CommunityType::Course->value            => __('communities.plural.courses'),
+            CommunityType::Event->value             => __('communities.plural.events'),
+            CommunityType::ThemeCommunity->value    => __('communities.plural.theme_communities'),
+            default                                 => __('communities.plural.default'),
         };
     }
 
     private function singularFor(?string $type): string
     {
         return match ($type) {
-            CommunityType::LocationCommunity->value => 'Location',
-            CommunityType::Organisation->value      => 'Organisation',
-            CommunityType::Campaign->value          => 'Campaign',
-            CommunityType::Course->value            => 'Course',
-            CommunityType::Event->value             => 'Event',
-            CommunityType::ThemeCommunity->value    => 'Theme',
-            default                                 => 'Community',
+            CommunityType::LocationCommunity->value => __('communities.singular.location'),
+            CommunityType::Organisation->value      => __('communities.singular.organisation'),
+            CommunityType::Campaign->value          => __('communities.singular.campaign'),
+            CommunityType::Course->value            => __('communities.singular.course'),
+            CommunityType::Event->value             => __('communities.singular.event'),
+            CommunityType::ThemeCommunity->value    => __('communities.singular.theme'),
+            default                                 => __('communities.singular.default'),
         };
     }
 

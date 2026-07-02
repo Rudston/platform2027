@@ -19,12 +19,12 @@
     // Short geographic badge for a location circle.
     $badgeFor = function ($circle) {
         return match (class_basename((string) $circle->locatable_type)) {
-            'Country'              => 'Country',
-            'Province'            => 'Province',
-            'DistrictMunicipality' => 'DM',
-            'LocalMunicipality'   => 'Local Municipality',
-            'MainPlace'           => 'Main Place',
-            'City'                => ($circle->locatable?->metropolis ? 'Metro' : 'City'),
+            'Country'              => __('geographic.badge_list.country'),
+            'Province'            => __('geographic.badge_list.province'),
+            'DistrictMunicipality' => __('geographic.badge_list.dm'),
+            'LocalMunicipality'   => __('geographic.badge_list.local_municipality'),
+            'MainPlace'           => __('geographic.badge_list.main_place'),
+            'City'                => ($circle->locatable?->metropolis ? __('geographic.badge_list.metro') : __('geographic.badge_list.city')),
             default               => class_basename((string) $circle->locatable_type),
         };
     };
@@ -52,7 +52,7 @@
                             <span class="truncate text-gray-800">{{ $circle->locatable?->name ?? $circle->name }}</span>
                             @if ($circle->also_here ?? false)
                                 <span class="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
-                                    Also here
+                                    {{ __('explore.also_here') }}
                                 </span>
                             @endif
                         </span>
@@ -72,7 +72,7 @@
                     wire:click="$dispatch('openModal', { component: 'explore.request-location-modal', arguments: { parentLocationName: @js($heading), parentCircleId: @js($selectedCircleId) } })"
                     class="text-sm text-indigo-600 hover:underline"
                 >
-                    Your location not listed? Click here to request us to add it
+                    {{ __('explore.request_location') }}
                 </button>
             </div>
         @endif

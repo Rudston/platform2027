@@ -17,12 +17,12 @@
                     <input
                         type="text"
                         wire:model.live.debounce.300ms="query"
-                        placeholder="Search communities…"
+                        placeholder="{{ __('explore.search_placeholder') }}"
                         class="w-full border-0 p-0 text-gray-800 placeholder-gray-400 focus:ring-0"
                         autofocus
                         x-init="$nextTick(() => $el.focus())"
                     >
-                    <button type="button" wire:click="closeSearch" class="text-gray-400 transition hover:text-gray-600" aria-label="Close search">✕</button>
+                    <button type="button" wire:click="closeSearch" class="text-gray-400 transition hover:text-gray-600" aria-label="{{ __('explore.close_search') }}">✕</button>
                 </div>
 
                 <div class="max-h-96 overflow-y-auto">
@@ -43,9 +43,9 @@
                     @empty
                         <div class="px-4 py-8 text-center text-sm text-gray-400">
                             @if (strlen($query) < 2)
-                                Type at least 2 characters to search…
+                                {{ __('explore.search_min_chars') }}
                             @else
-                                No results for “{{ $query }}”.
+                                {{ __('explore.search_no_results', ['query' => $query]) }}
                             @endif
                         </div>
                     @endforelse

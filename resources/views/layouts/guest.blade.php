@@ -24,19 +24,19 @@
                 @auth
                     <a href="{{ route('dashboard') }}"
                        class="rounded-sm border border-[#19140035] px-4 py-1.5 leading-normal hover:border-[#1915014a] dark:border-[#3E3E3A] dark:hover:border-[#62605b]">
-                        Dashboard
+                        {{ __('navigation.dashboard') }}
                     </a>
                 @else
                     @if (Route::has('login'))
                         <a href="{{ route('login') }}"
                            class="rounded-sm border border-transparent px-4 py-1.5 leading-normal hover:border-[#19140035] dark:hover:border-[#3E3E3A]">
-                            Log in
+                            {{ __('navigation.log_in') }}
                         </a>
                     @endif
                     @if (Route::has('register'))
                         <a href="{{ route('register') }}"
                            class="rounded-sm border border-[#19140035] px-4 py-1.5 leading-normal hover:border-[#1915014a] dark:border-[#3E3E3A] dark:hover:border-[#62605b]">
-                            Register
+                            {{ __('navigation.register') }}
                         </a>
                     @endif
                 @endauth

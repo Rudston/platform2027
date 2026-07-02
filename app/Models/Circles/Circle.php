@@ -9,10 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Translatable\HasTranslations;
 
 class Circle extends Model
 {
-    use SoftDeletes;
+    use HasTranslations, SoftDeletes;
+
+    /** Translatable JSON columns (resolved to the current locale transparently). */
+    public array $translatable = ['description'];
 
     protected $guarded = [];
 

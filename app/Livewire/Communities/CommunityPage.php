@@ -4,10 +4,8 @@ namespace App\Livewire\Communities;
 
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 
-#[Title('Community')]
 class CommunityPage extends Component
 {
     public Circle $circle;
@@ -56,6 +54,7 @@ class CommunityPage extends Component
 
     public function render()
     {
-        return view('livewire.communities.community-page');
+        return view('livewire.communities.community-page')
+            ->title(__('communities.page.title'));
     }
 }

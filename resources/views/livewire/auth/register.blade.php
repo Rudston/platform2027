@@ -2,13 +2,13 @@
     /** @var \App\Livewire\Auth\Register $this */
 @endphp
 <div>
-    <h1 class="mb-1 text-lg font-medium">Create your account</h1>
-    <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">Register to join the platform.</p>
+    <h1 class="mb-1 text-lg font-medium">{{ __('auth.register.heading') }}</h1>
+    <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">{{ __('auth.register.subtitle') }}</p>
 
     <form wire:submit="register" class="space-y-4">
         {{-- Name --}}
         <div>
-            <label for="name" class="block text-sm font-medium">Name</label>
+            <label for="name" class="block text-sm font-medium">{{ __('auth.register.name') }}</label>
             <input
                 type="text"
                 id="name"
@@ -21,7 +21,7 @@
 
         {{-- Email --}}
         <div>
-            <label for="email" class="block text-sm font-medium">Email</label>
+            <label for="email" class="block text-sm font-medium">{{ __('auth.shared.email') }}</label>
             <input
                 type="email"
                 id="email"
@@ -34,7 +34,7 @@
 
         {{-- Password --}}
         <div>
-            <label for="password" class="block text-sm font-medium">Password</label>
+            <label for="password" class="block text-sm font-medium">{{ __('auth.shared.password') }}</label>
             <input
                 type="password"
                 id="password"
@@ -47,7 +47,7 @@
 
         {{-- Confirm password --}}
         <div>
-            <label for="password_confirmation" class="block text-sm font-medium">Confirm password</label>
+            <label for="password_confirmation" class="block text-sm font-medium">{{ __('auth.register.confirm_password') }}</label>
             <input
                 type="password"
                 id="password_confirmation"
@@ -62,12 +62,12 @@
             type="submit"
             class="w-full rounded-md bg-[#1b1b18] px-4 py-2 text-sm font-medium text-white transition hover:bg-black dark:bg-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white"
         >
-            Register
+            {{ __('auth.register.submit') }}
         </button>
     </form>
 
     <p class="mt-6 text-center text-sm text-[#706f6c] dark:text-[#A1A09A]">
-        Already registered?
-        <a href="{{ route('login') }}" class="font-medium text-[#1b1b18] underline dark:text-[#EDEDEC]">Log in</a>
+        {{ __('auth.register.have_account') }}
+        <a href="{{ route('login') }}" class="font-medium text-[#1b1b18] underline dark:text-[#EDEDEC]">{{ __('auth.register.login') }}</a>
     </p>
 </div>

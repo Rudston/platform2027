@@ -22,11 +22,11 @@ class Breadcrumb extends Component
     public function typeLabel(): ?string
     {
         return match ($this->selectedType) {
-            CommunityType::Organisation->value   => 'Organisations',
-            CommunityType::Campaign->value       => 'Campaigns',
-            CommunityType::Course->value         => 'Courses',
-            CommunityType::Event->value          => 'Events',
-            CommunityType::ThemeCommunity->value => 'Theme Communities',
+            CommunityType::Organisation->value   => __('communities.plural.organisations'),
+            CommunityType::Campaign->value       => __('communities.plural.campaigns'),
+            CommunityType::Course->value         => __('communities.plural.courses'),
+            CommunityType::Event->value          => __('communities.plural.events'),
+            CommunityType::ThemeCommunity->value => __('communities.plural.theme_communities'),
             default                              => null,
         };
     }

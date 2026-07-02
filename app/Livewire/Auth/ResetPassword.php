@@ -7,11 +7,9 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts.guest')]
-#[Title('Reset password')]
 class ResetPassword extends Component
 {
     public string $token = '';
@@ -67,6 +65,7 @@ class ResetPassword extends Component
 
     public function render()
     {
-        return view('livewire.auth.reset-password');
+        return view('livewire.auth.reset-password')
+            ->title(__('auth.reset.title'));
     }
 }

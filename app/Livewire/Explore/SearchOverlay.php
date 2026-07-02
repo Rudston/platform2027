@@ -68,13 +68,13 @@ class SearchOverlay extends Component
     public function badgeFor(?string $circleableType): string
     {
         return match ($circleableType) {
-            CommunityType::LocationCommunity->value => 'Location',
-            CommunityType::Organisation->value      => 'Organisation',
-            CommunityType::Campaign->value          => 'Campaign',
-            CommunityType::Course->value            => 'Course',
-            CommunityType::Event->value             => 'Event',
-            CommunityType::ThemeCommunity->value    => 'Theme',
-            default                                 => 'Community',
+            CommunityType::LocationCommunity->value => __('communities.singular.location'),
+            CommunityType::Organisation->value      => __('communities.singular.organisation'),
+            CommunityType::Campaign->value          => __('communities.singular.campaign'),
+            CommunityType::Course->value            => __('communities.singular.course'),
+            CommunityType::Event->value             => __('communities.singular.event'),
+            CommunityType::ThemeCommunity->value    => __('communities.singular.theme'),
+            default                                 => __('communities.singular.default'),
         };
     }
 
