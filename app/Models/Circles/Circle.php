@@ -30,6 +30,7 @@ class Circle extends Model
         'circleable_type',
         'locatable_id',
         'locatable_type',
+        'is_test'
     ];
 
     /*
