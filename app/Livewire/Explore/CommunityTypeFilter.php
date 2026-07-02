@@ -10,7 +10,7 @@ class CommunityTypeFilter extends Component
 {
     /**
      * Which subset of pills to render:
-     *   'location'  → [All, Locations]            (top section)
+     *   'location'  → [Locations]                 (top section)
      *   'community' → [Theme Communities, Organisations, Campaigns, Courses, Events]
      */
     public string $group = 'location';
@@ -33,8 +33,7 @@ class CommunityTypeFilter extends Component
                 ['value' => CommunityType::Event->value,          'label' => 'Events',            'icon' => '📅'],
             ],
             default => [
-                ['value' => null,                                    'label' => 'All',       'icon' => '🌍'],
-                ['value' => CommunityType::LocationCommunity->value, 'label' => 'Locations', 'icon' => '📍'],
+                ['value' => null, 'label' => 'Locations', 'icon' => '📍'],
             ],
         };
     }
