@@ -3,6 +3,7 @@
 // Minimal test overrides — untranslated keys fall through pt_BR → pt → en.
 return [
     'singular' => [
+        'location' => 'Localidade',
         'organisation' => 'Organização',
         'campaign'     => 'Campanha',
         'course'       => 'Curso',
@@ -11,6 +12,7 @@ return [
     ],
 
     'plural' => [
+        'locations' => 'Localidades',
         'organisations'     => 'Organizações',
         'campaigns'         => 'Campanhas',
         'courses'           => 'Cursos',

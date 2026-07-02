@@ -146,7 +146,7 @@ Do not change any existing methods, relationships, or properties on these models
 4. LocatableType enum — add a locationLevel() method:
 Read LocatableType.php in full before modifying it. Add a method locationLevel(): LocationLevel that returns the correct LocationLevel for each enum case. This allows the column browser and other components to call $locatableType->locationLevel() rather than doing their own match on specific types.
 Also add isTerminal(): bool as a convenience proxy:
-phppublic function isTerminal(): bool
+pop public function isTerminal(): bool
 {
     return $this->locationLevel()->isTerminal();
 }
