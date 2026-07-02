@@ -1,0 +1,80 @@
+QUESTION:
+
+In south africa, the demography is hierarchically divided into provinces, district municipalities, local municipalities and 'main places'; I am wondering how one can cater for the structures in other countries such as Brazil.
+
+I believe this is the case in Brazil:
+
+A typical Brazilian hierarchy is:
+
+Brazil
+  State
+    Municipality
+      District
+        Neighbourhood (Bairro)
+
+For example:
+
+Brazil
+  São Paulo
+    Campinas
+      Distrito de Barão Geraldo
+        Cidade Universitária
+
+or
+
+Brazil
+  Rio Grande do Sul
+    Porto Alegre
+      Centro Histórico
+
+So it seems I would have to make serious changes to make this
+ structure more generic like:
+
+Country
+  Level 1 Administrative Area
+  Level 2 Administrative Area
+  Level 3 Administrative Area
+  Place
+  Neighbourhood
+
+To make such a change would be best done before adding language functionality, but seems worryingly huge as we already have models and tables named for the South African case ...
+ =====
+ ANSWER:
+
+ This is a genuinely important architectural decision and worth thinking through carefully before doing anything. Let me give you an honest assessment.
+ How big is the change really?
+ The concern is valid but the scope depends entirely on which approach you take. There are three realistic options:
+
+ Option A: Generic replacement — rename everything
+ Replace provinces, district_municipalities, local_municipalities, main_places with generic administrative_areas with a level column (1–4), plus a separate places table.
+ Pro: Architecturally clean, fully generic from day one.
+ Con: This is genuinely large. Every model, migration, seeder, relationship, LocatableType enum, circle creation service, column browser, and all the Explore UI logic that currently knows about specific types would need updating. You have 14,000+ seeded MainPlaces and working circle relationships. The risk of breaking something is high.
+ Verdict: Too disruptive at this stage. Not recommended.
+
+ Option B: Polymorphic abstraction layer — keep SA tables, add a generic interface
+ Keep your existing SA-specific tables exactly as they are. Introduce a generic abstraction on top:
+
+ An AdministrativeArea interface (or abstract model) that all locatable models implement
+ A LocationLevel enum (Level1, Level2, Level3, Place) that each model self-reports
+ A locatables polymorphic registry or a geographic_nodes view that unifies them for querying
+
+ Brazil's states, municipalities, districts, neighbourhoods tables get added later and implement the same interface. The column browser, circle creation service, and Explore UI only ever talk to the interface — they don't care whether the underlying record is a Province or a State.
+ Pro: No changes to existing SA tables or seeded data. New countries add new tables implementing the interface. Explore and circle logic stays stable.
+ Con: Slightly more indirection. The polymorphic locatable_type column on circles already handles this partially — you'd be formalising what's already implied.
+ Verdict: This is the right approach. It's essentially what your Circleable/HasCircle pattern already does for community types — apply the same pattern to geographic types.
+
+ Option C: Do nothing now, revisit when Brazil is real
+ Keep everything SA-specific. When/if Brazil becomes a real requirement, do the abstraction then — with a clearer picture of what "generic" actually needs to cover.
+ Pro: Zero risk, zero work now.
+ Con: The longer you wait the more code assumes SA-specific types. But honestly — you're not building Brazil yet. Premature generalisation is a real cost too.
+ Verdict: More reasonable than it sounds. The key question is how soon Brazil (or another country) is a real roadmap item vs a theoretical future.
+
+ My honest recommendation
+ Do Option B, but only the interface/contract part — not the full implementation.
+ Concretely, before adding internationalisation:
+
+ Define a HasLocationLevel interface (or trait) with a single method locationLevel(): LocationLevel — every locatable model implements it
+ Add a LocationLevel enum with cases Level1 through Level4 (or named: Region, District, LocalArea, Place) — each SA model returns its appropriate level
+ Make the column browser and LocatableType enum reference LocationLevel for display/branching logic rather than hardcoded type checks
+
+ This is a small, bounded change — maybe 8–10 files — that future-proofs the architecture without touching tables, seeders, or existing data. When Brazil arrives, you add its tables, implement the interface, and the rest of the platform handles it.
