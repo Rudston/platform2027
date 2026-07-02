@@ -27,4 +27,26 @@ enum LocatableType: string
             self::City                 => 'City',
         };
     }
+
+    /**
+     * Country-agnostic level for this SA-specific type, so callers can reason
+     * about geography generically (e.g. $locatableType->locationLevel()).
+     */
+    public function locationLevel(): LocationLevel
+    {
+        return match ($this) {
+            self::Country              => LocationLevel::Country,
+            self::Province             => LocationLevel::Region,
+            self::DistrictMunicipality => LocationLevel::District,
+            self::LocalMunicipality    => LocationLevel::Local,
+            self::City                 => LocationLevel::City,
+            self::MainPlace            => LocationLevel::Place,
+        };
+    }
+
+    /** Convenience proxy: is this the terminal (bottom) geographic level? */
+    public function isTerminal(): bool
+    {
+        return $this->locationLevel()->isTerminal();
+    }
 }

@@ -2,12 +2,14 @@
 
 namespace App\Models\Demography;
 
+use App\Contracts\Geographic\HasLocationLevel;
+use App\Enums\LocationLevel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class City extends Model
+class City extends Model implements HasLocationLevel
 {
     use SoftDeletes;
 
@@ -52,5 +54,20 @@ class City extends Model
     public function circleDescription(): string
     {
         return "This is where you will find all the communities belonging to the municipal area of the City of ".$this->name;
+    }
+
+    public function locationLevel(): LocationLevel
+    {
+        return LocationLevel::City;
+    }
+
+    public function locationLabel(): string
+    {
+        return $this->name;
+    }
+
+    public function locationParentId(): ?int
+    {
+        return $this->province_id;
     }
 }

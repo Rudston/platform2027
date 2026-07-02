@@ -2,12 +2,14 @@
 
 namespace App\Models\Demography;
 
+use App\Contracts\Geographic\HasLocationLevel;
+use App\Enums\LocationLevel;
 use App\Models\Circles\Circle;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class MainPlace extends Model
+class MainPlace extends Model implements HasLocationLevel
 {
     use SoftDeletes;
 
@@ -56,5 +58,21 @@ class MainPlace extends Model
         return $circle
             ? route('explore', ['circle' => $circle->id], absolute: false)
             : null;
+    }
+
+    public function locationLevel(): LocationLevel
+    {
+        return LocationLevel::Place;
+    }
+
+    public function locationLabel(): string
+    {
+        return $this->name;
+    }
+
+    public function locationParentId(): ?int
+    {
+        // A MainPlace belongs to a LocalMunicipality OR a City — never both.
+        return $this->local_municipality_id ?? $this->city_id;
     }
 }

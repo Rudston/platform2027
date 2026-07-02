@@ -27,6 +27,7 @@ class CircleCreationService
     /**
      * Default country id used when no location is specified (South Africa).
      */
+    // TODO: review for multi-country compatibility
     private const DEFAULT_COUNTRY_ID = 191;
 
     public function create(

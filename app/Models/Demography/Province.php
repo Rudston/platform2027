@@ -2,11 +2,13 @@
 
 namespace App\Models\Demography;
 
+use App\Contracts\Geographic\HasLocationLevel;
+use App\Enums\LocationLevel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Province extends Model
+class Province extends Model implements HasLocationLevel
 {
     protected $table = 'provinces';
 
@@ -52,5 +54,20 @@ class Province extends Model
         } else {
             return "This is where you will find everything relating to the top level of the province of ".$this->name;
         }
+    }
+
+    public function locationLevel(): LocationLevel
+    {
+        return LocationLevel::Region;
+    }
+
+    public function locationLabel(): string
+    {
+        return $this->name;
+    }
+
+    public function locationParentId(): ?int
+    {
+        return $this->country_id;
     }
 }

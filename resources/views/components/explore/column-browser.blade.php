@@ -10,11 +10,11 @@
     $isLocationMode = $selectedType === null
         || $selectedType === \App\Enums\CommunityType::LocationCommunity->value;
 
-    // True when this column is listing MainPlace-level results (the terminal
-    // geographic level) — used to show the "request a location" button below.
-    $isMainPlaceLevel = $isLocationMode
+    // True when this column is listing terminal-level results (the bottom of
+    // the geographic hierarchy) — used to show the "request a location" button.
+    $isTerminalLevel = $isLocationMode
         && $communities->isNotEmpty()
-        && (string) $communities->first()->locatable_type === \App\Enums\LocatableType::MainPlace->value;
+        && (\App\Enums\LocatableType::tryFrom((string) $communities->first()->locatable_type)?->isTerminal() ?? false);
 
     // Short geographic badge for a location circle.
     $badgeFor = function ($circle) {
@@ -64,7 +64,7 @@
             @endforeach
         </ul>
 
-        @if ($isMainPlaceLevel)
+        @if ($isTerminalLevel)
             {{-- TODO: guard this button with auth + permission check --}}
             <div class="border-t border-gray-100 px-4 py-3 text-center">
                 <button

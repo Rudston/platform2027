@@ -149,7 +149,7 @@ class ExploreCommunities extends Component
     #[Computed]
     public function isAtTerminalLevel(): bool
     {
-        return $this->selectedCircle?->locatable_type === LocatableType::MainPlace->value;
+        return LocatableType::tryFrom((string) $this->selectedCircle?->locatable_type)?->isTerminal() ?? false;
     }
 
     /**
@@ -480,6 +480,7 @@ class ExploreCommunities extends Component
     |--------------------------------------------------------------------------
     */
 
+    // TODO: review for multi-country compatibility
     private const SOUTH_AFRICA_ID = 191;
 
     private function countryCircleId(): ?int
