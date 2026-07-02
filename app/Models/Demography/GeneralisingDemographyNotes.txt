@@ -78,3 +78,83 @@ To make such a change would be best done before adding language functionality, b
  Make the column browser and LocatableType enum reference LocationLevel for display/branching logic rather than hardcoded type checks
 
  This is a small, bounded change — maybe 8–10 files — that future-proofs the architecture without touching tables, seeders, or existing data. When Brazil arrives, you add its tables, implement the interface, and the rest of the platform handles it.
+===== Implemented =====
+I need to introduce a thin geographic abstraction layer over the existing South African demography models, so that the Explore UI and circle creation logic work against a generic interface rather than SA-specific types. This is preparation for supporting other countries (e.g. Brazil) in future without changing existing tables, seeders, or data.
+What already exists:
+
+SA-specific models: Country, Province, DistrictMunicipality, LocalMunicipality, MainPlace, City
+LocatableType enum mapping these to their polymorphic string identifiers
+CircleCreationService using LocatableType directly
+column-browser.blade.php branching on specific types to determine drill-down behaviour
+ExploreCommunities and related components referencing specific locatable types in places
+
+The SA geographic hierarchy for reference:
+Country
+  └── Province
+        ├── DistrictMunicipality
+        │     └── LocalMunicipality
+        │           └── MainPlace        ← always terminal (no children)
+        └── City
+              └── MainPlace              ← always terminal (no children)
+MainPlace is the only terminal level. City is NOT terminal — it has MainPlace children.
+This step is interface/contract only — no table changes, no data changes, no seeders.
+
+Required changes:
+1. LocationLevel enum:
+Create app/Enums/LocationLevel.php with the following cases:
+phpenum LocationLevel: string
+{
+    case Country  = 'country';
+    case Region   = 'region';    // Province, State, etc.
+    case District = 'district';  // DistrictMunicipality, etc.
+    case Local    = 'local';     // LocalMunicipality, etc.
+    case City     = 'city';      // Cities (metropolitan — sits outside the DM/LM hierarchy, has MainPlace children)
+    case Place    = 'place';     // MainPlace, Neighbourhood, etc. — ALWAYS terminal
+}
+Add a helper method label(): string returning a human-readable string for each case (e.g. Region → 'Region').
+Add isTerminal(): bool — returns true only for Place. Every other level including City returns false because City has MainPlace children:
+phppublic function isTerminal(): bool
+{
+    return match($this) {
+        LocationLevel::Place => true,
+        default              => false,
+    };
+}
+Important: isTerminal() is a semantic hint only. The column browser's authoritative check for whether to render a next column must remain driven by whether children actually exist in the DB ($children->isNotEmpty()), not solely by this flag. isTerminal() should only be used to control things like the "Your location not listed?" button and the "No further sub-areas" message — things that are specific to being at the bottom of the geographic hierarchy regardless of child count.
+
+2. HasLocationLevel interface:
+Create app/Contracts/Geographic/HasLocationLevel.php:
+phpinterface HasLocationLevel
+{
+    public function locationLevel(): LocationLevel;
+    public function locationLabel(): string;   // human-readable name of this specific instance e.g. "Western Cape"
+    public function locationParentId(): ?int;  // id of the parent locatable, null for Country
+}
+
+3. Implement the interface on all SA locatable models:
+Read each model before modifying it. Add implements HasLocationLevel and the three methods to:
+
+Country → LocationLevel::Country, locationLabel() returns country name, locationParentId() returns null
+Province → LocationLevel::Region, parent is country_id
+DistrictMunicipality → LocationLevel::District, parent is province_id
+LocalMunicipality → LocationLevel::Local, parent is district_municipality_id
+City → LocationLevel::City, parent is province_id
+MainPlace → LocationLevel::Place, locationParentId() returns local_municipality_id ?? city_id — either may be set, never both
+
+Do not change any existing methods, relationships, or properties on these models — only add the interface implementation.
+
+4. LocatableType enum — add a locationLevel() method:
+Read LocatableType.php in full before modifying it. Add a method locationLevel(): LocationLevel that returns the correct LocationLevel for each enum case. This allows the column browser and other components to call $locatableType->locationLevel() rather than doing their own match on specific types.
+Also add isTerminal(): bool as a convenience proxy:
+phppublic function isTerminal(): bool
+{
+    return $this->locationLevel()->isTerminal();
+}
+
+5. Column browser — replace hardcoded type checks:
+Read column-browser.blade.php and its backing Livewire component (if any) in full. Find every place that checks for a specific LocatableType (e.g. === LocatableType::MainPlace) to determine whether to show the "No further sub-areas" message or the "Your location not listed?" button. Replace these checks with $locatableType->isTerminal().
+Do not change the existing logic that determines whether to render a next column at all — that must remain driven by whether children exist in the DB, not by isTerminal().
+No other behaviour should change.
+
+6. Verify CircleCreationService and ExploreCommunities need no changes:
+Read both files and confirm that neither hardcodes specific LocatableType cases in a way that would break when a new country's locatable types are added later. If you find any such hardcoding, add a comment // TODO: review for multi-country compatibility but do not refactor it in this step — just report what you found.
