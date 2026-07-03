@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -41,10 +42,23 @@ class RolesAndPermissionsSeeder extends Seeder
             Role::findOrCreate($role, $guard);
         }
 
+        // Global permissions (team-agnostic, circle_id = null).
+        $permissions = [
+            'edit_content_blocks',
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::findOrCreate($permission, $guard);
+        }
+
+        // Grant all defined permissions to superadmin.
+        Role::findByName('superadmin', $guard)->givePermissionTo($permissions);
+
         $this->command->info(sprintf(
-            'Seeded %d global roles and %d circle roles.',
+            'Seeded %d global roles, %d circle roles and %d permissions.',
             count($globalRoles),
             count($circleRoles),
+            count($permissions),
         ));
     }
 }
