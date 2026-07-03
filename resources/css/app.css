@@ -5,7 +5,50 @@
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+/* 1. Tell Tailwind v4 to look for a manual ".dark" class on the html tag */
+@variant dark (&:where(.dark, .dark *));
+
+/* 2. Define your Light Mode baseline variables */
+/*
+ * Semantic color tokens. The variable name after `--color-` MUST equal the
+ * utility suffix you want to write in markup — Tailwind v4 derives utilities
+ * from the full suffix. So `--color-main` backs `text-main` (NOT
+ * `--color-text-main`, which would only back `text-text-main`).
+ *   bg-surface        ← --color-surface
+ *   text-main         ← --color-main
+ *   text-muted        ← --color-muted
+ *   border-border-muted ← --color-border-muted
+ */
+:root {
+    --color-surface: #ffffff;
+    --color-main: #111827;          /* Gray 900 */
+    --color-muted: #6b7280;         /* Gray 500 */
+    --color-border-muted: #e5e7eb;  /* Gray 200 */
+}
+
+/* 3. Redefine those exact variables for Dark Mode */
+.dark {
+    --color-surface: #0f172a;       /* Slate 900 */
+    --color-main: #f9fafb;          /* Gray 50 */
+    --color-muted: #9ca3af;         /* Gray 400 */
+    --color-border-muted: #334155;  /* Slate 700 */
+}
+
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --color-surface: var(--color-surface);
+    --color-main: var(--color-main);
+    --color-muted: var(--color-muted);
+    --color-border-muted: var(--color-border-muted);
+}
+
+/*
+ * Tailwind v4's Preflight no longer sets `cursor: pointer` on buttons, so
+ * enabled buttons show the default arrow. Restore the hand cursor globally.
+ */
+@layer base {
+    button:not(:disabled) {
+        cursor: pointer;
+    }
 }

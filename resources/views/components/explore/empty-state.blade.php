@@ -14,13 +14,13 @@
     'addModalType' => null,
 ])
 
-<div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center">
+<div class="rounded-lg border border-dashed border-border-muted bg-surface p-10 text-center">
     <div class="text-5xl" aria-hidden="true">{{ $icon }}</div>
 
-    <h2 class="mt-4 text-lg font-semibold text-gray-800">{{ $heading }}</h2>
+    <h2 class="mt-4 text-lg font-semibold text-main">{{ $heading }}</h2>
 
     @if ($subheading)
-        <p class="mt-1 text-sm text-gray-500">{{ $subheading }}</p>
+        <p class="mt-1 text-sm text-muted">{{ $subheading }}</p>
     @endif
 
     @if ($addLabel)
@@ -43,9 +43,9 @@
     @endif
 
     @if ((int) $belowCount > 0)
-        <div class="mx-auto mt-8 max-w-xs border-t border-gray-100 pt-4 text-sm text-gray-500">
-            <span class="font-semibold text-gray-700">{{ $belowCount }}</span> {{ $belowLabel }}
-            <div class="mt-0.5 text-gray-400">{{ __('explore.empty.in_sub_regions') }}</div>
+        <div class="mx-auto mt-8 max-w-xs border-t border-border-muted pt-4 text-sm text-muted">
+            <span class="font-semibold text-main">{{ $belowCount }}</span> {{ $belowLabel }}
+            <div class="mt-0.5 text-muted">{{ __('explore.empty.in_sub_regions') }}</div>
         </div>
     @endif
 </div>

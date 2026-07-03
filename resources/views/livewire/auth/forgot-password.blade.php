@@ -5,15 +5,15 @@
     <h1 class="mb-1 text-lg font-medium">{{ __('auth.forgot.heading') }}</h1>
 
     @if ($sent)
-        <div class="mt-4 rounded-md bg-green-50 p-4 text-sm text-green-700 dark:bg-[#1D2B1D] dark:text-green-300">
+        <div class="mt-4 rounded-md bg-green-50 p-4 text-sm text-green-700">
             {{ __('auth.forgot.sent') }}
         </div>
 
-        <p class="mt-6 text-center text-sm text-[#706f6c] dark:text-[#A1A09A]">
-            <a href="{{ route('login') }}" class="font-medium text-[#1b1b18] underline dark:text-[#EDEDEC]">{{ __('auth.shared.back_to_login') }}</a>
+        <p class="mt-6 text-center text-sm text-muted">
+            <a href="{{ route('login') }}" class="font-medium text-main underline">{{ __('auth.shared.back_to_login') }}</a>
         </p>
     @else
-        <p class="mb-6 text-sm text-[#706f6c] dark:text-[#A1A09A]">
+        <p class="mb-6 text-sm text-muted">
             {{ __('auth.forgot.intro') }}
         </p>
 
@@ -25,21 +25,21 @@
                     id="email"
                     wire:model="email"
                     autocomplete="email"
-                    class="mt-1 block w-full rounded-md border border-[#19140035] bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-[#3E3E3A] dark:bg-[#0a0a0a]"
+                    class="mt-1 block w-full rounded-md border border-border-muted bg-surface px-3 py-2 text-sm text-main shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
-                @error('email') <p class="mt-1 text-sm text-red-600 dark:text-[#FF4433]">{{ $message }}</p> @enderror
+                @error('email') <p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
 
             <button
                 type="submit"
-                class="w-full rounded-md bg-[#1b1b18] px-4 py-2 text-sm font-medium text-white transition hover:bg-black dark:bg-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white"
+                class="w-full rounded-md bg-main px-4 py-2 text-sm font-medium text-surface transition hover:opacity-90"
             >
                 {{ __('auth.forgot.submit') }}
             </button>
         </form>
 
-        <p class="mt-6 text-center text-sm text-[#706f6c] dark:text-[#A1A09A]">
-            <a href="{{ route('login') }}" class="font-medium text-[#1b1b18] underline dark:text-[#EDEDEC]">{{ __('auth.shared.back_to_login') }}</a>
+        <p class="mt-6 text-center text-sm text-muted">
+            <a href="{{ route('login') }}" class="font-medium text-main underline">{{ __('auth.shared.back_to_login') }}</a>
         </p>
     @endif
 </div>

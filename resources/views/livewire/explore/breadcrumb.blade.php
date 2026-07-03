@@ -10,7 +10,7 @@
         @php($isCurrent = $loop->last && ! $typeLabel)
 
         @if ($isCurrent)
-            <span class="font-semibold text-gray-800">{{ $crumb['name'] }}</span>
+            <span class="font-semibold text-main">{{ $crumb['name'] }}</span>
         @else
             <button
                 type="button"
@@ -22,11 +22,11 @@
         @endif
 
         @if (! $loop->last || $typeLabel)
-            <span class="text-gray-400" aria-hidden="true">›</span>
+            <span class="text-muted" aria-hidden="true">›</span>
         @endif
     @endforeach
 
     @if ($typeLabel)
-        <span class="font-semibold text-gray-800">{{ $typeLabel }}</span>
+        <span class="font-semibold text-main">{{ $typeLabel }}</span>
     @endif
 </nav>

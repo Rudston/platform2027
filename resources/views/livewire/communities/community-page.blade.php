@@ -9,29 +9,29 @@
         {{ __('communities.page.back') }}
     </a>
 
-    <div class="mt-4 rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+    <div class="mt-4 rounded-lg border border-border-muted bg-surface p-8 shadow-sm">
         {{-- Header: type icon + name --}}
         <div class="flex items-start gap-3">
             <span class="text-3xl" aria-hidden="true">{{ $this->icon() }}</span>
-            <h1 class="text-2xl font-bold text-gray-800">{{ $circle->name }}</h1>
+            <h1 class="text-2xl font-bold text-main">{{ $circle->name }}</h1>
         </div>
 
         {{-- Geographic breadcrumb (temporary: single location line, as in the modal) --}}
-        <div class="mt-3 flex items-center gap-1.5 text-sm text-gray-500">
+        <div class="mt-3 flex items-center gap-1.5 text-sm text-muted">
             <span aria-hidden="true">📍</span>
             <span>{{ $circle->locatable?->name ?? '—' }}</span>
         </div>
 
         {{-- Description --}}
         @if ($circle->description)
-            <p class="mt-4 text-gray-600">{{ $circle->description }}</p>
+            <p class="mt-4 text-muted">{{ $circle->description }}</p>
         @endif
 
         {{-- Active services --}}
         @php($services = $circle->services->where('pivot.is_active', true))
         @if ($services->isNotEmpty())
             <div class="mt-6">
-                <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400">{{ __('communities.page.services') }}</h2>
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('communities.page.services') }}</h2>
                 <div class="mt-2 flex flex-wrap gap-2">
                     @foreach ($services as $service)
                         <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
@@ -43,7 +43,7 @@
         @endif
 
         {{-- Member count placeholder --}}
-        <div class="mt-6 text-sm text-gray-500">{{ __('communities.page.members', ['count' => 0]) }}</div>
+        <div class="mt-6 text-sm text-muted">{{ __('communities.page.members', ['count' => 0]) }}</div>
 
         {{-- Join (placeholder) --}}
         <div class="mt-6">

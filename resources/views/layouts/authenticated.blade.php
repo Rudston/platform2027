@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {{-- Apply the .dark class before paint so semantic tokens flip with the
+         stored/system theme. --}}
+    <script>
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+
     <title>{{ $title ?? config('app.name', 'Platform2027') }}</title>
 
     {{-- Fonts (consistent with the welcome page) --}}
@@ -15,8 +23,8 @@
          so @livewireStyles/@livewireScripts are intentionally omitted. --}}
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-[#FDFDFC] text-[#1b1b18] antialiased dark:bg-[#0a0a0a] dark:text-[#EDEDEC]">
-    <nav class="border-b border-[#19140014] bg-white dark:border-[#3E3E3A] dark:bg-[#161615]">
+<body class="min-h-screen bg-surface text-main antialiased transition-colors duration-200">
+    <nav class="border-b border-border-muted bg-surface">
         <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 text-sm">
             {{-- Left: app name --}}
             <a href="{{ url('/') }}" class="font-semibold">{{ config('app.name', 'Platform2027') }}</a>
@@ -29,11 +37,11 @@
 
             {{-- Right: user + logout --}}
             <div class="flex items-center gap-4">
-                <span class="text-[#706f6c] dark:text-[#A1A09A]">{{ auth()->user()?->name }}</span>
+                <span class="text-muted">{{ auth()->user()?->name }}</span>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit"
-                            class="rounded-sm border border-[#19140035] px-4 py-1.5 leading-normal hover:border-[#1915014a] dark:border-[#3E3E3A] dark:hover:border-[#62605b]">
+                            class="rounded-sm border border-border-muted px-4 py-1.5 leading-normal transition hover:opacity-80">
                         {{ __('navigation.log_out') }}
                     </button>
                 </form>

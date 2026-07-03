@@ -1,19 +1,19 @@
 @php
     /** @var \App\Models\Circles\Circle $circle */
 @endphp
-<div class="flex flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+<div class="flex flex-col rounded-lg border border-border-muted bg-surface p-4 shadow-sm">
     <div class="flex items-start justify-between">
         <span class="text-2xl" aria-hidden="true">{{ $this->icon() }}</span>
-        <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+        <span class="shrink-0 rounded-full bg-border-muted px-2 py-0.5 text-xs font-medium text-muted">
             {{ $this->levelBadge() }}
         </span>
     </div>
 
-    <h3 class="mt-2 font-semibold text-gray-800">{{ $circle->name }}</h3>
-    <p class="mt-1 line-clamp-2 text-sm text-gray-500">{{ $circle->description }}</p>
+    <h3 class="mt-2 font-semibold text-main">{{ $circle->name }}</h3>
+    <p class="mt-1 line-clamp-2 text-sm text-muted">{{ $circle->description }}</p>
 
     <div class="mt-4 flex items-center justify-between">
-        <span class="text-xs text-gray-400">{{ __('communities.card.members', ['count' => 0]) }}</span>
+        <span class="text-xs text-muted">{{ __('communities.card.members', ['count' => 0]) }}</span>
         <a
             href="{{ $from ? route('communities.show', ['circle' => $circle, 'from' => $from]) : route('communities.show', $circle) }}"
             wire:navigate

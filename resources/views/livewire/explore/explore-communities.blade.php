@@ -23,11 +23,11 @@
         <div>
             {{-- Header --}}
             <div class="flex items-center justify-between gap-4">
-                <h1 class="text-xl font-bold tracking-tight text-gray-900">{{ __('explore.title') }}</h1>
+                <h1 class="text-xl font-bold tracking-tight text-main">{{ __('explore.title') }}</h1>
                 <button
                     type="button"
                     wire:click="$dispatch('open-search')"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-border-muted bg-surface px-3 py-2 text-sm font-medium text-muted shadow-sm transition hover:bg-border-muted"
                 >
                     <span aria-hidden="true">🔍</span> {{ __('ui.search') }}
                 </button>
@@ -42,12 +42,12 @@
             <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <livewire:explore.breadcrumb :breadcrumb="$breadcrumb" :selected-type="$selectedType" :key="'breadcrumb'" />
 
-                <div class="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
+                <div class="flex items-center gap-1 rounded-lg border border-border-muted bg-surface p-0.5 shadow-sm">
                     <button
                         type="button"
                         disabled
                         title="Coming soon"
-                        class="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-gray-400 opacity-60"
+                        class="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-muted opacity-60"
                     >
                         <span aria-hidden="true">🗺</span> {{ __('explore.view_mode.map') }}
                     </button>
@@ -57,7 +57,7 @@
                         @class([
                             'inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition',
                             'bg-indigo-600 text-white' => $viewMode === 'browse',
-                            'text-gray-700 hover:bg-gray-50' => $viewMode !== 'browse',
+                            'text-muted hover:bg-border-muted' => $viewMode !== 'browse',
                         ])
                     >
                         <span aria-hidden="true">☰</span> {{ __('explore.view_mode.browse') }}
@@ -78,7 +78,7 @@
                         />
                     @elseif ($this->isAtTerminalLevel)
                         {{-- MainPlace is the terminal geographic level — no deeper level to drill into. --}}
-                        <div class="rounded-lg border border-gray-100 bg-white px-4 py-6 text-center text-sm text-gray-400">
+                        <div class="rounded-lg border border-border-muted bg-surface px-4 py-6 text-center text-sm text-muted">
                             {{ __('explore.no_further_subareas') }}
                         </div>
                     @elseif ($this->communitiesCountBelow > 0)
@@ -103,7 +103,7 @@
                     @endif
                 @else
                     {{-- Map view (Phase 1: disabled; toggle never activates this branch) --}}
-                    <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
+                    <div class="rounded-lg border border-dashed border-border-muted bg-surface p-10 text-center text-muted">
                         {{ __('explore.map_coming_soon') }}
                     </div>
                 @endif
@@ -120,7 +120,7 @@
                     <a
                         href="{{ $suggestedCommunityUrl }}"
                         wire:navigate
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-600 bg-white px-3 py-2 text-sm font-medium text-indigo-600 shadow-sm transition hover:bg-indigo-50"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-600 bg-surface px-3 py-2 text-sm font-medium text-indigo-600 shadow-sm transition hover:bg-indigo-50"
                     >
                         {{ __('explore.home_community') }}
                     </a>
@@ -133,7 +133,7 @@
                     <livewire:explore.community-card :circle="$this->rightColumnCircle" :from="$this->exploreUrl" :key="'location-card-'.$this->rightColumnCircle->id" />
                 </div>
             @else
-                <div class="mt-auto flex min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-400">
+                <div class="mt-auto flex min-h-40 items-center justify-center rounded-lg border border-dashed border-border-muted bg-surface p-10 text-center text-sm text-muted">
                     {{ __('explore.select_location') }}
                 </div>
             @endif
@@ -143,12 +143,12 @@
     {{-- ===================================================================== --}}
     {{-- BOTTOM SECTION — community types at the selected location             --}}
     {{-- ===================================================================== --}}
-    <div class="mt-10 border-t border-gray-200 pt-8">
+    <div class="mt-10 border-t border-border-muted pt-8">
         @php($current = collect($breadcrumb)->last())
-        <h2 class="text-lg font-semibold tracking-tight text-gray-900">
+        <h2 class="text-lg font-semibold tracking-tight text-main">
             {{ __('explore.communities_in', ['place' => $current['name'] ?? 'South Africa']) }}
         </h2>
-        <p class="mt-0.5 text-sm text-gray-500">
+        <p class="mt-0.5 text-sm text-muted">
             {{ __('explore.bottom_subtext') }}
         </p>
 
@@ -160,7 +160,7 @@
         {{-- Community-type content --}}
         <div class="mt-4">
             @if ($selectedCommunityType === null)
-                <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
+                <div class="rounded-lg border border-dashed border-border-muted bg-surface p-10 text-center text-muted">
                     {{ __('explore.pick_type') }}
                 </div>
             @elseif ($this->typeCommunities->isNotEmpty())

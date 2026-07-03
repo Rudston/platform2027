@@ -46,7 +46,7 @@
                     {{-- Full width on mobile, ~65% on desktop. (wire-elements only
                          offers fixed max-width presets, so a responsive width is
                          set here instead of via modalWidth/modalMaxWidth().) --}}
-                    class="relative w-full lg:w-[65%] my-8 bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all"
+                    class="relative w-full lg:w-[65%] my-8 bg-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all"
                     id="modal-container"
                     x-trap.noscroll.inert="show && showActiveComponent"
                     aria-modal="true"

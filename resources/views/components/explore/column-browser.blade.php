@@ -32,31 +32,31 @@
 
 @if ($isLocationMode)
     {{-- File-browser style column: a navigable list that drills down. --}}
-    <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div class="overflow-hidden rounded-lg border border-border-muted bg-surface shadow-sm">
         @if ($heading)
-            <div class="border-b border-gray-100 px-4 py-3">
-                <h2 class="font-semibold text-gray-800">{{ $heading }}</h2>
+            <div class="border-b border-border-muted px-4 py-3">
+                <h2 class="font-semibold text-main">{{ $heading }}</h2>
             </div>
         @endif
 
-        <ul class="divide-y divide-gray-100">
+        <ul class="divide-y divide-border-muted">
             @foreach ($communities as $circle)
                 <li>
                     <button
                         type="button"
                         wire:click="selectCircle({{ $circle->id }})"
-                        class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
+                        class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-border-muted"
                     >
                         <span class="flex min-w-0 items-center gap-2">
-                            <span class="text-gray-300" aria-hidden="true">▸</span>
-                            <span class="truncate text-gray-800">{{ $circle->locatable?->name ?? $circle->name }}</span>
+                            <span class="text-muted" aria-hidden="true">▸</span>
+                            <span class="truncate text-main">{{ $circle->locatable?->name ?? $circle->name }}</span>
                             @if ($circle->also_here ?? false)
                                 <span class="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
                                     {{ __('explore.also_here') }}
                                 </span>
                             @endif
                         </span>
-                        <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                        <span class="shrink-0 rounded-full bg-border-muted px-2 py-0.5 text-xs font-medium text-muted">
                             {{ $badgeFor($circle) }}
                         </span>
                     </button>
@@ -66,7 +66,7 @@
 
         @if ($isTerminalLevel)
             {{-- TODO: guard this button with auth + permission check --}}
-            <div class="border-t border-gray-100 px-4 py-3 text-center">
+            <div class="border-t border-border-muted px-4 py-3 text-center">
                 <button
                     type="button"
                     wire:click="$dispatch('openModal', { component: 'explore.request-location-modal', arguments: { parentLocationName: @js($heading), parentCircleId: @js($selectedCircleId) } })"

@@ -12,7 +12,7 @@
             @class([
                 'flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition',
                 'border-indigo-600 bg-indigo-600 text-white shadow-sm' => $isActive,
-                'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' => ! $isActive,
+                'border-border-muted bg-surface text-muted hover:bg-border-muted' => ! $isActive,
             ])
         >
             <span aria-hidden="true">{{ $pill['icon'] }}</span>

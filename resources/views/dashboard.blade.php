@@ -5,17 +5,17 @@
                 {{ __('pages.dashboard.greeting', ['name' => auth()->user()->name]) }}
             </h1>
 
-            <p class="mt-2 text-sm text-[#706f6c] dark:text-[#A1A09A]">
+            <p class="mt-2 text-sm text-muted">
                 {{ __('pages.dashboard.logged_in', ['email' => auth()->user()->email]) }}
             </p>
 
-            <p class="mt-1 text-sm text-[#706f6c] dark:text-[#A1A09A]">
+            <p class="mt-1 text-sm text-muted">
                 {{ __('pages.dashboard.role', ['roles' => auth()->user()->getRoleNames()->join(', ') ?: '—']) }}
             </p>
 
             <a
                 href="{{ route('explore') }}"
-                class="mt-6 inline-flex items-center gap-1.5 rounded-md bg-[#1b1b18] px-4 py-2 text-sm font-medium text-white transition hover:bg-black dark:bg-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white"
+                class="mt-6 inline-flex items-center gap-1.5 rounded-md bg-main px-4 py-2 text-sm font-medium text-surface transition hover:opacity-90"
             >
                 {{ __('pages.dashboard.explore') }}
             </a>
