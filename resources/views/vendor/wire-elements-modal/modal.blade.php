@@ -43,8 +43,10 @@
                     x-transition:leave="ease-in duration-200"
                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                    x-bind:class="modalWidth"
-                    class="relative w-full my-8 bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:w-full"
+                    {{-- Full width on mobile, ~65% on desktop. (wire-elements only
+                         offers fixed max-width presets, so a responsive width is
+                         set here instead of via modalWidth/modalMaxWidth().) --}}
+                    class="relative w-full lg:w-[65%] my-8 bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all"
                     id="modal-container"
                     x-trap.noscroll.inert="show && showActiveComponent"
                     aria-modal="true"
