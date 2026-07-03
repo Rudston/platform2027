@@ -1,510 +1,367 @@
-# CLAUDE.md — Platform 2027 Project Context
+# CLAUDE.md — Platform 2027
 
-## Project Overview
-
-Platform 2027 is a South African civic platform providing persistent
-collaborative spaces ("Circles") for communities across South Africa.
-It facilitates citizen collaboration, pressure on the state, and
-community organisation across location-based and theme-based lines.
-No political parties have access.
-
-## Tech Stack
-
-- **Laravel 12**
-- **PHP 8.2+**
-- **Livewire 4**
-- **Filament** (admin panels + forms)
-- **Tailwind CSS 4** (via Vite — do NOT add tailwind.config.js)
-- **Alpine.js** (via Livewire 4)
-- **Spatie Laravel Permission** (with teams enabled)
-- **MySQL**
-- **wire-elements/modal** (for modals in Explore page)
-
-## Database Connections
-
-Single database connection: `project2027` (default)
-No legacy database connections are relevant.
+This file is the authoritative reference for AI-assisted development on
+Platform 2027. Read this before touching any file.
 
 ---
 
-## Core Architecture
+## Non-Negotiable Rules
 
-### The Circle System
+1. NEVER install Laravel Breeze, Jetstream, or any auth scaffold
+2. NEVER modify `resources/views/layouts/app.blade.php`
+3. NEVER remove existing routes from `routes/web.php` — only add
+4. NEVER add `tailwind.config.js` — Tailwind 4 is configured via Vite
+5. ALWAYS read every file before modifying it
+6. ALWAYS make one step at a time and stop for review
+7. ALWAYS show the final state of every file you create or modify
+8. NEVER proceed to the next step without explicit approval
 
-Every community on the platform is wrapped in a **Circle** — a
-collaborative container. Circles are hierarchical (self-referencing
-via `parent_id`) and use a **materialized path** for efficient
-ancestor/descendant queries.
+---
 
-#### circles table
+## Tech Stack
+
+- Laravel 12, PHP 8.2+, MySQL
+- Livewire 4 — NOT Livewire 3 (syntax differs significantly)
+- Tailwind CSS 4 via Vite — NO tailwind.config.js
+- Alpine.js (bundled with Livewire 4)
+- Filament (admin panels)
+- Spatie Laravel Permission (teams mode, team_foreign_key = circle_id)
+- Spatie Laravel Translatable (circles.description only)
+- wire-elements/modal
+
+---
+
+## Domain: Circles
+
+Every community is a **Circle**. Circles are the universal container.
+
+```php
+Circle {
+    circleable_type / circleable_id  // polymorphic community type
+    locatable_type  / locatable_id   // polymorphic geographic anchor
+    parent_id                        // hierarchical nesting
+    path                             // materialised path for tree queries
+    name                             // proper noun — NOT translated
+    description                      // JSON (spatie/laravel-translatable)
+}
+```
+
+### Community types (circleable_type)
+- LocationCommunity
+- ThemeCommunity
+- OrganisationCommunity
+- CourseCommunity
+- Campaign
+- Event
+
+### Contracts and Traits
+- `Circleable` interface + `HasCircle` trait — all community models
+- `Locatable` interface + `HasLocation` trait — all demography models
+- `HasLocationLevel` interface — all demography models (see below)
+- `ProvidesCircleIdentity` — demography models providing circleName()
+  and circleDescription()
+
+---
+
+## Geographic Hierarchy (SA)
 
 ```
-id
-name                 (required)
-description          (nullable)
-circleable_id        (polymorphic — points to community model)
-circleable_type      (polymorphic — community model class)
-locatable_id         (polymorphic — points to demography model)
-locatable_type       (polymorphic — demography model class)
-parent_id            (nullable FK to circles — self-referencing)
-depth                (unsignedTinyInteger, default 0)
-path                 (string, nullable — e.g. "1/4/12")
-timestamps
+Country (id=191 for South Africa)
+  └── Province
+        ├── DistrictMunicipality
+        │     └── LocalMunicipality
+        │           └── MainPlace     ← TERMINAL (isTerminal() = true)
+        └── City
+              └── MainPlace           ← TERMINAL (isTerminal() = true)
 ```
 
-Path and depth are auto-maintained in `Circle::booted()`.
+CRITICAL: City is NOT terminal — it has MainPlace children.
+Only MainPlace (LocationLevel::Place) is terminal.
 
-#### circle_associations table (cross-community links)
+### Soft deletes
+City, LocalMunicipality, DistrictMunicipality, MainPlace all use
+SoftDeletes trait. Province and Country do not (yet).
 
+---
+
+## Geographic Abstraction Layer
+
+Enables future non-SA country support without schema changes.
+
+### LocationLevel enum (`app/Enums/LocationLevel.php`)
+```php
+enum LocationLevel: string {
+    case Country  = 'country';
+    case Region   = 'region';    // Province, State, etc.
+    case District = 'district';  // DistrictMunicipality, etc.
+    case Local    = 'local';     // LocalMunicipality, etc.
+    case City     = 'city';      // Metropolitan — NOT terminal
+    case Place    = 'place';     // MainPlace — ALWAYS terminal
+}
+// isTerminal(): true ONLY for Place
 ```
-circle_id               (FK to circles, cascadeOnDelete)
-associated_circle_id    (FK to circles, cascadeOnDelete)
-association_type        (string, default 'related')
-approved                (boolean, default false)
-approved_at             (timestamp, nullable)
-approved_by_user_id     (FK to users, nullOnDelete, nullable)
-primary key: [circle_id, associated_circle_id]
-timestamps
+
+### HasLocationLevel interface (`app/Contracts/Geographic/`)
+```php
+interface HasLocationLevel {
+    public function locationLevel(): LocationLevel;
+    public function locationLabel(): string;
+    public function locationParentId(): ?int;
+}
 ```
+Implemented on: Country, Province, DistrictMunicipality,
+LocalMunicipality, City, MainPlace.
+
+### LocatableType enum additions
+- `locationLevel(): LocationLevel`
+- `isTerminal(): bool` — proxy for locationLevel()->isTerminal()
+
+### Usage rule
+- `isTerminal()` → drives UI hints (no-further-levels message,
+  "Your location not listed?" button)
+- `$children->isNotEmpty()` → drives whether to render next column
+  Never use isTerminal() as the sole check for rendering columns.
 
 ---
 
 ## Enums
 
-### CommunityType (app/Enums/CommunityType.php)
+### CommunityType
+Maps community type to model class path.
+CASE NAMES NEVER CHANGE — only values if needed.
 
-Maps community types to their model class paths.
-CASE NAMES must never change — only values if class paths change.
+### LocatableType
+Maps demography type to model class path.
+Now includes locationLevel() and isTerminal() methods.
 
-```php
-case Organisation      = 'App\Models\Communities\OrganisationCommunity';
-case Campaign          = 'App\Models\Communities\Campaign';
-case Course            = 'App\Models\Communities\CourseCommunity';
-case LocationCommunity = 'App\Models\Communities\LocationCommunity';
-case ThemeCommunity    = 'App\Models\Communities\ThemeCommunity';
+### LocationLevel
+See Geographic Abstraction Layer above.
+
+---
+
+## Key Services
+
+### CircleCreationService
+Single entry point for creating any circle type.
+- Handles name/description auto-population
+- Attaches default services
+- Wrapped in DB transaction
+- Signature: create(type, data, parentCircle?, locatableType, locatableId)
+
+### CircleMembershipService
+Membership management (partially built).
+
+### CoordinateData::nearest(float $lat, float $lng): ?static
+Nearest-neighbour lookup:
+1. Bounding box ±0.5° + squared Euclidean ORDER BY LIMIT 1
+2. Fallback: full table scan if bounding box returns 0 results
+   Composite index on (latitude, longitude) exists.
+   Do NOT use SQRT — squared distance sufficient for ranking.
+
+---
+
+## Internationalisation
+
+### Key decisions
+- PHP array files under `lang/en/` organised by feature area
+- Keys: stable snake_case strings (NOT English sentences)
+- `lang/pt/` — shared Portuguese base
+- `lang/pt_BR/` — Brazilian Portuguese overrides only
+- Fallback chain: pt_BR → pt → en → key itself (visible = bug)
+
+### What IS translated
+- All UI strings: labels, buttons, headings, empty states, modals
+- Community type names: Organisation, Campaign, Course, Theme, Event
+- Validation messages
+
+### What is NOT translated
+- Circle names (proper nouns)
+- Place/location names (proper nouns: "Western Cape", "Cape Town")
+- User-generated content
+
+### circles.description
+- JSON column via spatie/laravel-translatable
+- Stored as: `{"en": "...", "pt": "..."}`
+- Access as plain string: `$circle->description` (auto-resolves locale)
+- NEVER treat as a plain text column
+
+### SetLocaleFromBrowser middleware
+Priority: saved user preference → session locale → Accept-Language
+header → app default.
+Sets App::setLocale() AND Carbon::setLocale().
+Registered on web middleware group only.
+
+### Lang file structure
 ```
-
-### LocatableType (app/Enums/LocatableType.php)
-
-Maps geographic levels to demography model class paths.
-Includes `label()` and `modelClass()` methods.
-
-```php
-case Country              = 'App\Models\Demography\Country';
-case Province             = 'App\Models\Demography\Province';
-case DistrictMunicipality = 'App\Models\Demography\DistrictMunicipality';
-case LocalMunicipality    = 'App\Models\Demography\LocalMunicipality';
-case MainPlace            = 'App\Models\Demography\MainPlace';
-case City                 = 'App\Models\Demography\City';
+lang/en/
+  explore.php      — Explore page UI
+  communities.php  — community types, cards, modals
+  navigation.php   — nav, page titles
+  validation.php   — validation messages
+  ui.php           — generic: Save, Cancel, Close, Back, View, etc.
 ```
+All keys in lang/en/ must exist before being referenced in views.
 
 ---
 
-## Contracts (Interfaces)
+## Explore Page (/explore)
 
-### app/Contracts/Circleable.php
-Every community model implements this.
-```php
-public function circle(): HasOne;
-public function hasService(string $serviceKey): bool;
-public function isNestedIn(Circle $circle): bool;
-public function defaultServices(): array;
-public function getCircleName(): string;
-public function getCircleDescription(): string;
-```
+Always public — no auth middleware. Ever.
 
-### app/Contracts/Locatable.php
-Every community model implements this.
-```php
-public function location(): MorphTo;
-public function locatedIn(Model $place): bool;
-public function setLocation(Model $place): void;
-```
+### Layout: two vertical sections
 
-### app/Contracts/CircleServiceContract.php
-Every service handler implements this.
-```php
-public function boot(Circle $circle): void;
-public function getKey(): string;
-public function getPermissions(): array;
-```
+**TOP SECTION** — two columns (50/50):
+- Left: geographic location browser
+    - Header + "Could this be your community?" button (geolocation)
+    - Type filter: [All] [Locations] only
+    - Breadcrumb + Map/Browse toggle
+    - Column browser (max-height: MAX_HEIGHT_LOCATIONS_COLUMN, overflow-y-auto)
+- Right: LocationCommunity card for selected location
+  (placeholder if nothing selected)
 
-### app/Contracts/ProvidesCircleIdentity.php
-Every demography model implements this.
-```php
-public function circleName(): string;
-public function circleDescription(): string;
-public function circleNameShort(): string;
-```
+**BOTTOM SECTION:**
+- Type tabs: [Organisations] [Campaigns] [Courses] [Themes] [Events]
+- Card grid filtered by current geographic selection
+- Add Community button (stub, TODO auth guard)
 
----
+### URL state sync (#[Url] on ExploreCommunities)
+- selectedCircleId
+- selectedType (top: All/Locations)
+- selectedBottomType (bottom: Org/Campaign/Course/Theme/Event)
+- viewMode (browse/map)
 
-## Traits
+### Critical interaction rules
+1. Switching type NEVER resets geographic selection
+2. Clicking breadcrumb preserves type, trims geographic trail
+3. "South Africa" crumb always present, always clickable
+4. "Also here" badge: column browser ONLY (not on cards)
+5. isTerminal() check drives no-further-levels message only
+6. Bottom section always filtered by top section's geography
 
-### app/Traits/HasCircle.php
-Provides default implementations of Circleable.
-Includes `withCirclePermissions(callable $callback)` helper.
+### Column browser terminal behaviour
+At MainPlace level (isTerminal() = true):
+- Next column: x-explore.no-further-levels ("No further sub-areas")
+  NOT x-explore.empty-state
+- Bottom of list: "Your location not listed?" button
+  → RequestLocationModal(parentLocationName, parentCircleId)
+  TODO: auth guard
 
-### app/Traits/HasLocation.php
-Provides default implementations of Locatable.
+### Geolocation button
+"Could this be your community?" — only shown when full chain resolves:
+getUserLocation() → CoordinateData::nearest() → getMainPlace()
+→ explorerLocationCommunityUrl() → $suggestedCommunityUrl (non-null)
+On failure: silent. No loading state.
+MainPlace::explorerLocationCommunityUrl(): string|null
+Returns /explore?circle={id} or null.
 
----
+### Add Community modal (per type)
+Bottom section — both empty and non-empty states.
+Button label uses correct a/an per type (hardcoded):
+- "Add an Organisation Community"
+- "Add a Campaign"
+- "Add a Course Community"
+- "Add a Theme Community"
+- "Add an Event"
+  Modal body: placeholder only. TODO: save logic + auth guard.
 
-## Community Models (app/Models/Communities/)
-
-All implement both `Circleable` and `Locatable`.
-All use `HasCircle` and `HasLocation` traits.
-
-### OrganisationCommunity
-- Table: `organisation_communities`
-- belongsTo: Organisation (via organisation_id, nullable)
-- One-to-one with Organisation entity
-
-### Campaign
-- Table: `campaigns`
-
-### CourseCommunity
-- Table: `course_communities`
-- belongsToMany: Course (via course_course_community pivot)
-
-### LocationCommunity
-- Table: `location_communities`
-- Name/description derived from locatable's
-  circleName() / circleDescription()
-
-### ThemeCommunity
-- Table: `theme_communities`
-- belongsTo: Theme (via theme_id)
-- circleName(): "{theme->name} ({locatable->circleNameShort()})"
-- circleDescription(): auto-generated from theme + location
+### Map view
+Toggle visible, disabled. "Coming soon" tooltip. Deferred to Phase 2.
 
 ---
 
-## Entity Models (plain — do NOT implement Circleable)
+## Community Page (/communities/{circle})
 
-### app/Models/Organisation
-- Table: `organisations`
-- Fields: name, description, website (nullable),
-  contact_person, contact_email
-- hasOne: OrganisationCommunity
-- hasCommunity(): bool helper
+Route: GET /communities/{circle} — route-model bound to Circle.
+Public. No auth middleware yet.
+Component: CommunityPage (app/Livewire/Explore/CommunityPage.php)
+Layout: layouts/public.blade.php (temporary — pre-auth)
 
-### app/Models/Course
-- Table: `courses`
-- Fields: name, description, website (nullable),
-  contact_person (nullable), contact_email (nullable)
-- belongsToMany: CourseCommunity (via course_course_community)
+### Back link (stateless)
+"View →" on CommunityCard generates:
+/communities/{circle}?from={urlencoded current explore URL}
+CommunityPage reads ?from= for back link. Falls back to /explore.
 
----
-
-## Demography Models (app/Models/Demography/)
-
-All implement ProvidesCircleIdentity.
-Hierarchy: Country → Province → DistrictMunicipality
-→ LocalMunicipality / City → MainPlace
-
-### Tables
-- countries
-- provinces
-- district_municipalities
-- local_municipalities
-- cities (metros and large cities)
-- main_places (suburbs/areas — Stats SA 2011 data)
-- urban_places
-
-### Key relationships
-- Province belongsTo Country
-- DistrictMunicipality belongsTo Province
-- LocalMunicipality belongsTo DistrictMunicipality
-- City belongsTo Province (metros belong directly to province)
-- MainPlace belongsTo LocalMunicipality OR City
-
-### circleNameShort() implementations
-- Country:              "South Africa"
-- Province:             "{name}"
-- DistrictMunicipality: "{name} DM"
-- LocalMunicipality:    "{name}"
-- City:                 "{name}"
+### Content
+Currently: placeholder (same as former CommunityDetail modal).
+Type-specific nested components: future work.
 
 ---
 
-## Services (app/Models/Circles/)
+## Authentication
 
-### Service model
-- Table: `services`
-- Fields: name, key (unique), description, handler_class, is_active
-- belongsToMany: Circle (via circle_service pivot)
+Built manually — Livewire 4 components.
+NO Breeze, NO Jetstream, EVER.
 
-### circle_service pivot
-- circle_id, service_id, config (json, nullable), is_active, timestamps
-
-### 9 Service handlers (app/Services/Circles/)
-Keys: store_assets, notifications, manage_interaction,
-manage_media, manage_users, manage_events,
-manage_voting, manage_learning, manage_social_media
+Components: Login, Register, ForgotPassword, ResetPassword
+Controller: LogoutController
+Layouts: guest.blade.php, authenticated.blade.php
+Public layout: public.blade.php (temporary — used by Explore + CommunityPage)
 
 ---
 
-## CircleCreationService (app/Services/Circles/CircleCreationService.php)
+## Spatie Permissions
 
-Central service for creating any circle community.
+Teams mode enabled. team_foreign_key = circle_id.
+circle_id is NULLABLE on pivot tables — intentional, allows global roles.
 
-```php
-public function create(
-    CommunityType $type,
-    array $data,
-    ?Circle $parentCircle = null,
-    ?LocatableType $locatableType = null,
-    ?int $locatableId = null,
-    ?Organisation $organisation = null,  // for OrganisationCommunity
-    array $courseIds = [],               // for CourseCommunity
-): Circle
-```
-
-- Defaults location to Country (South Africa) if not specified
-- For LocationCommunity: auto-derives name/description from locatable
-- For ThemeCommunity: derives name/description from theme + locatable
-- Attaches defaultServices() automatically after circle creation
-- Wraps everything in DB::transaction()
-- DEFAULT_COUNTRY_ID constant for South Africa
+Seeded roles: new_user, full_member, curator, trainer, admin,
+superadmin, circle_admin, circle_full_member, circle_visitor
 
 ---
 
-## Roles and Permissions (Spatie)
+## Seeders (already run — do not re-run blindly)
 
-Teams enabled. team_foreign_key = circle_id.
-circle_id is NULLABLE on model_has_roles and model_has_permissions
-(custom migration applied to fix Spatie's NOT NULL default).
+- LocationCommunitiesSeeder — country → LM/City circles
+- MainPlaceCommunitiesSeeder — ~14,039 MainPlace circles (idempotent)
+- ThemeCommunitiesSeeder — national + WC + Eden DM
+- Full SA demography (provinces, DMs, LMs, cities, main places)
 
-### Global roles (no team context)
-new_user, full_member, curator, trainer, admin, superadmin
-
-### Circle-level roles (scoped per circle)
-circle_admin, circle_full_member, circle_visitor
-
-### CircleMembershipService (app/Services/Circles/CircleMembershipService.php)
-Handles circle role assignment with team context.
-Always resets team context to null after assignment.
+MainPlaceCommunitiesSeeder is idempotent — checks before creating.
+Always use chunk()/lazy() for large demography queries.
 
 ---
 
-## Explore Communities Page (Livewire 4)
+## JavaScript
 
-Public page at GET /explore
+### resources/js/utils/geolocation.js
+Exports: getUserLocation(): Promise<{latitude, longitude}>
+Rejection codes: 'denied' | 'unavailable' | 'timeout'
+Defaults: enableHighAccuracy:false, timeout:10000, maximumAge:300000
 
-### Component structure (app/Livewire/Explore/)
-- ExploreCommunities.php  — parent, holds all state
-- CommunityTypeFilter.php — pill/tab bar for type selection
-- Breadcrumb.php          — geographic navigation trail
-- ColumnBrowser.php       — three-panel file-browser style navigation
-- CommunityCard.php       — single community display card
-- CommunityDetail.php     — modal with full community info
-- SearchOverlay.php       — live search across circle names
-- MapView.php             — SVG map (Phase 2, not yet built)
-
-### State (in ExploreCommunities)
-- selectedType: ?string    — CommunityType enum value, null = all
-- selectedCircleId: ?int   — current geographic circle, null = national
-- viewMode: string         — 'browse' | 'map'
-- breadcrumb: array        — [{id, name}] trail
-
-### Key behaviour
-- Switching community TYPE preserves geographic selection
-- Breadcrumb always starts with South Africa (null id)
-- Three empty states: communities exist / none at level / none anywhere
-- Associated circles (via circle_associations) merged into results
-  with 'also_here' flag for UI badging
-- Map view disabled pending SVG map sourcing (show "coming soon")
-
-### Views (resources/views/livewire/explore/)
-explore-communities, community-type-filter, breadcrumb,
-column-browser, community-card, community-detail,
-search-overlay, map-view
-
-### Blade components (resources/views/components/explore/)
-- empty-state.blade.php
-
----
-
-## Authentication (Manual — NO Breeze/Jetstream)
-
-Built manually with Livewire 4. Tailwind 4 compatible.
-
-### Livewire components (app/Livewire/Auth/)
-- Login.php
-- Register.php (assigns 'new_user' role on creation)
-- ForgotPassword.php
-- ResetPassword.php
-
-### Controller
-- app/Http/Controllers/Auth/LogoutController.php
-
-### Layouts
-- resources/views/layouts/guest.blade.php
-  (for unauthenticated pages)
-- resources/views/layouts/authenticated.blade.php
-  (for dashboard etc. — nav bar with Explore link)
-- resources/views/layouts/app.blade.php
-  (existing — used by Explore page — DO NOT MODIFY)
-
-### Routes
-- GET  /login              → Login (guest middleware)
-- GET  /register           → Register (guest middleware)
-- GET  /forgot-password    → ForgotPassword (guest middleware)
-- GET  /reset-password/{token} → ResetPassword (guest middleware)
-- GET  /dashboard          → dashboard view (auth middleware)
-- POST /logout             → LogoutController
-- GET  /explore            → ExploreCommunities (public)
-
----
-
-## Folder Structure Summary
-
-```
-app/
-  Contracts/
-    Circleable.php
-    CircleServiceContract.php
-    Locatable.php
-    ProvidesCircleIdentity.php
-  Enums/
-    CommunityType.php
-    LocatableType.php
-  Http/Controllers/Auth/
-    LogoutController.php
-  Livewire/
-    Auth/
-      Login.php
-      Register.php
-      ForgotPassword.php
-      ResetPassword.php
-    Explore/
-      ExploreCommunities.php
-      CommunityTypeFilter.php
-      Breadcrumb.php
-      ColumnBrowser.php
-      CommunityCard.php
-      CommunityDetail.php
-      SearchOverlay.php
-      MapView.php
-  Models/
-    Circles/
-      Circle.php
-      Service.php
-    Communities/
-      OrganisationCommunity.php
-      Campaign.php
-      CourseCommunity.php
-      LocationCommunity.php
-      ThemeCommunity.php
-    Demography/
-      Country.php
-      Province.php
-      DistrictMunicipality.php
-      LocalMunicipality.php
-      City.php
-      MainPlace.php
-      UrbanPlace.php
-    Organisation.php
-    Course.php
-    User.php
-  Services/
-    Circles/
-      CircleCreationService.php
-      CircleMembershipService.php
-      StoreAssetsService.php
-      NotificationsService.php
-      ManageInteractionService.php
-      ManageMediaService.php
-      ManageUsersService.php
-      ManageEventsService.php
-      ManageVotingService.php
-      ManageLearningService.php
-      ManageSocialMediaService.php
-  Traits/
-    HasCircle.php
-    HasLocation.php
-
-database/
-  migrations/
-    (all standard Laravel + project migrations)
-  seeders/
-    LocationCommunitiesSeeder.php
-    ThemeCommunitiesSeeder.php
-    ServicesSeeder.php
-    RolesAndPermissionsSeeder.php
-    MainPlacesSeeder.php
-
-resources/
-  views/
-    layouts/
-      app.blade.php          ← existing Explore layout
-      guest.blade.php        ← auth pages
-      authenticated.blade.php ← dashboard etc.
-    livewire/
-      auth/
-        login.blade.php
-        register.blade.php
-        forgot-password.blade.php
-        reset-password.blade.php
-      explore/
-        (all explore components)
-    components/explore/
-      empty-state.blade.php
-    welcome.blade.php
-    dashboard.blade.php
-```
-
----
-
-## Key Decisions Log
-
-1. **No base class for communities** — interface + trait pattern
-   used instead to avoid single inheritance lockout.
-
-2. **Materialized path on circles** — avoids recursive CTEs for
-   ancestor/descendant queries. Auto-maintained in booted().
-
-3. **Locatable is mandatory** — every circle has at least a
-   Country-level location. morphs() not nullableMorphs().
-
-4. **circle_id nullable on Spatie pivots** — custom migration
-   applied so global roles (no team context) work alongside
-   circle-scoped roles.
-
-5. **Breeze rejected** — incompatible with Tailwind 4 and
-   Livewire 4. Auth built manually.
-
-6. **OrganisationCommunity ≠ Organisation** — the community
-   (circle wrapper) is separate from the entity. One-to-one.
-
-7. **CourseCommunity ↔ Course is many-to-many** — a course
-   community can feature multiple courses; a course can appear
-   in multiple communities.
-
-8. **circle_associations for cross-community links** — preserves
-   single parent hierarchy while allowing optional associations.
-   Approval workflow fields included from the start.
-
-9. **No map view yet** — SVG map sourcing in progress.
-   amCharts SA provinces SVG recommended as starting point.
-
-10. **Stats SA main places data** — 2011 census data seeded using
-    authoritative MN_SA_2011.dbf crosswalk from Adrian Frith's
-    census data. Prefix → MDB code mapping via MN_CODE field.
+Import in app.js. Call from Alpine x-init on ExploreCommunities.
+On success: $wire.setUserLocation(lat, lng)
+On failure: silent.
 
 ---
 
 ## What Is NOT Yet Built
 
 - Full membership system (circle_user pivot + approval workflow)
-- Campaign model details (fields beyond name/description)
-- Filament admin panels (structure planned, not built)
-- Map view for Explore page
-- User profile pages
-- Notification system (service stub exists)
-- Voting/polls system (service stub exists)
-- Social media integration (service stub exists)
-- Learning management (service stub exists)
+- Auth/permission guards on buttons (TODO comments in place)
+- Campaign model fields
+- Filament admin panels
+- Map view (SVG sourcing in progress)
+- User profile pages + saved locale preference
+- Language switcher UI
+- CommunityPage type-specific nested components
+- Notification, voting, social media, learning service implementations
 - Payment/subscription system
 - API endpoints
+- Email/notification templates
+
+---
+
+## Common Mistakes to Avoid
+
+- Using Livewire 3 syntax (wire:model.defer, etc.) — this is Livewire 4
+- Adding tailwind.config.js — never
+- Modifying app.blade.php — never
+- Treating circles.description as a plain string — it is JSON
+- Marking City as terminal — only Place (MainPlace) is terminal
+- Using isTerminal() to decide whether to render a next column —
+  use $children->isNotEmpty() for that
+- Creating duplicate lang keys or using keys not in lang/en/
+- Forgetting TODO auth guard comments on new buttons/actions
+- Running LocationCommunitiesSeeder again (use MainPlaceCommunitiesSeeder
+  for MainPlace level — it is idempotent)
+- Using SQRT in CoordinateData::nearest() — squared distance is enough
