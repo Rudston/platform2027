@@ -41,14 +41,22 @@ class ContentBlock extends Model
 
                 $value = (string) $block->getTranslation('content', $locale, false);
 
-                // Fall back to English when the current locale has no content.
-                if ($value === '') {
+                // Fall back to English when the current locale has no meaningful
+                // content. Markup/whitespace-only (e.g. an empty RichEditor's
+                // "<p></p>") counts as empty.
+                if (static::isBlank($value)) {
                     $value = (string) $block->getTranslation('content', config('app.fallback_locale', 'en'), false);
                 }
 
-                return $value !== '' ? $value : $fallback;
+                return static::isBlank($value) ? $fallback : $value;
             },
         );
+    }
+
+    /** Treat markup/whitespace-only content (e.g. "<p></p>") as empty. */
+    protected static function isBlank(string $value): bool
+    {
+        return trim(strip_tags($value)) === '';
     }
 
     /**
