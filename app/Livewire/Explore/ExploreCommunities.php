@@ -8,10 +8,12 @@ use App\Models\Circles\Circle;
 use App\Models\Demography\CoordinateData;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
+#[Layout('layouts.main')]
 class ExploreCommunities extends Component
 {
 

@@ -2,8 +2,8 @@
     /** @var \App\Models\Circles\Circle $circle */
     /** @var string $backUrl */
 @endphp
-{{-- Full height, 80% width, centred. Rendered in the neutral layouts.app
-     shell (public — no auth chrome). --}}
+{{-- Full height, 80% width, centred. Rendered in layouts.main (public shell
+     with the adaptive top nav). --}}
 <div class="mx-auto min-h-screen w-4/5 py-10">
     <a href="{{ $backUrl }}" wire:navigate class="text-sm text-indigo-600 hover:underline">
         {{ __('communities.page.back') }}

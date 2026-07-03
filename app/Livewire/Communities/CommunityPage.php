@@ -4,8 +4,10 @@ namespace App\Livewire\Communities;
 
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
+#[Layout('layouts.main')]
 class CommunityPage extends Component
 {
     public Circle $circle;
