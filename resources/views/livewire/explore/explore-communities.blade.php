@@ -33,6 +33,9 @@
                 </button>
             </div>
 
+            {{-- Editable intro banner (content block) --}}
+            <x-content-block key="explore.welcome_banner" class="mt-2 text-sm text-muted" />
+
             {{-- Location filter (All / Locations) --}}
             <div class="mt-2">
                 <livewire:explore.community-type-filter group="location" :active="$selectedType" :key="'type-filter-top'" />
