@@ -24,7 +24,7 @@ Platform 2027. Read this before touching any file.
 - Livewire 4 — NOT Livewire 3 (syntax differs significantly)
 - Tailwind CSS 4 via Vite — NO tailwind.config.js
 - Alpine.js (bundled with Livewire 4)
-- Filament (admin panels)
+- Filament v5 (filament/filament ^5.6) — admin panel at /admin
 - Spatie Laravel Permission (teams mode, team_foreign_key = circle_id)
 - Spatie Laravel Translatable (circles.description only)
 - wire-elements/modal
@@ -287,6 +287,59 @@ Type-specific nested components: future work.
 
 ---
 
+## Filament Admin Panel (/admin)
+
+AdminPanelProvider (`app/Providers/Filament/AdminPanelProvider.php`).
+- Path `/admin`, panel id `admin`, `->login()`, dark mode on, primary = Amber
+- Access restricted to `admin` + `superadmin` roles via
+  `User::canAccessPanel()` (User implements `FilamentUser`)
+- Nav group `Platform` registered for platform-management resources
+- Auto-discovers Resources/Pages/Widgets under `app/Filament/`
+
+### Content Blocks (admin-editable copy)
+
+Small pieces of locale-aware copy rendered into public views
+(banners, hints, instructions) — editable in the admin panel.
+
+**content_blocks table**
+- `key` (string, unique) — stable lookup handle used in views
+- `description` (string) — admin-facing note
+- `content` (JSON, translatable via spatie/laravel-translatable) —
+  `{"en": "...", "pt_BR": "..."}`
+- `is_html` (bool, default true) — rich HTML vs plain text
+
+**ContentBlock model (`app/Models/ContentBlock.php`)**
+- `$translatable = ['content']`
+- `ContentBlock::get(string $key, string $fallback = ''): string`
+  - Cached 1h per key+locale
+  - Resolution: current locale → `app.fallback_locale` (en) → `$fallback`
+  - Markup/whitespace-only content (e.g. `<p></p>`) treated as blank
+- Cache auto-flushed on saved/deleted (`booted()` hooks), per supported locale
+
+**ContentBlockResource** (`app/Filament/Resources/ContentBlocks/`)
+- Under `Platform` nav group
+- `key` disabled on edit (stable handle)
+- Per-locale tabs (from `config('app.supported_locales')`) — RichEditor
+  when `is_html`, Textarea otherwise (toggled live)
+- Table shows a per-locale checkmark/dash for which locales have content
+
+**ContentBlockSeeder** — registered in DatabaseSeeder, idempotent
+(`updateOrCreate` by key). Seeds English only; pt_BR left blank (falls
+back to English). Keys: `explore.welcome_banner`,
+`explore.column_browser_hint`, `community.join_instructions`,
+`onboarding.new_user_welcome`.
+
+**x-content-block Blade component**
+`<x-content-block key="explore.welcome_banner" fallback="…" />`
+- Renders `ContentBlock::get()` (`{!! !!}` when `is_html`, escaped otherwise)
+- Renders nothing when empty and the viewer cannot edit
+- Inline edit pencil (top-right, on hover) for admin/superadmin only —
+  links to the Filament edit page
+- Currently rendered only at the top of the Explore page
+  (`explore.welcome_banner`); other seeded keys not yet placed in views
+
+---
+
 ## Authentication
 
 Built manually — Livewire 4 components.
@@ -314,6 +367,7 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - LocationCommunitiesSeeder — country → LM/City circles
 - MainPlaceCommunitiesSeeder — ~14,039 MainPlace circles (idempotent)
 - ThemeCommunitiesSeeder — national + WC + Eden DM
+- ContentBlockSeeder — 4 content blocks (idempotent, updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 
 MainPlaceCommunitiesSeeder is idempotent — checks before creating.
@@ -339,7 +393,7 @@ On failure: silent.
 - Full membership system (circle_user pivot + approval workflow)
 - Auth/permission guards on buttons (TODO comments in place)
 - Campaign model fields
-- Filament admin panels
+- Filament resources beyond ContentBlock (panel + ContentBlock exist)
 - Map view (SVG sourcing in progress)
 - User profile pages + saved locale preference
 - Language switcher UI
@@ -357,6 +411,8 @@ On failure: silent.
 - Adding tailwind.config.js — never
 - Modifying app.blade.php — never
 - Treating circles.description as a plain string — it is JSON
+- Treating ContentBlock.content as a plain string — it is translatable
+  JSON; always read via ContentBlock::get()
 - Marking City as terminal — only Place (MainPlace) is terminal
 - Using isTerminal() to decide whether to render a next column —
   use $children->isNotEmpty() for that
