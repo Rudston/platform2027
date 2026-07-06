@@ -19,7 +19,8 @@ No political parties have access.
 - Alpine.js (via Livewire 4)
 - Filament v5 (filament/filament ^5.6) — admin panel at /admin + forms
 - Spatie Laravel Permission (teams enabled, team_foreign_key = circle_id)
-- Spatie Laravel Translatable (circles.description + content_blocks.content)
+- Spatie Laravel Translatable (circles.description + content_blocks.content
+  + email_templates.subject/body)
 - wire-elements/modal
 
 ---
@@ -105,6 +106,13 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     resource: an admin-editable, locale-aware CMS for small pieces of copy
     rendered into public views via `<x-content-block>` (see below)
 
+13. **Email templates** — DB-backed, locale-aware email system:
+    email_templates table (translatable subject/body), EmailTemplate model,
+    EmailServiceHandler (implements CircleServiceContract) that renders +
+    sends via {{ variable }} substitution, TemplateMailable + mail views,
+    and a Filament EmailTemplateResource under a "Communication" nav group
+    (see Email Templates section below)
+
 ---
 
 ## Geographic Abstraction Layer (Multi-Country)
@@ -156,6 +164,9 @@ All SA locatable models implement:
 - Content blocks (content_blocks.content): spatie/laravel-translatable —
   stored as `{"en": "...", "pt_BR": "..."}` JSON, resolved via
   ContentBlock::get() (see Filament Admin Panel section)
+- Email templates (email_templates.subject/body): spatie/laravel-translatable
+  — same `{"en": "...", "pt_BR": "..."}` JSON pattern, resolved via
+  EmailTemplate::getByKey() (see Email Templates section)
 - Community type names (Organisation, Campaign, etc.): ARE translatable
 - Place/location proper names: NOT translated
 
@@ -241,6 +252,63 @@ community.join_instructions, onboarding.new_user_welcome.
 
 ---
 
+## Email Templates & Communication
+
+DB-backed, locale-aware transactional emails, editable in the admin panel.
+
+**email_templates table** (migration 2026_07_06_000001)
+- `key` (string 150, unique) — stable lookup handle used in code
+- `description` (string 255, nullable) — admin hint
+- `subject` (JSON, translatable) — `{"en": "...", "pt_BR": "..."}`
+- `body` (JSON, translatable)
+- `is_html` (bool, default true) — HTML vs plain-text rendering
+- `available_variables` (JSON array, nullable) — variable whitelist,
+  e.g. `["user_name", "action_url"]` (developer-set, not admin-edited)
+- `is_active` (bool, default true) — inactive templates cannot be sent
+
+**EmailTemplate model (app/Models/Communication/EmailTemplate.php)**
+- `$translatable = ['subject', 'body']`; casts is_html/is_active bool,
+  available_variables array
+- `EmailTemplate::getByKey(string $key): ?self` — cached 1h per key+locale,
+  cache flushed on saved/deleted per supported locale (same pattern as
+  ContentBlock)
+
+**EmailServiceHandler (app/Services/Communication/EmailServiceHandler.php)**
+- Implements CircleServiceContract; getKey() = 'email'
+- `sendTemplate(key, toAddress, variables = [], ?Circle)` — synchronous
+- `queueTemplate(key, toAddress, variables = [], ?Circle)` — queued
+- Both delegate to a private buildMailable(): resolves template, throws
+  RuntimeException if missing/inactive, substitutes `{{ variable_name }}`
+  placeholders via strtr(), returns a TemplateMailable
+- `$circle` param reserved for future circle-scoped context
+
+**TemplateMailable (app/Mail/TemplateMailable.php)**
+- Constructor: (subject, body, isHtml); assigns subject to the inherited
+  Mailable::$subject (avoids the typed-property redeclaration fatal)
+- HTML → resources/views/mail/template.blade.php
+- Plain → resources/views/mail/template-plain.blade.php
+- Minimal inline-styled views, no external CSS
+
+**EmailTemplateResource (app/Filament/Resources/EmailTemplates/)**
+- Under a NEW `Communication` nav group
+- key disabled on edit; description; is_html/is_active toggles
+- available_variables shown as read-only chips (disabled TagsInput,
+  dehydrated(false))
+- Per-locale tabs (from config('app.supported_locales')): subject TextInput
+  + body RichEditor (is_html) / Textarea (plain)
+- Table: key, description, per-locale "Complete/Missing" badge, is_active
+  ToggleColumn, updated_at
+
+**EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
+(updateOrCreate by key). English stubs, empty pt_BR (falls back). Keys:
+email.welcome, email.circle_invitation, email.password_reset.
+
+**Local mail:** MailHog via MAMP — SMTP localhost:1025, UI at
+http://localhost:8025/mailhog (note the /mailhog web path).
+Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
+
+---
+
 ## Seeded Data
 
 - Full SA demography hierarchy seeded:
@@ -254,6 +322,8 @@ community.join_instructions, onboarding.new_user_welcome.
 - LocationCommunity circles for all levels down to MainPlace
 - ThemeCommunity circles (national + WC province + Eden DM)
 - 4 content blocks (via ContentBlockSeeder)
+- 3 email templates (via EmailTemplateSeeder): email.welcome,
+  email.circle_invitation, email.password_reset
 - Spatie roles: new_user, full_member, curator, trainer,
   admin, superadmin, circle_admin, circle_full_member, circle_visitor
 - 9 service stubs
@@ -272,6 +342,7 @@ community.join_instructions, onboarding.new_user_welcome.
   (bounding box ±0.5° + squared Euclidean, fallback to full scan)
 - Composite index on coordinate_data(latitude, longitude)
 - ContentBlock model + content_blocks table (translatable content)
+- EmailTemplate model + email_templates table (translatable subject/body)
 - All migrations including circle_associations
 - circles.description: JSON column (spatie/laravel-translatable)
 
@@ -280,12 +351,14 @@ community.join_instructions, onboarding.new_user_welcome.
 - MainPlaceCommunitiesSeeder (~14,039 MainPlace circles, idempotent)
 - ThemeCommunitiesSeeder
 - ContentBlockSeeder (idempotent, registered in DatabaseSeeder)
+- EmailTemplateSeeder (idempotent, registered in DatabaseSeeder)
 - Full SA demography data
 
 ### Services
 - CircleCreationService
 - CircleMembershipService
-- 9 service handler stubs
+- EmailServiceHandler (Communication — sendTemplate/queueTemplate)
+- 9 circle service handler stubs
 
 ### Explore Page (see Explore UI Supplement for full detail)
 - Two-section layout: top (location browser) + bottom (community types)
@@ -308,10 +381,17 @@ community.join_instructions, onboarding.new_user_welcome.
 
 ### Filament Admin Panel
 - AdminPanelProvider at /admin (admin + superadmin only)
-- `Platform` nav group
-- ContentBlockResource (per-locale content editing)
+- `Platform` nav group → ContentBlockResource (per-locale content editing)
+- `Communication` nav group → EmailTemplateResource (per-locale subject/body)
 - x-content-block Blade component for rendering blocks in public views,
   rendered at the top of the Explore page (explore.welcome_banner)
+
+### Email / Communication (see Email Templates section)
+- email_templates table + EmailTemplate model (translatable, cached getByKey)
+- EmailServiceHandler with sendTemplate() + queueTemplate()
+- TemplateMailable + HTML/plain mail views
+- EmailTemplateResource + EmailTemplateSeeder (3 templates)
+- Verified end-to-end send to MailHog; EmailServiceHandlerTest covers welcome
 
 ### Authentication (manual, Livewire 4)
 - Login, Register, ForgotPassword, ResetPassword components
@@ -327,7 +407,7 @@ community.join_instructions, onboarding.new_user_welcome.
 - Auth/permission guards on Add Community and Request Location buttons
   (TODO comments in place throughout)
 - Campaign model fields
-- Filament resources beyond ContentBlock (panel + ContentBlock exist)
+- Filament resources beyond ContentBlock + EmailTemplate
 - Map view for Explore page (SVG sourcing in progress)
 - User profile pages with saved locale preference
 - Language switcher UI
@@ -335,7 +415,9 @@ community.join_instructions, onboarding.new_user_welcome.
   (service stubs exist, full implementation pending)
 - Payment/subscription system
 - API endpoints
-- Email/notification templates
+- Notification system + wiring EmailServiceHandler into real flows
+  (registration welcome, circle invitations, password reset) — the email
+  template infrastructure exists but is not yet called from app events
 - CommunityPage type-specific nested components (placeholder only)
 - "Also here" badge on community cards (currently only in column browser)
 - Wider placement of x-content-block — currently rendered only at the top
@@ -361,7 +443,12 @@ community.join_instructions, onboarding.new_user_welcome.
     — never treat it as a plain string column
 12. content_blocks.content is translatable JSON — always read via
     ContentBlock::get(); the /admin panel is admin/superadmin only
-13. All lang keys must exist in lang/en/ before being used in views
+13. email_templates.subject/body are translatable JSON — send via
+    EmailServiceHandler; available_variables is developer-set, not admin-edited
+14. Tests must NEVER use RefreshDatabase (full migrate fails on sqlite — no
+    countries migration) and never hit MailHog (phpunit.xml MAIL_MAILER=array
+    + Mail::fake()); build only the tables a test needs
+15. All lang keys must exist in lang/en/ before being used in views
 
 ---
 
@@ -377,6 +464,8 @@ app/
   Filament/
     Resources/
       ContentBlocks/  ContentBlockResource + Pages/
+      EmailTemplates/ EmailTemplateResource + Pages/
+  Mail/               TemplateMailable
   Http/Middleware/    SetLocaleFromBrowser
   Livewire/Auth/      Login, Register, ForgotPassword, ResetPassword
   Livewire/Explore/   ExploreCommunities + sub-components
@@ -385,12 +474,14 @@ app/
   Models/Circles/     Circle, Service
   Models/Communities/ OrganisationCommunity, Campaign, CourseCommunity,
                       LocationCommunity, ThemeCommunity
+  Models/Communication/ EmailTemplate
   Models/Demography/  Country, Province, DistrictMunicipality,
                       LocalMunicipality, City, MainPlace, CoordinateData
   Models/             Organisation, Course, User, ContentBlock
   Providers/Filament/ AdminPanelProvider
   Services/Circles/   CircleCreationService, CircleMembershipService,
                       + 9 service handlers
+  Services/Communication/ EmailServiceHandler
   Traits/             HasCircle, HasLocation
 
 resources/
@@ -404,8 +495,13 @@ resources/
     livewire/auth/    login, register, forgot-password, reset-password
     livewire/explore/ all explore components
     livewire/         community-page
+    mail/             template.blade.php, template-plain.blade.php
     components/       content-block.blade.php
     components/explore/ empty-state, no-further-levels
+
+tests/
+  Services/           EmailServiceHandlerTest (Services testsuite in phpunit.xml)
+  Feature/  Unit/     (default Laravel examples)
 
 lang/
   en/                 explore.php, communities.php, navigation.php,

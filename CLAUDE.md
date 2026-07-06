@@ -26,7 +26,8 @@ Platform 2027. Read this before touching any file.
 - Alpine.js (bundled with Livewire 4)
 - Filament v5 (filament/filament ^5.6) — admin panel at /admin
 - Spatie Laravel Permission (teams mode, team_foreign_key = circle_id)
-- Spatie Laravel Translatable (circles.description only)
+- Spatie Laravel Translatable (circles.description, content_blocks.content,
+  email_templates.subject/body)
 - wire-elements/modal
 
 ---
@@ -338,6 +339,56 @@ back to English). Keys: `explore.welcome_banner`,
 - Currently rendered only at the top of the Explore page
   (`explore.welcome_banner`); other seeded keys not yet placed in views
 
+### Email Templates (DB-backed, locale-aware transactional email)
+
+**email_templates table** (migration `2026_07_06_000001`)
+- `key` (string 150, unique) — stable lookup handle used in code
+- `description` (string 255, nullable) — admin hint
+- `subject` (JSON, translatable) — `{"en": "...", "pt_BR": "..."}`
+- `body` (JSON, translatable)
+- `is_html` (bool, default true) — HTML vs plain-text rendering
+- `available_variables` (JSON array, nullable) — variable whitelist,
+  e.g. `["user_name", "action_url"]`; developer-set, NOT admin-edited
+- `is_active` (bool, default true) — inactive templates cannot be sent
+
+**EmailTemplate model (`app/Models/Communication/EmailTemplate.php`)**
+- `$translatable = ['subject', 'body']`; casts `is_html`/`is_active` bool,
+  `available_variables` array
+- `EmailTemplate::getByKey(string $key): ?self` — cached 1h per key+locale;
+  cache flushed on saved/deleted per supported locale (mirrors ContentBlock)
+
+**EmailServiceHandler (`app/Services/Communication/EmailServiceHandler.php`)**
+- Implements `CircleServiceContract`; `getKey()` = `'email'`
+- `sendTemplate(key, toAddress, variables = [], ?Circle)` — synchronous
+- `queueTemplate(key, toAddress, variables = [], ?Circle)` — queued
+- Both delegate to private `buildMailable()`: resolves the template, throws
+  `RuntimeException` if missing/inactive, substitutes `{{ variable_name }}`
+  via `strtr()`, returns a `TemplateMailable`. `$circle` reserved for future use.
+
+**TemplateMailable (`app/Mail/TemplateMailable.php`)**
+- Constructor `(subject, body, isHtml)`; assigns `subject` to the inherited
+  `Mailable::$subject` (do NOT promote it — typing the inherited untyped
+  property is a fatal error)
+- HTML → `resources/views/mail/template.blade.php`
+- Plain → `resources/views/mail/template-plain.blade.php`
+- Minimal inline-styled views, no external CSS
+
+**EmailTemplateResource** (`app/Filament/Resources/EmailTemplates/`)
+- Under a `Communication` nav group (separate from `Platform`)
+- `key` disabled on edit; `available_variables` shown as read-only chips
+  (disabled TagsInput, `dehydrated(false)`)
+- Per-locale tabs (from `config('app.supported_locales')`): subject TextInput
+  + body RichEditor (when `is_html`) / Textarea (plain)
+- Table: key, description, per-locale "Complete/Missing" badge,
+  `is_active` ToggleColumn, updated_at
+
+**EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
+(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). Keys:
+`email.welcome`, `email.circle_invitation`, `email.password_reset`.
+
+Local mail: MailHog via MAMP — SMTP `localhost:1025`, UI at
+`http://localhost:8025/mailhog` (note the `/mailhog` web path).
+
 ---
 
 ## Authentication
@@ -368,6 +419,7 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - MainPlaceCommunitiesSeeder — ~14,039 MainPlace circles (idempotent)
 - ThemeCommunitiesSeeder — national + WC + Eden DM
 - ContentBlockSeeder — 4 content blocks (idempotent, updateOrCreate by key)
+- EmailTemplateSeeder — 3 email templates (idempotent, updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 
 MainPlaceCommunitiesSeeder is idempotent — checks before creating.
@@ -393,7 +445,10 @@ On failure: silent.
 - Full membership system (circle_user pivot + approval workflow)
 - Auth/permission guards on buttons (TODO comments in place)
 - Campaign model fields
-- Filament resources beyond ContentBlock (panel + ContentBlock exist)
+- Filament resources beyond ContentBlock + EmailTemplate
+- Wiring EmailServiceHandler into real flows (registration welcome, circle
+  invitations, password reset) — template infrastructure exists but is not
+  yet triggered by app events
 - Map view (SVG sourcing in progress)
 - User profile pages + saved locale preference
 - Language switcher UI
@@ -401,7 +456,21 @@ On failure: silent.
 - Notification, voting, social media, learning service implementations
 - Payment/subscription system
 - API endpoints
-- Email/notification templates
+- In-app notification templates (email templates are built — see
+  Email Templates section)
+
+---
+
+## Testing
+
+- PHPUnit (not Pest); namespaced test classes under `tests/`
+- `tests/Services` has its own `Services` testsuite in `phpunit.xml`
+- Test DB is sqlite `:memory:` with `MAIL_MAILER=array` (phpunit.xml)
+- NEVER use `RefreshDatabase` — the full migration set fails on sqlite
+  (a demography backfill references a `countries` table that no migration
+  creates). Build only the tables a test needs by running their specific
+  migrations' `up()` in `setUp()`
+- Tests never hit MailHog: `array` mailer + `Mail::fake()`
 
 ---
 
@@ -413,6 +482,11 @@ On failure: silent.
 - Treating circles.description as a plain string — it is JSON
 - Treating ContentBlock.content as a plain string — it is translatable
   JSON; always read via ContentBlock::get()
+- Treating email_templates.subject/body as plain strings — translatable
+  JSON; send via EmailServiceHandler (never build/send mail ad hoc)
+- Promoting $subject in TemplateMailable — fatal (inherited untyped
+  Mailable::$subject); assign it in the constructor body instead
+- Using RefreshDatabase in tests — migrations fail on sqlite (see Testing)
 - Marking City as terminal — only Place (MainPlace) is terminal
 - Using isTerminal() to decide whether to render a next column —
   use $children->isNotEmpty() for that
