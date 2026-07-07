@@ -2,6 +2,8 @@
 
 namespace App\Models\Circles;
 
+use App\Enums\CircleStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +24,7 @@ class Circle extends Model
 
     protected $casts = [
         'depth' => 'integer',
+        'status' => CircleStatus::class,
     ];
 
     protected $fillable = [
@@ -34,7 +37,8 @@ class Circle extends Model
         'circleable_type',
         'locatable_id',
         'locatable_type',
-        'is_test'
+        'is_test',
+        'status',
     ];
 
     /*
@@ -161,6 +165,18 @@ class Circle extends Model
     public function isNestedIn(Circle $circle): bool
     {
         return str_starts_with((string) $this->path, $circle->path.'/');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes
+    |--------------------------------------------------------------------------
+    */
+
+    /** Limit the query to active circles only. */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', CircleStatus::Active);
     }
 
     /*
