@@ -76,11 +76,32 @@ class ContentBlockResource extends Resource
                     ->live()
                     ->helperText('On: rich text (HTML) editor. Off: plain-text editor.'),
 
+                Toggle::make('collapsible')
+                    ->label('Collapsible')
+                    ->default(false)
+                    // Live so the title inputs + default_collapsed react immediately.
+                    ->live()
+                    ->helperText('Render this block as an expand/collapse disclosure.'),
+
+                Toggle::make('default_collapsed')
+                    ->label('Collapsed by default')
+                    ->default(true)
+                    // Only relevant for collapsible blocks.
+                    ->hidden(fn (Get $get): bool => ! (bool) $get('collapsible'))
+                    ->helperText('Whether the disclosure starts collapsed.'),
+
                 Tabs::make('content')
                     ->columnSpanFull()
                     ->tabs(array_map(
                         fn (string $locale): Tab => Tab::make(static::localeLabel($locale))
                             ->schema([
+                                // Disclosure heading for this locale — only shown
+                                // when the block is collapsible.
+                                TextInput::make("title.{$locale}")
+                                    ->label('Title')
+                                    ->visible(fn (Get $get): bool => (bool) $get('collapsible'))
+                                    ->helperText('Heading shown on the collapsible disclosure.'),
+
                                 // Both editors bind to the same translatable path
                                 // (content.{locale}); only one shows at a time,
                                 // toggled live by is_html.
@@ -121,6 +142,10 @@ class ContentBlockResource extends Resource
                         ->state(fn (ContentBlock $record): bool => filled(trim(strip_tags((string) $record->getTranslation('content', $locale, false))))),
                     static::locales(),
                 ),
+
+                IconColumn::make('collapsible')
+                    ->label('Collapsible')
+                    ->boolean(),
 
                 TextColumn::make('updated_at')
                     ->dateTime()

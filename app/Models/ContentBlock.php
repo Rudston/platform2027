@@ -11,12 +11,14 @@ class ContentBlock extends Model
     use HasTranslations;
 
     /** Translatable JSON columns (resolved to the current locale transparently). */
-    public array $translatable = ['content'];
+    public array $translatable = ['content', 'title'];
 
     protected $guarded = [];
 
     protected $casts = [
         'is_html' => 'boolean',
+        'collapsible' => 'boolean',
+        'default_collapsed' => 'boolean',
     ];
 
     /**
