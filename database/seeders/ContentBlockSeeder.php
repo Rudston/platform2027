@@ -57,6 +57,27 @@ class ContentBlockSeeder extends Seeder
             );
         }
 
-        $this->command->info(sprintf('Seeded %d content blocks.', count($blocks)));
+        // Collapsible "how to add" guidance shown in each Add Community modal.
+        // Placeholder content for now — edit per locale in the admin panel.
+        $howToTypes = ['campaign', 'course', 'event', 'theme'];
+
+        foreach ($howToTypes as $type) {
+            ContentBlock::updateOrCreate(
+                ['key' => "community.how_to_add.{$type}"],
+                [
+                    'description' => "Collapsible how-to guidance in the Add {$type} Community modal",
+                    'title' => ['en' => 'How this works', 'pt_BR' => ''],
+                    'content' => ['en' => '<p>test.</p>', 'pt_BR' => ''],
+                    'is_html' => true,
+                    'collapsible' => true,
+                    'default_collapsed' => true,
+                ],
+            );
+        }
+
+        $this->command->info(sprintf(
+            'Seeded %d content blocks.',
+            count($blocks) + count($howToTypes),
+        ));
     }
 }
