@@ -172,7 +172,7 @@
                 <div class="-mt-4 mb-4 flex justify-end">
                     <button
                         type="button"
-                        wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($selectedCommunityType), label: @js($this->addCommunityLabel) } })"
+                        wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($selectedCommunityType), label: @js($this->addCommunityLabel), circleId: @js($selectedCircleId) } })"
                         class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
                     >
                         {{ __('explore.add_community', ['label' => $this->addCommunityLabel]) }}
@@ -192,6 +192,7 @@
                     :subheading="__('explore.empty.be_first_text')"
                     :add-label="$this->addCommunityLabel"
                     :add-modal-type="$selectedCommunityType"
+                    :circle-id="$selectedCircleId"
                     :below-count="$this->typeCommunitiesCountBelow"
                     :below-label="$this->communityTypeLabel"
                 />
@@ -202,6 +203,7 @@
                     :subheading="__('explore.empty.fresh_text')"
                     :add-label="$this->addCommunityLabel"
                     :add-modal-type="$selectedCommunityType"
+                    :circle-id="$selectedCircleId"
                     :below-count="0"
                 />
             @endif

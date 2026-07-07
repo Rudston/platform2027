@@ -18,6 +18,7 @@ class Organisation extends Model
         'website',
         'contact_person',
         'contact_email',
+        'contact_job_title',
     ];
 
     public function community(): HasOne

@@ -50,6 +50,12 @@ return [
         'placeholder' => 'The form for adding :label will be added here.',
     ],
 
+    // Add-community modal — auth guard, organisation form
+    'login_to_add'                   => 'Please log in to add a community to the platform.',
+    'organisation_duplicate_warning' => 'An organisation community for this organisation already exists on the platform.',
+    'submit_for_approval'            => 'Submit for Approval',
+    'contact_person_for_approval'    => 'Contact person for approval',
+
     'request_modal' => [
         'title'         => 'Request a location in :place',
         'subtitle'      => 'We will let you know once it has been added.',

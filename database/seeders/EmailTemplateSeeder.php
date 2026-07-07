@@ -62,7 +62,7 @@ class EmailTemplateSeeder extends Seeder
             [
                 'key' => 'email.organisation_approval_request',
                 'description' => 'Sent to the organisation contact requesting approval to add the organisation to the platform',
-                'available_variables' => ['contact_name', 'organisation_name', 'requester_name', 'approve_url', 'deny_url', 'expires_at'],
+                'available_variables' => ['contact_name', 'organisation_name', 'requester_name', 'review_url', 'expires_at'],
                 'subject' => [
                     'en' => 'Action Required: Approve your organisation on Platform 2027',
                     'pt_BR' => '',
@@ -71,10 +71,9 @@ class EmailTemplateSeeder extends Seeder
                     'en' => '<p>Hi {{ contact_name }},</p>'
                         .'<p>{{ requester_name }} has requested to add <strong>{{ organisation_name }}</strong> to '
                         .'Platform 2027. As the organisation&rsquo;s contact, we need your approval before it goes live.</p>'
-                        .'<p>Please review and respond:</p>'
+                        .'<p>Review the request and choose to approve or decline it:</p>'
                         .'<p>'
-                        .'<a href="{{ approve_url }}" style="display:inline-block;padding:10px 20px;margin-right:8px;background-color:#16a34a;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Approve</a>'
-                        .'<a href="{{ deny_url }}" style="display:inline-block;padding:10px 20px;background-color:#dc2626;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Deny</a>'
+                        .'<a href="{{ review_url }}" style="display:inline-block;padding:10px 20px;background-color:#4f46e5;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Review this request</a>'
                         .'</p>'
                         .'<p style="font-size:14px;color:#6b7280;">This link expires in 7 days, on {{ expires_at }}. '
                         .'If you weren&rsquo;t expecting this request, you can safely ignore this email.</p>',

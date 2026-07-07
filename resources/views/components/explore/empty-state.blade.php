@@ -12,6 +12,9 @@
     // (still used by the top location browser).
     'addLabel' => null,
     'addModalType' => null,
+    // Parent circle (current geographic selection) passed to the Add modal so
+    // a community created from an empty state nests under the right location.
+    'circleId' => null,
 ])
 
 <div class="rounded-lg border border-dashed border-border-muted bg-surface p-10 text-center">
@@ -27,7 +30,7 @@
         {{-- TODO: guard this button with auth + permission check --}}
         <button
             type="button"
-            wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($addModalType), label: @js($addLabel) } })"
+            wire:click="$dispatch('openModal', { component: 'explore.add-community-modal', arguments: { type: @js($addModalType), label: @js($addLabel), circleId: @js($circleId) } })"
             class="mt-5 inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
         >
             {{ __('explore.add_community', ['label' => $addLabel]) }}

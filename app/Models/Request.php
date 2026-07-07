@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 class Request extends Model
 {
@@ -104,19 +103,32 @@ class Request extends Model
     */
 
     /**
-     * Create an external organisation-approval request.
+     * Create an external organisation-approval request for the given circle.
      *
-     * @todo Phase B — build the request: type 'organisation_approval',
-     *       direction 'external', requestable = $organisation,
-     *       respondent_email = $respondentEmail, token expiry, metadata.
+     * ulid + token are auto-generated in booted(); metadata always starts with
+     * an empty email_log the controller/service appends to.
+     *
+     * @param  array<string, mixed>  $metadata
      */
     public static function createForOrganisation(
         User $requester,
         Circle $circle,
         Organisation $organisation,
         string $respondentEmail,
+        array $metadata = [],
     ): self {
-        throw new RuntimeException('Request::createForOrganisation() is not implemented yet.');
+        return static::create([
+            'type' => 'organisation_approval',
+            'status' => 'pending',
+            'direction' => 'external',
+            'requester_id' => $requester->id,
+            'circle_id' => $circle->id,
+            'requestable_type' => $organisation->getMorphClass(),
+            'requestable_id' => $organisation->getKey(),
+            'respondent_email' => $respondentEmail,
+            'token_expires_at' => now()->addDays(7),
+            'metadata' => array_merge($metadata, ['email_log' => []]),
+        ]);
     }
 
     /** True when a token expiry is set and has passed. */
@@ -124,6 +136,34 @@ class Request extends Model
     {
         return $this->token_expires_at !== null
             && $this->token_expires_at->isPast();
+    }
+
+    /**
+     * Append an entry to the metadata.email_log array, preserving all other
+     * metadata keys. Records each attempt to send an email for this request.
+     */
+    public function logEmail(
+        string $template,
+        string $recipient,
+        string $status,
+        ?string $error = null,
+    ): void {
+        $metadata = $this->metadata ?? [];
+
+        $entry = [
+            'template' => $template,
+            'recipient' => $recipient,
+            'sent_at' => now()->toIso8601String(),
+            'status' => $status,
+        ];
+
+        if ($error !== null) {
+            $entry['error'] = $error;
+        }
+
+        $metadata['email_log'] = array_merge($metadata['email_log'] ?? [], [$entry]);
+
+        $this->update(['metadata' => $metadata]);
     }
 
     /*
