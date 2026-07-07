@@ -17,9 +17,10 @@ No political parties have access.
 - Livewire 4 (NOT Livewire 3)
 - Tailwind CSS 4 via Vite (NO tailwind.config.js)
 - Alpine.js (via Livewire 4)
-- Filament (admin panels + forms)
+- Filament v5 (filament/filament ^5.6) — admin panel at /admin + forms
 - Spatie Laravel Permission (teams enabled, team_foreign_key = circle_id)
-- Spatie Laravel Translatable (circles.description column only)
+- Spatie Laravel Translatable (circles.description + content_blocks.content
+  /title + email_templates.subject/body)
 - wire-elements/modal
 
 ---
@@ -91,13 +92,26 @@ Every circle has at least a Country-level location (mandatory, not nullable).
    (see Geographic Abstraction section below)
 
 10. **Internationalisation** — PHP array lang files under lang/en/ organised
-    by feature area; spatie/laravel-translatable on circles.description only;
-    circle names treated as proper nouns (not translated); browser
-    Accept-Language auto-detection via SetLocaleFromBrowser middleware
+    by feature area; spatie/laravel-translatable on circles.description +
+    content_blocks.content; circle names treated as proper nouns (not
+    translated); browser Accept-Language auto-detection via
+    SetLocaleFromBrowser middleware
 
 11. **Community page** — dedicated full page at /communities/{circle}
     replaces modal for viewing a community; stateless back-link via
     ?from= query parameter
+
+12. **Filament admin panel** — panel at /admin, restricted to admin +
+    superadmin roles (User::canAccessPanel). "Content blocks" is the first
+    resource: an admin-editable, locale-aware CMS for small pieces of copy
+    rendered into public views via `<x-content-block>` (see below)
+
+13. **Email templates** — DB-backed, locale-aware email system:
+    email_templates table (translatable subject/body), EmailTemplate model,
+    EmailServiceHandler (implements CircleServiceContract) that renders +
+    sends via {{ variable }} substitution, TemplateMailable + mail views,
+    and a Filament EmailTemplateResource under a "Communication" nav group
+    (see Email Templates section below)
 
 ---
 
@@ -147,6 +161,12 @@ All SA locatable models implement:
 - Circle names: proper nouns — NOT translated
 - Circle descriptions: spatie/laravel-translatable — stored as
   `{"en": "...", "pt": "..."}` JSON, resolved transparently at runtime
+- Content blocks (content_blocks.content): spatie/laravel-translatable —
+  stored as `{"en": "...", "pt_BR": "..."}` JSON, resolved via
+  ContentBlock::get() (see Filament Admin Panel section)
+- Email templates (email_templates.subject/body): spatie/laravel-translatable
+  — same `{"en": "...", "pt_BR": "..."}` JSON pattern, resolved via
+  EmailTemplate::getByKey() (see Email Templates section)
 - Community type names (Organisation, Campaign, etc.): ARE translatable
 - Place/location proper names: NOT translated
 
@@ -183,6 +203,131 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 
 ---
 
+## Filament Admin Panel & Content Blocks
+
+### Admin panel
+- AdminPanelProvider (app/Providers/Filament/AdminPanelProvider.php)
+- Path /admin, panel id `admin`, `->login()`, dark mode on, primary = Amber
+- Access restricted to `admin` + `superadmin` roles via
+  User::canAccessPanel() (User implements FilamentUser)
+- Nav group `Platform` registered for platform-management resources
+- Auto-discovers Resources/Pages/Widgets under app/Filament/
+
+### Content Blocks (admin-editable, locale-aware CMS copy)
+Small pieces of copy (banners, hints, instructions) rendered into public
+views and editable in the admin panel.
+
+**content_blocks table** (base migration + 2026_07_07 add-collapsible)
+- `key` (string, unique) — stable lookup handle used in views
+- `description` (string) — admin-facing note
+- `content` (JSON, translatable) — `{"en": "...", "pt_BR": "..."}`
+- `title` (JSON, translatable, nullable) — heading for collapsible blocks
+- `is_html` (bool, default true) — rich HTML vs plain text
+- `collapsible` (bool, default false) — render as expand/collapse disclosure
+- `default_collapsed` (bool, default true) — initial state when collapsible
+
+**ContentBlock model (app/Models/ContentBlock.php)**
+- `$translatable = ['content', 'title']`; casts is_html/collapsible/
+  default_collapsed to boolean
+- `ContentBlock::get(string $key, string $fallback = ''): string`
+  - Cached 1h per key+locale
+  - Resolution: current locale → app.fallback_locale (en) → $fallback
+  - Markup/whitespace-only content (e.g. `<p></p>`) treated as blank
+- Cache auto-flushed on saved/deleted (booted() hooks), per supported locale
+
+**ContentBlockResource (app/Filament/Resources/ContentBlocks/)**
+- Under `Platform` nav group
+- `key` disabled on edit (stable handle)
+- Toggles: is_html, collapsible (live), default_collapsed (hidden unless
+  collapsible)
+- Per-locale tabs (from config('app.supported_locales')): title TextInput
+  (visible only when collapsible) + content RichEditor (is_html) / Textarea
+- Table: per-locale content checkmark + a collapsible boolean icon column
+- EditContentBlock hydrates full content AND title translations on fill
+
+**ContentBlockSeeder** — registered in DatabaseSeeder, idempotent
+(updateOrCreate by key). Seeds English only; pt_BR left blank (falls back
+to English). Keys: explore.welcome_banner, explore.column_browser_hint,
+community.join_instructions, onboarding.new_user_welcome, plus 4 collapsible
+how-to blocks community.how_to_add.{campaign,course,event,theme}
+(title "How this works", placeholder content). NOTE: the organisation
+how-to block (community.how_to_add.organisation) exists in the dev DB but
+is NOT in the seeder yet.
+
+**x-content-block Blade component**
+`<x-content-block key="explore.welcome_banner" fallback="…" />`
+- Props: key, fallback, collapsible, collapsed, title — collapsible/collapsed/
+  title default to the block's stored values; a non-null inline value overrides
+- Non-collapsible: renders ContentBlock::get() directly (as before)
+- Collapsible: Alpine disclosure — title on the left, +/- toggle on the right,
+  body via x-show + x-collapse (Livewire's bundled Alpine). Initial state is
+  server-rendered to avoid FOUC (the project has no x-cloak CSS)
+- Renders nothing when empty and the viewer cannot edit
+- `{!! !!}` when is_html else escaped; inline edit pencil (top-right, on hover)
+  for admin/superadmin only
+
+**Usage:** collapsible how-to blocks render in the Add Community modals — see
+Explore UI Supplement → Add Community button.
+
+---
+
+## Email Templates & Communication
+
+DB-backed, locale-aware transactional emails, editable in the admin panel.
+
+**email_templates table** (migration 2026_07_06_000001)
+- `key` (string 150, unique) — stable lookup handle used in code
+- `description` (string 255, nullable) — admin hint
+- `subject` (JSON, translatable) — `{"en": "...", "pt_BR": "..."}`
+- `body` (JSON, translatable)
+- `is_html` (bool, default true) — HTML vs plain-text rendering
+- `available_variables` (JSON array, nullable) — variable whitelist,
+  e.g. `["user_name", "action_url"]` (developer-set, not admin-edited)
+- `is_active` (bool, default true) — inactive templates cannot be sent
+
+**EmailTemplate model (app/Models/Communication/EmailTemplate.php)**
+- `$translatable = ['subject', 'body']`; casts is_html/is_active bool,
+  available_variables array
+- `EmailTemplate::getByKey(string $key): ?self` — cached 1h per key+locale,
+  cache flushed on saved/deleted per supported locale (same pattern as
+  ContentBlock)
+
+**EmailServiceHandler (app/Services/Communication/EmailServiceHandler.php)**
+- Implements CircleServiceContract; getKey() = 'email'
+- `sendTemplate(key, toAddress, variables = [], ?Circle)` — synchronous
+- `queueTemplate(key, toAddress, variables = [], ?Circle)` — queued
+- Both delegate to a private buildMailable(): resolves template, throws
+  RuntimeException if missing/inactive, substitutes `{{ variable_name }}`
+  placeholders via strtr(), returns a TemplateMailable
+- `$circle` param reserved for future circle-scoped context
+
+**TemplateMailable (app/Mail/TemplateMailable.php)**
+- Constructor: (subject, body, isHtml); assigns subject to the inherited
+  Mailable::$subject (avoids the typed-property redeclaration fatal)
+- HTML → resources/views/mail/template.blade.php
+- Plain → resources/views/mail/template-plain.blade.php
+- Minimal inline-styled views, no external CSS
+
+**EmailTemplateResource (app/Filament/Resources/EmailTemplates/)**
+- Under a NEW `Communication` nav group
+- key disabled on edit; description; is_html/is_active toggles
+- available_variables shown as read-only chips (disabled TagsInput,
+  dehydrated(false))
+- Per-locale tabs (from config('app.supported_locales')): subject TextInput
+  + body RichEditor (is_html) / Textarea (plain)
+- Table: key, description, per-locale "Complete/Missing" badge, is_active
+  ToggleColumn, updated_at
+
+**EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
+(updateOrCreate by key). English stubs, empty pt_BR (falls back). Keys:
+email.welcome, email.circle_invitation, email.password_reset.
+
+**Local mail:** MailHog via MAMP — SMTP localhost:1025, UI at
+http://localhost:8025/mailhog (note the /mailhog web path).
+Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
+
+---
+
 ## Seeded Data
 
 - Full SA demography hierarchy seeded:
@@ -195,6 +340,10 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 - ~12,675 CoordinateData records (lat/lng for MainPlaces)
 - LocationCommunity circles for all levels down to MainPlace
 - ThemeCommunity circles (national + WC province + Eden DM)
+- 8 content blocks (via ContentBlockSeeder): 4 page-copy blocks + 4
+  collapsible how-to blocks (community.how_to_add.{campaign,course,event,theme})
+- 3 email templates (via EmailTemplateSeeder): email.welcome,
+  email.circle_invitation, email.password_reset
 - Spatie roles: new_user, full_member, curator, trainer,
   admin, superadmin, circle_admin, circle_full_member, circle_visitor
 - 9 service stubs
@@ -212,6 +361,8 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 - CoordinateData model with nearest() static method
   (bounding box ±0.5° + squared Euclidean, fallback to full scan)
 - Composite index on coordinate_data(latitude, longitude)
+- ContentBlock model + content_blocks table (translatable content)
+- EmailTemplate model + email_templates table (translatable subject/body)
 - All migrations including circle_associations
 - circles.description: JSON column (spatie/laravel-translatable)
 
@@ -219,12 +370,15 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 - LocationCommunitiesSeeder (country → LM/City)
 - MainPlaceCommunitiesSeeder (~14,039 MainPlace circles, idempotent)
 - ThemeCommunitiesSeeder
+- ContentBlockSeeder (idempotent, registered in DatabaseSeeder)
+- EmailTemplateSeeder (idempotent, registered in DatabaseSeeder)
 - Full SA demography data
 
 ### Services
 - CircleCreationService
 - CircleMembershipService
-- 9 service handler stubs
+- EmailServiceHandler (Communication — sendTemplate/queueTemplate)
+- 9 circle service handler stubs
 
 ### Explore Page (see Explore UI Supplement for full detail)
 - Two-section layout: top (location browser) + bottom (community types)
@@ -245,6 +399,22 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 - Stateless back-link via ?from= query parameter
 - layouts/public.blade.php (temporary — pre-auth)
 
+### Filament Admin Panel
+- AdminPanelProvider at /admin (admin + superadmin only)
+- `Platform` nav group → ContentBlockResource (per-locale content editing)
+- `Communication` nav group → EmailTemplateResource (per-locale subject/body)
+- x-content-block Blade component (supports collapsible disclosures),
+  rendered at the top of the Explore page (explore.welcome_banner) and as
+  collapsible how-to guidance in each Add Community modal (keyed off
+  CommunityType, language-independent — AddCommunityModal::howToKey())
+
+### Email / Communication (see Email Templates section)
+- email_templates table + EmailTemplate model (translatable, cached getByKey)
+- EmailServiceHandler with sendTemplate() + queueTemplate()
+- TemplateMailable + HTML/plain mail views
+- EmailTemplateResource + EmailTemplateSeeder (3 templates)
+- Verified end-to-end send to MailHog; EmailServiceHandlerTest covers welcome
+
 ### Authentication (manual, Livewire 4)
 - Login, Register, ForgotPassword, ResetPassword components
 - LogoutController
@@ -259,7 +429,7 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 - Auth/permission guards on Add Community and Request Location buttons
   (TODO comments in place throughout)
 - Campaign model fields
-- Filament admin panels
+- Filament resources beyond ContentBlock + EmailTemplate
 - Map view for Explore page (SVG sourcing in progress)
 - User profile pages with saved locale preference
 - Language switcher UI
@@ -267,9 +437,17 @@ Runs on web middleware group only (covers Livewire XHR automatically).
   (service stubs exist, full implementation pending)
 - Payment/subscription system
 - API endpoints
-- Email/notification templates
+- Notification system + wiring EmailServiceHandler into real flows
+  (registration welcome, circle invitations, password reset) — the email
+  template infrastructure exists but is not yet called from app events
 - CommunityPage type-specific nested components (placeholder only)
 - "Also here" badge on community cards (currently only in column browser)
+- Wider placement of x-content-block — currently used on the Explore page
+  (explore.welcome_banner) and in the Add Community modals (how_to_add.*);
+  other seeded keys (column_browser_hint, community.join_instructions,
+  onboarding.new_user_welcome) not yet placed in views
+- Real copy for the how-to blocks (campaign/course/event/theme are
+  placeholder "test" content) + seeding the organisation how-to block
 
 ---
 
@@ -287,7 +465,14 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 10. Only LocationLevel::Place is terminal — City is NOT terminal
 11. circles.description is a JSON column (spatie/laravel-translatable)
     — never treat it as a plain string column
-12. All lang keys must exist in lang/en/ before being used in views
+12. content_blocks.content is translatable JSON — always read via
+    ContentBlock::get(); the /admin panel is admin/superadmin only
+13. email_templates.subject/body are translatable JSON — send via
+    EmailServiceHandler; available_variables is developer-set, not admin-edited
+14. Tests must NEVER use RefreshDatabase (full migrate fails on sqlite — no
+    countries migration) and never hit MailHog (phpunit.xml MAIL_MAILER=array
+    + Mail::fake()); build only the tables a test needs
+15. All lang keys must exist in lang/en/ before being used in views
 
 ---
 
@@ -300,6 +485,11 @@ app/
     Circleable, Locatable,
     CircleServiceContract, ProvidesCircleIdentity
   Enums/              CommunityType, LocatableType, LocationLevel
+  Filament/
+    Resources/
+      ContentBlocks/  ContentBlockResource + Pages/
+      EmailTemplates/ EmailTemplateResource + Pages/
+  Mail/               TemplateMailable
   Http/Middleware/    SetLocaleFromBrowser
   Livewire/Auth/      Login, Register, ForgotPassword, ResetPassword
   Livewire/Explore/   ExploreCommunities + sub-components
@@ -308,11 +498,14 @@ app/
   Models/Circles/     Circle, Service
   Models/Communities/ OrganisationCommunity, Campaign, CourseCommunity,
                       LocationCommunity, ThemeCommunity
+  Models/Communication/ EmailTemplate
   Models/Demography/  Country, Province, DistrictMunicipality,
                       LocalMunicipality, City, MainPlace, CoordinateData
-  Models/             Organisation, Course, User
+  Models/             Organisation, Course, User, ContentBlock
+  Providers/Filament/ AdminPanelProvider
   Services/Circles/   CircleCreationService, CircleMembershipService,
                       + 9 service handlers
+  Services/Communication/ EmailServiceHandler
   Traits/             HasCircle, HasLocation
 
 resources/
@@ -326,7 +519,13 @@ resources/
     livewire/auth/    login, register, forgot-password, reset-password
     livewire/explore/ all explore components
     livewire/         community-page
+    mail/             template.blade.php, template-plain.blade.php
+    components/       content-block.blade.php
     components/explore/ empty-state, no-further-levels
+
+tests/
+  Services/           EmailServiceHandlerTest (Services testsuite in phpunit.xml)
+  Feature/  Unit/     (default Laravel examples)
 
 lang/
   en/                 explore.php, communities.php, navigation.php,
@@ -476,6 +675,9 @@ Shown in all states (empty and non-empty):
 - Empty: centred below empty state message (replaces "Be the first" CTA)
 - Label: "Add a/an {Type} Community" (correct a/an per type hardcoded)
 - Opens AddCommunityModal (placeholder — no save logic yet)
+- AddCommunityModal renders a collapsible how-to content block per type via
+  AddCommunityModal::howToKey() (maps CommunityType → community.how_to_add.*,
+  language-independent); falls back to placeholder text for types without one
 - TODO: guard with auth + permission check (comment in every instance)
 
 ### Community cards

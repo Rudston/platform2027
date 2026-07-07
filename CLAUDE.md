@@ -263,7 +263,10 @@ Button label uses correct a/an per type (hardcoded):
 - "Add a Course Community"
 - "Add a Theme Community"
 - "Add an Event"
-  Modal body: placeholder only. TODO: save logic + auth guard.
+  Modal body: a collapsible how-to content block per type, resolved by
+  `AddCommunityModal::howToKey()` (maps the CommunityType enum →
+  `community.how_to_add.*`, language-independent — NOT the translated label);
+  types without a block fall back to placeholder text. TODO: save logic + auth.
 
 ### Map view
 Toggle visible, disabled. "Coming soon" tooltip. Deferred to Phase 2.
@@ -302,15 +305,19 @@ AdminPanelProvider (`app/Providers/Filament/AdminPanelProvider.php`).
 Small pieces of locale-aware copy rendered into public views
 (banners, hints, instructions) — editable in the admin panel.
 
-**content_blocks table**
+**content_blocks table** (base + `2026_07_07` add-collapsible migration)
 - `key` (string, unique) — stable lookup handle used in views
 - `description` (string) — admin-facing note
 - `content` (JSON, translatable via spatie/laravel-translatable) —
   `{"en": "...", "pt_BR": "..."}`
+- `title` (JSON, translatable, nullable) — heading for collapsible blocks
 - `is_html` (bool, default true) — rich HTML vs plain text
+- `collapsible` (bool, default false) — render as expand/collapse disclosure
+- `default_collapsed` (bool, default true) — initial state when collapsible
 
 **ContentBlock model (`app/Models/ContentBlock.php`)**
-- `$translatable = ['content']`
+- `$translatable = ['content', 'title']`; `is_html`/`collapsible`/
+  `default_collapsed` cast to boolean
 - `ContentBlock::get(string $key, string $fallback = ''): string`
   - Cached 1h per key+locale
   - Resolution: current locale → `app.fallback_locale` (en) → `$fallback`
@@ -320,24 +327,36 @@ Small pieces of locale-aware copy rendered into public views
 **ContentBlockResource** (`app/Filament/Resources/ContentBlocks/`)
 - Under `Platform` nav group
 - `key` disabled on edit (stable handle)
-- Per-locale tabs (from `config('app.supported_locales')`) — RichEditor
-  when `is_html`, Textarea otherwise (toggled live)
-- Table shows a per-locale checkmark/dash for which locales have content
+- Toggles: `is_html`, `collapsible` (live), `default_collapsed` (hidden
+  unless `collapsible`)
+- Per-locale tabs (from `config('app.supported_locales')`): `title` TextInput
+  (visible only when `collapsible`) + content RichEditor (`is_html`) / Textarea
+- Table: per-locale content checkmark + a `collapsible` boolean icon column
+- `EditContentBlock` hydrates full `content` AND `title` translations on fill
 
 **ContentBlockSeeder** — registered in DatabaseSeeder, idempotent
 (`updateOrCreate` by key). Seeds English only; pt_BR left blank (falls
 back to English). Keys: `explore.welcome_banner`,
 `explore.column_browser_hint`, `community.join_instructions`,
-`onboarding.new_user_welcome`.
+`onboarding.new_user_welcome`, plus 4 collapsible how-to blocks
+`community.how_to_add.{campaign,course,event,theme}` (title "How this works",
+placeholder content). NOTE: `community.how_to_add.organisation` exists in the
+dev DB but is NOT in the seeder yet.
 
 **x-content-block Blade component**
 `<x-content-block key="explore.welcome_banner" fallback="…" />`
-- Renders `ContentBlock::get()` (`{!! !!}` when `is_html`, escaped otherwise)
+- Props: `key`, `fallback`, `collapsible`, `collapsed`, `title` —
+  collapsible/collapsed/title default to the block's stored values; a non-null
+  inline value overrides
+- Non-collapsible: renders `ContentBlock::get()` directly (`{!! !!}` when
+  `is_html`, else escaped)
+- Collapsible: Alpine disclosure — title left, +/- toggle right, body via
+  `x-show` + `x-collapse` (Livewire's bundled Alpine). Initial state is
+  server-rendered to avoid FOUC (project has no `x-cloak` CSS)
 - Renders nothing when empty and the viewer cannot edit
-- Inline edit pencil (top-right, on hover) for admin/superadmin only —
-  links to the Filament edit page
-- Currently rendered only at the top of the Explore page
-  (`explore.welcome_banner`); other seeded keys not yet placed in views
+- Inline edit pencil (top-right, on hover) for admin/superadmin only
+- Used on the Explore page (`explore.welcome_banner`) and in the Add Community
+  modals (collapsible how-to blocks — see below)
 
 ### Email Templates (DB-backed, locale-aware transactional email)
 
@@ -418,7 +437,8 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - LocationCommunitiesSeeder — country → LM/City circles
 - MainPlaceCommunitiesSeeder — ~14,039 MainPlace circles (idempotent)
 - ThemeCommunitiesSeeder — national + WC + Eden DM
-- ContentBlockSeeder — 4 content blocks (idempotent, updateOrCreate by key)
+- ContentBlockSeeder — 8 content blocks (4 page-copy + 4 collapsible how-to;
+  idempotent, updateOrCreate by key)
 - EmailTemplateSeeder — 3 email templates (idempotent, updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 
@@ -482,6 +502,9 @@ On failure: silent.
 - Treating circles.description as a plain string — it is JSON
 - Treating ContentBlock.content as a plain string — it is translatable
   JSON; always read via ContentBlock::get()
+- Branching on a TRANSLATED string (e.g. __('...add_label...')) — breaks in
+  non-English locales; key off a stable identifier (CommunityType enum,
+  lang array key) instead. See AddCommunityModal::howToKey()
 - Treating email_templates.subject/body as plain strings — translatable
   JSON; send via EmailServiceHandler (never build/send mail ad hoc)
 - Promoting $subject in TemplateMailable — fatal (inherited untyped
