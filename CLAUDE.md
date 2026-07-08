@@ -544,6 +544,9 @@ On failure: silent.
 - Request types other than organisation_approval — circle_join,
   location_request, circle_association are reserved type strings only
 - Membership approval (circle_join) + internal-direction request flows
+- Role transition after organisation approval: the requester is granted
+  circle_admin on approval (intended, even for platform admins) — switching
+  that to a dedicated organisation-staff role during onboarding is future work
 - Wiring EmailServiceHandler into other flows (registration welcome, circle
   invitations, password reset) — templates exist but aren't triggered by
   app events yet (the organisation-approval flow IS fully wired)

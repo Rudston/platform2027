@@ -490,6 +490,9 @@ requests to expired; scheduled daily in routes/console.php.
 - Filament resources beyond ContentBlock + EmailTemplate + Request
 - Request types other than organisation_approval (circle_join,
   location_request, circle_association are reserved strings only)
+- Role transition after org approval: requester gets circle_admin on approval
+  (intended, even for platform admins); switching that to a dedicated
+  organisation-staff role during onboarding is future work
 - Map view for Explore page (SVG sourcing in progress)
 - User profile pages with saved locale preference
 - Language switcher UI
