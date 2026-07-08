@@ -24,7 +24,7 @@
             {{-- How this works (admin-editable content block) --}}
             <div class="mt-4">
                 <x-content-block
-                    key="modal.organisation_community.how_it_works"
+                    key="community.how_to_add.organisation"
                     :collapsible="true"
                     :collapsed="true"
                     title="How this works"
