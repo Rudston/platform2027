@@ -3,6 +3,7 @@
 namespace App\Models\Circles;
 
 use App\Enums\CircleStatus;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -177,6 +178,22 @@ class Circle extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', CircleStatus::Active);
+    }
+
+    /**
+     * Limit to circles the given user may see: active always, plus pending for
+     * platform admins/superadmins. Column is qualified so the scope is safe on
+     * relationship (joined) queries too.
+     */
+    public function scopeVisibleTo(Builder $query, ?User $user): Builder
+    {
+        $statuses = [CircleStatus::Active->value];
+
+        if ($user?->hasAnyRole(['admin', 'superadmin'])) {
+            $statuses[] = CircleStatus::Pending->value;
+        }
+
+        return $query->whereIn('circles.status', $statuses);
     }
 
     /*

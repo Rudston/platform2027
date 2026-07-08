@@ -37,6 +37,9 @@ return [
         'members' => ':count members',
     ],
 
+    // Circle lifecycle status shown on cards
+    'status_pending' => 'Pending',
+
     'page' => [
         'title'    => 'Community',
         'back'     => '← Explore Communities',

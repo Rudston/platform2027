@@ -175,6 +175,7 @@ class ExploreCommunities extends Component
             $children = Circle::query()
                 ->where('circleable_type', CommunityType::LocationCommunity->value)
                 ->where('parent_id', $parentId)
+                ->visibleTo(auth()->user())
                 ->with(['circleable', 'locatable', 'services'])
                 ->orderBy('name')
                 ->get();
@@ -188,6 +189,7 @@ class ExploreCommunities extends Component
 
             $associated = $current
                 ? $current->approvedAssociatedBy()
+                    ->visibleTo(auth()->user())
                     ->with(['circleable', 'locatable', 'services'])
                     ->orderBy('circles.name')
                     ->get()
@@ -211,6 +213,7 @@ class ExploreCommunities extends Component
             ->where('circleable_type', $this->selectedType)
             ->where('locatable_type', $locatableType)
             ->where('locatable_id', $locatableId)
+            ->visibleTo(auth()->user())
             ->with(['circleable', 'locatable', 'services'])
             ->orderBy('name')
             ->get();
@@ -235,6 +238,7 @@ class ExploreCommunities extends Component
         return Circle::query()
             ->where('circleable_type', $this->selectedType)
             ->where('path', 'like', $circle->path.'/%')
+            ->visibleTo(auth()->user())
             ->count();
     }
 
@@ -283,6 +287,7 @@ class ExploreCommunities extends Component
             ->where('circleable_type', $this->selectedCommunityType)
             ->where('locatable_type', $locatableType)
             ->where('locatable_id', $locatableId)
+            ->visibleTo(auth()->user())
             ->with(['circleable', 'locatable', 'services'])
             ->orderBy('name')
             ->get();
@@ -307,6 +312,7 @@ class ExploreCommunities extends Component
         return Circle::query()
             ->where('circleable_type', $this->selectedCommunityType)
             ->where('path', 'like', $circle->path.'/%')
+            ->visibleTo(auth()->user())
             ->count();
     }
 
