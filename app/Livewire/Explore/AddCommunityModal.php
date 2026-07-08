@@ -7,6 +7,7 @@ use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
 use App\Models\Organisation;
 use App\Models\Request;
+use App\Models\User;
 use App\Services\Circles\CircleCreationService;
 use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +75,7 @@ class AddCommunityModal extends ModalComponent
      */
     public function submitOrganisation(): void
     {
-        /** @var \App\Models\User|null $user */
+        /** @var User|null $user */
         $user = auth()->user();
 
         if (! $user) {
