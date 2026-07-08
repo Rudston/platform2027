@@ -1,8 +1,14 @@
+@php
+    // Prop declarations for the IDE (defined by @props below).
+    /** @var string $key */
+    /** @var string $fallback */
+    /** @var bool|string|null $collapsible */
+    /** @var bool|string|null $collapsed */
+    /** @var string|null $title */
+@endphp
 @props([
     'key',
     'fallback' => '',
-    // When null, fall back to the model's stored values. An explicit inline
-    // value (true/false/"true"/"false") overrides whatever the block stores.
     'collapsible' => null,
     'collapsed' => null,
     'title' => null,
@@ -49,7 +55,7 @@
         >
             <button
                 type="button"
-                @click="open = ! open"
+                x-on:click="open = ! open"
                 :aria-expanded="open ? 'true' : 'false'"
                 class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-main"
             >

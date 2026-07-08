@@ -31,7 +31,7 @@
 
             {{-- Right: theme toggle + auth actions --}}
             <div class="flex items-center gap-3">
-                <button type="button" @click="darkMode = !darkMode"
+                <button type="button" x-on:click="darkMode = !darkMode"
                         class="rounded-lg border border-border-muted px-2 py-1.5 text-xs font-semibold transition hover:opacity-80"
                         aria-label="Toggle dark mode">
                     <span x-show="!darkMode">🌙</span>
