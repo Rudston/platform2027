@@ -61,7 +61,7 @@ class AddCommunityModal extends ModalComponent
         return [
             'organisationName' => ['required', 'string', 'max:150'],
             'organisationWebsite' => ['nullable', 'url', 'max:255'],
-            'organisationDescription' => ['nullable', 'string', 'max:500'],
+            'organisationDescription' => ['nullable', 'string', 'max:800'],
             'contactName' => ['required', 'string', 'max:150'],
             'contactEmail' => ['required', 'email', 'max:150'],
             'contactJobTitle' => ['nullable', 'string', 'max:100'],
