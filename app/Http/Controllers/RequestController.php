@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Enums\CircleStatus;
+use App\Enums\CommunityType;
+use App\Models\Circles\Circle;
 use App\Models\Request as RequestModel;
 use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Http\Request;
@@ -76,8 +78,13 @@ class RequestController extends Controller
         // Notifications happen outside the transaction so a mail failure never
         // rolls back the approval. Each send is logged (success or failure).
         $organisationName = (string) ($request->requestable?->name ?? '');
+        // Link to the community page, with a ?from= back-link to the Explore
+        // view where the organisation lives (mirrors the "View" button).
         $communityUrl = $request->circle
-            ? route('communities.show', $request->circle)
+            ? route('communities.show', [
+                'circle' => $request->circle,
+                'from' => $this->exploreBackUrl($request->circle),
+            ])
             : url('/');
 
         if ($requester = $request->requester) {
@@ -140,6 +147,20 @@ class RequestController extends Controller
             'organisationName' => (string) ($request->requestable?->name ?? ''),
             'platformName' => config('app.name'),
         ]);
+    }
+
+    /**
+     * Relative Explore URL for the organisation's location (its parent circle,
+     * with the Organisation bottom-filter) — used as the community page's
+     * ?from= back link so it matches the "View" button's behaviour. Must be a
+     * /explore path (CommunityPage only honours those).
+     */
+    private function exploreBackUrl(Circle $circle): string
+    {
+        return route('explore', array_filter([
+            'circle' => $circle->parent_id,
+            'community' => CommunityType::Organisation->name,
+        ], static fn ($v) => $v !== null && $v !== ''), false);
     }
 
     /** A request can be acted on only while it exists, is pending and unexpired. */
