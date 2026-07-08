@@ -584,6 +584,10 @@ On failure: silent.
   the IDE's prop parsing (see resources/views/components/content-block.blade.php)
 - Alpine handlers in Blade: use `x-on:click` (not `@click`) so neither the
   IDE nor Blade mistakes it for a directive
+- Passing `auth()->user()` where an `App\Models\User` is required — it's typed
+  `Authenticatable|null`, so the IDE flags a mismatch. Capture it into a
+  `/** @var \App\Models\User $user */` variable with a null-guard, then pass
+  `$user`. NEVER drop the `()` — `auth()->user` is a non-existent property (null)
 - Adding tailwind.config.js — never
 - Modifying app.blade.php — never
 - Treating circles.description as a plain string — it is JSON

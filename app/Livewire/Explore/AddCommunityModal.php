@@ -74,7 +74,10 @@ class AddCommunityModal extends ModalComponent
      */
     public function submitOrganisation(): void
     {
-        if (! auth()->check()) {
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+
+        if (! $user) {
             return;
         }
 
@@ -91,7 +94,7 @@ class AddCommunityModal extends ModalComponent
             return;
         }
 
-        $request = DB::transaction(function (): Request {
+        $request = DB::transaction(function () use ($user): Request {
             $organisation = Organisation::create([
                 'name' => $this->organisationName,
                 'description' => $this->organisationDescription ?: null,
@@ -117,7 +120,7 @@ class AddCommunityModal extends ModalComponent
             $circle->update(['status' => CircleStatus::Pending]);
 
             return Request::createForOrganisation(
-                requester: auth()->user(),
+                requester: $user,
                 circle: $circle,
                 organisation: $organisation,
                 respondentEmail: $this->contactEmail,
@@ -138,7 +141,7 @@ class AddCommunityModal extends ModalComponent
                 [
                     'contact_name' => $this->contactName,
                     'organisation_name' => $this->organisationName,
-                    'requester_name' => auth()->user()->name,
+                    'requester_name' => $user->name,
                     // Link to the GET landing page where the contact clicks the
                     // real (POST) Approve/Decline actions — email clicks are GET.
                     'review_url' => route('requests.confirm', $request->token),
