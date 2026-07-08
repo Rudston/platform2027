@@ -62,7 +62,7 @@
 
                 <div>
                     <label for="organisationDescription" class="block text-sm font-medium text-main">Description</label>
-                    <textarea id="organisationDescription" rows="3" maxlength="500" wire:model="organisationDescription"
+                    <textarea id="organisationDescription" rows="3" maxlength="800" wire:model="organisationDescription"
                               class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted"></textarea>
                     @error('organisationDescription') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
