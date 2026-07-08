@@ -27,7 +27,6 @@
                     key="community.how_to_add.organisation"
                     :collapsible="true"
                     :collapsed="true"
-                    title="How this works"
                     class="flex-1"
                 />
             </div>
@@ -46,7 +45,7 @@
             <div class="mt-6 space-y-4">
                 <div>
                     <label for="organisationName" class="block text-sm font-medium text-main">
-                        Organisation name <span class="text-red-500">*</span>
+                        {{ __('communities.org_form.organisation_name') }} <span class="text-red-500">*</span>
                     </label>
                     <input id="organisationName" type="text" wire:model="organisationName"
                            class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted" />
@@ -54,14 +53,14 @@
                 </div>
 
                 <div>
-                    <label for="organisationWebsite" class="block text-sm font-medium text-main">Website URL</label>
-                    <input id="organisationWebsite" type="url" wire:model="organisationWebsite" placeholder="https://…"
+                    <label for="organisationWebsite" class="block text-sm font-medium text-main">{{ __('communities.org_form.website_url') }}</label>
+                    <input id="organisationWebsite" type="url" wire:model="organisationWebsite" placeholder="{{ __('communities.org_form.website_placeholder') }}"
                            class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted" />
                     @error('organisationWebsite') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
-                    <label for="organisationDescription" class="block text-sm font-medium text-main">Description</label>
+                    <label for="organisationDescription" class="block text-sm font-medium text-main">{{ __('communities.org_form.description') }}</label>
                     <textarea id="organisationDescription" rows="3" maxlength="800" wire:model="organisationDescription"
                               class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted"></textarea>
                     @error('organisationDescription') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
@@ -74,7 +73,7 @@
 
                 <div>
                     <label for="contactName" class="block text-sm font-medium text-main">
-                        Contact name <span class="text-red-500">*</span>
+                        {{ __('communities.org_form.contact_name') }} <span class="text-red-500">*</span>
                     </label>
                     <input id="contactName" type="text" wire:model="contactName"
                            class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted" />
@@ -83,7 +82,7 @@
 
                 <div>
                     <label for="contactEmail" class="block text-sm font-medium text-main">
-                        Contact email <span class="text-red-500">*</span>
+                        {{ __('communities.org_form.contact_email') }} <span class="text-red-500">*</span>
                     </label>
                     <input id="contactEmail" type="email" wire:model="contactEmail"
                            class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted" />
@@ -91,7 +90,7 @@
                 </div>
 
                 <div>
-                    <label for="contactJobTitle" class="block text-sm font-medium text-main">Contact job title</label>
+                    <label for="contactJobTitle" class="block text-sm font-medium text-main">{{ __('communities.org_form.contact_job_title') }}</label>
                     <input id="contactJobTitle" type="text" wire:model="contactJobTitle"
                            class="mt-1 w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-main placeholder:text-muted" />
                     @error('contactJobTitle') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror

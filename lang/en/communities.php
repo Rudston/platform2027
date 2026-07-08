@@ -59,6 +59,17 @@ return [
     'submit_for_approval'            => 'Submit for Approval',
     'contact_person_for_approval'    => 'Contact person for approval',
 
+    // Organisation add-community form fields
+    'org_form' => [
+        'organisation_name'   => 'Organisation name',
+        'website_url'         => 'Website URL',
+        'website_placeholder' => 'https://…',
+        'description'         => 'Description',
+        'contact_name'        => 'Contact name',
+        'contact_email'       => 'Contact email',
+        'contact_job_title'   => 'Contact job title',
+    ],
+
     'request_modal' => [
         'title'         => 'Request a location in :place',
         'subtitle'      => 'We will let you know once it has been added.',
