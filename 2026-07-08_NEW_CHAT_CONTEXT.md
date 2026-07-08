@@ -349,7 +349,7 @@ emailed token link. Only `organisation_approval` is implemented end-to-end
 - circles.status column (default active); Circle casts it + scopeActive()
 - New circles default to Active; the org flow sets Pending explicitly
 
-**requests table + Request model (app/Models/Request.php)**
+**requests table + Request model (app/Models/Communication/Request.php)**
 - type / status / direction (external|internal), requester, circle,
   polymorphic requestable, respondent_email, token + token_expires_at,
   responded_at, response_note, metadata (JSON), ulid (public id), soft deletes
@@ -573,10 +573,10 @@ app/
   Models/Circles/     Circle, Service
   Models/Communities/ OrganisationCommunity, Campaign, CourseCommunity,
                       LocationCommunity, ThemeCommunity
-  Models/Communication/ EmailTemplate
+  Models/Communication/ EmailTemplate, Request
   Models/Demography/  Country, Province, DistrictMunicipality,
                       LocalMunicipality, City, MainPlace, CoordinateData
-  Models/             Organisation, Course, User, ContentBlock, Request
+  Models/             Organisation, Course, User, ContentBlock
   Providers/Filament/ AdminPanelProvider
   Services/Circles/   CircleCreationService, CircleMembershipService,
                       + 9 service handlers

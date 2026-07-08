@@ -424,7 +424,7 @@ External-approval workflow: a logged-in user submits a new Organisation
 Community; it stays PENDING until the organisation's contact approves it via
 an emailed link. Only `organisation_approval` is implemented end-to-end.
 
-### requests table + Request model (`app/Models/Request.php`)
+### requests table + Request model (`app/Models/Communication/Request.php`)
 Generic request record: `type`, `status` (default pending), `direction`
 (external|internal), `requester_id`, `circle_id`, polymorphic `requestable`,
 `respondent_email`, `respondent_user_id`, `token` (unique) + `token_expires_at`,
