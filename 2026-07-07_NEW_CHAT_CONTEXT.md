@@ -113,6 +113,14 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     and a Filament EmailTemplateResource under a "Communication" nav group
     (see Email Templates section below)
 
+14. **Organisation approval / Requests** — external approval workflow. A
+    logged-in user submits an Organisation Community; it stays PENDING until
+    the org's contact approves it via an emailed token link. Backed by a
+    generic `requests` table + Request model, a public RequestController,
+    a Filament RequestResource under a "Governance" group, and a daily
+    `requests:expire` command. CircleStatus enum + circles.status gate the
+    circle's lifecycle. (See Organisation Approval & Requests section below.)
+
 ---
 
 ## Geographic Abstraction Layer (Multi-Country)
@@ -320,11 +328,53 @@ DB-backed, locale-aware transactional emails, editable in the admin panel.
 
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
 (updateOrCreate by key). English stubs, empty pt_BR (falls back). Keys:
-email.welcome, email.circle_invitation, email.password_reset.
+email.welcome, email.circle_invitation, email.password_reset,
+email.organisation_approval_request/confirmed/denied (6 total).
 
 **Local mail:** MailHog via MAMP — SMTP localhost:1025, UI at
 http://localhost:8025/mailhog (note the /mailhog web path).
 Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
+
+---
+
+## Organisation Approval & Requests
+
+External approval workflow: a logged-in user submits an Organisation
+Community; it stays PENDING until the org's contact approves it via an
+emailed token link. Only `organisation_approval` is implemented end-to-end
+(circle_join / location_request / circle_association are reserved strings).
+
+**CircleStatus + circles.status**
+- Enum app/Enums/CircleStatus: Active, Pending, Denied, Suspended, Archived
+- circles.status column (default active); Circle casts it + scopeActive()
+- New circles default to Active; the org flow sets Pending explicitly
+
+**requests table + Request model (app/Models/Request.php)**
+- type / status / direction (external|internal), requester, circle,
+  polymorphic requestable, respondent_email, token + token_expires_at,
+  responded_at, response_note, metadata (JSON), ulid (public id), soft deletes
+- booted() auto-generates ulid + token; scopes pending/expired/external/internal
+- createForOrganisation(...); logEmail() appends to metadata.email_log; isExpired()
+- Model is App\Models\Request — alias as RequestModel where Illuminate\Http\Request is used
+
+**Submission (AddCommunityModal)** — auth-guarded org form + duplicate check;
+submitOrganisation() creates Organisation + a Pending circle + Request, then
+emails the contact; circleId (parent) passed from Add bar AND empty-state;
+organisations.contact_job_title column added.
+
+**Public approval (no auth, token-based)** — RequestController show/approve/deny;
+routes GET/POST /requests/confirm/{token}[/approve|/deny]; views
+requests/{confirm,confirmed,denied,expired} on layouts/public.blade.php
+(nav-free). Approve → circle Active + requester gets circle_admin (Spatie,
+scoped to circle_id); deny → circle stays pending. Emails link to the GET
+landing page (requests.confirm), never the POST routes.
+
+**Governance admin** — Filament RequestResource (app/Filament/Resources/Requests/)
+under a NEW `Governance` group: badge columns + filters, read-only view page
+with email-log table, and Approve / Deny / Resend row actions (pending/expired).
+
+**Expiry** — `requests:expire` command (chunkById) flips past-expiry pending
+requests to expired; scheduled daily in routes/console.php.
 
 ---
 
@@ -342,8 +392,8 @@ Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
 - ThemeCommunity circles (national + WC province + Eden DM)
 - 8 content blocks (via ContentBlockSeeder): 4 page-copy blocks + 4
   collapsible how-to blocks (community.how_to_add.{campaign,course,event,theme})
-- 3 email templates (via EmailTemplateSeeder): email.welcome,
-  email.circle_invitation, email.password_reset
+- 6 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
+  password_reset + organisation_approval_request/confirmed/denied
 - Spatie roles: new_user, full_member, curator, trainer,
   admin, superadmin, circle_admin, circle_full_member, circle_visitor
 - 9 service stubs
@@ -403,6 +453,7 @@ Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
 - AdminPanelProvider at /admin (admin + superadmin only)
 - `Platform` nav group → ContentBlockResource (per-locale content editing)
 - `Communication` nav group → EmailTemplateResource (per-locale subject/body)
+- `Governance` nav group → RequestResource (view-only + Approve/Deny/Resend)
 - x-content-block Blade component (supports collapsible disclosures),
   rendered at the top of the Explore page (explore.welcome_banner) and as
   collapsible how-to guidance in each Add Community modal (keyed off
@@ -412,8 +463,15 @@ Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
 - email_templates table + EmailTemplate model (translatable, cached getByKey)
 - EmailServiceHandler with sendTemplate() + queueTemplate()
 - TemplateMailable + HTML/plain mail views
-- EmailTemplateResource + EmailTemplateSeeder (3 templates)
+- EmailTemplateResource + EmailTemplateSeeder (6 templates)
 - Verified end-to-end send to MailHog; EmailServiceHandlerTest covers welcome
+
+### Organisation Approval & Requests (see section above)
+- CircleStatus enum + circles.status; requests table + Request model
+- AddCommunityModal org form → creates Organisation + Pending circle + Request
+- Public RequestController + /requests/confirm/{token} pages (approve/deny)
+- Filament RequestResource (Governance) with Approve/Deny/Resend actions
+- requests:expire command scheduled daily
 
 ### Authentication (manual, Livewire 4)
 - Login, Register, ForgotPassword, ResetPassword components
@@ -429,7 +487,9 @@ Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
 - Auth/permission guards on Add Community and Request Location buttons
   (TODO comments in place throughout)
 - Campaign model fields
-- Filament resources beyond ContentBlock + EmailTemplate
+- Filament resources beyond ContentBlock + EmailTemplate + Request
+- Request types other than organisation_approval (circle_join,
+  location_request, circle_association are reserved strings only)
 - Map view for Explore page (SVG sourcing in progress)
 - User profile pages with saved locale preference
 - Language switcher UI
@@ -437,9 +497,9 @@ Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
   (service stubs exist, full implementation pending)
 - Payment/subscription system
 - API endpoints
-- Notification system + wiring EmailServiceHandler into real flows
-  (registration welcome, circle invitations, password reset) — the email
-  template infrastructure exists but is not yet called from app events
+- Notification system + wiring EmailServiceHandler into OTHER flows
+  (registration welcome, circle invitations, password reset) — templates
+  exist but aren't triggered by app events yet (organisation-approval IS wired)
 - CommunityPage type-specific nested components (placeholder only)
 - "Also here" badge on community cards (currently only in column browser)
 - Wider placement of x-content-block — currently used on the Explore page
@@ -473,6 +533,12 @@ Tests never touch MailHog (MAIL_MAILER=array in phpunit.xml + Mail::fake()).
     countries migration) and never hit MailHog (phpunit.xml MAIL_MAILER=array
     + Mail::fake()); build only the tables a test needs
 15. All lang keys must exist in lang/en/ before being used in views
+16. The Eloquent model is App\Models\Request — alias it (as RequestModel)
+    wherever Illuminate\Http\Request is also imported
+17. Approval emails link to the GET landing page route('requests.confirm',
+    $token), never the POST approve/deny routes (email clicks are GET)
+18. New circles are created Active by CircleCreationService — set
+    CircleStatus::Pending explicitly for approval-gated circles
 
 ---
 
@@ -484,12 +550,15 @@ app/
     Geographic/       HasLocationLevel
     Circleable, Locatable,
     CircleServiceContract, ProvidesCircleIdentity
-  Enums/              CommunityType, LocatableType, LocationLevel
+  Console/Commands/   ExpireRequests (requests:expire)
+  Enums/              CommunityType, LocatableType, LocationLevel, CircleStatus
   Filament/
     Resources/
       ContentBlocks/  ContentBlockResource + Pages/
       EmailTemplates/ EmailTemplateResource + Pages/
+      Requests/       RequestResource + Pages/ (List, View)
   Mail/               TemplateMailable
+  Http/Controllers/   RequestController (+ Auth/LogoutController)
   Http/Middleware/    SetLocaleFromBrowser
   Livewire/Auth/      Login, Register, ForgotPassword, ResetPassword
   Livewire/Explore/   ExploreCommunities + sub-components
@@ -501,7 +570,7 @@ app/
   Models/Communication/ EmailTemplate
   Models/Demography/  Country, Province, DistrictMunicipality,
                       LocalMunicipality, City, MainPlace, CoordinateData
-  Models/             Organisation, Course, User, ContentBlock
+  Models/             Organisation, Course, User, ContentBlock, Request
   Providers/Filament/ AdminPanelProvider
   Services/Circles/   CircleCreationService, CircleMembershipService,
                       + 9 service handlers
@@ -515,10 +584,12 @@ resources/
   views/
     layouts/          app.blade.php (do not modify),
                       guest.blade.php, authenticated.blade.php,
-                      public.blade.php (temporary)
+                      main.blade.php (public pages, with nav),
+                      public.blade.php (nav-free, external request pages)
     livewire/auth/    login, register, forgot-password, reset-password
     livewire/explore/ all explore components
     livewire/         community-page
+    requests/         confirm, confirmed, denied, expired (approval pages)
     mail/             template.blade.php, template-plain.blade.php
     components/       content-block.blade.php
     components/explore/ empty-state, no-further-levels

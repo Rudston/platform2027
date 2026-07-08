@@ -138,6 +138,12 @@ Now includes locationLevel() and isTerminal() methods.
 ### LocationLevel
 See Geographic Abstraction Layer above.
 
+### CircleStatus (`app/Enums/CircleStatus.php`)
+Circle lifecycle, string-backed: Active, Pending, Denied, Suspended, Archived.
+`circles.status` column (default `active`); Circle casts it and has
+`scopeActive()`. New circles default to Active — approval-gated flows set
+Pending explicitly. See Organisation Approval & Requests below.
+
 ---
 
 ## Key Services
@@ -148,6 +154,8 @@ Single entry point for creating any circle type.
 - Attaches default services
 - Wrapped in DB transaction
 - Signature: create(type, data, parentCircle?, locatableType, locatableId)
+- Circles are created with status Active (DB default) — set
+  CircleStatus::Pending after creation for approval-gated types
 
 ### CircleMembershipService
 Membership management (partially built).
@@ -410,6 +418,72 @@ Local mail: MailHog via MAMP — SMTP `localhost:1025`, UI at
 
 ---
 
+## Organisation Approval & Requests
+
+External-approval workflow: a logged-in user submits a new Organisation
+Community; it stays PENDING until the organisation's contact approves it via
+an emailed link. Only `organisation_approval` is implemented end-to-end.
+
+### requests table + Request model (`app/Models/Request.php`)
+Generic request record: `type`, `status` (default pending), `direction`
+(external|internal), `requester_id`, `circle_id`, polymorphic `requestable`,
+`respondent_email`, `respondent_user_id`, `token` (unique) + `token_expires_at`,
+`responded_at`, `response_note`, `metadata` (JSON), `ulid` (public id), soft deletes.
+- `booted()` auto-generates `ulid` (`Str::ulid`) + `token` (`Str::random(64)`)
+- Scopes: `pending()`, `expired()`, `external()`, `internal()`
+- `createForOrganisation(requester, circle, organisation, respondentEmail, metadata=[])`
+  — 7-day token, metadata seeded with an empty `email_log`
+- `logEmail(template, recipient, status, error?)` — appends to
+  `metadata.email_log` (audit of every send attempt)
+- `isExpired()` — `token_expires_at` in the past
+- The model is `App\Models\Request` — alias it (`as RequestModel`) wherever
+  `Illuminate\Http\Request` is also used
+
+### Submission (Explore → AddCommunityModal)
+- Auth-guarded org form (name, website, description, contact name/email/job
+  title) + duplicate check (`whereHas('community')`)
+- `submitOrganisation()`: create Organisation + a **Pending** circle (via
+  CircleCreationService) + `Request::createForOrganisation()`, then email the
+  contact (outside the txn, logged)
+- `circleId` (parent = geographic selection) passed from BOTH the Add bar and
+  the empty-state dispatches
+- `organisations.contact_job_title` column added (migration `2026_07_07_000004`)
+
+### Public approval pages (no auth, token-based)
+- `RequestController` show/approve/deny (`app/Http/Controllers/RequestController.php`)
+- Routes (routes/web.php):
+  - GET `/requests/confirm/{token}` → `requests.confirm`
+  - POST `/requests/confirm/{token}/approve` → `requests.confirm.approve`
+  - POST `/requests/confirm/{token}/deny` → `requests.confirm.deny`
+- Views `resources/views/requests/{confirm,confirmed,denied,expired}.blade.php`
+  on `layouts/public.blade.php` (nav-free, external-facing — created here)
+- **approve**: txn → request approved + circle `Active` + requester granted
+  Spatie `circle_admin` scoped to `circle_id`; then emails both parties
+- **deny**: txn → request denied (+ optional note); circle stays pending
+- invalid / expired / already-actioned / unknown token → expired view
+- Approval emails link to the GET landing page (`requests.confirm`), never the
+  POST approve/deny routes (email clicks are GET → 405)
+
+### Email templates (EmailTemplateSeeder)
+`email.organisation_approval_request` (single "Review this request" button →
+`review_url`), `…_confirmed`, `…_denied`.
+
+### Governance admin (Filament)
+- `RequestResource` (`app/Filament/Resources/Requests/`) under a `Governance`
+  nav group (auto-rendered; provider unchanged)
+- List: type/status/direction badges + filters; View: read-only detail +
+  email-log table
+- Row actions (pending/expired only): **Approve**, **Deny** (optional note),
+  **Resend** (regenerates token+expiry, resends request email). Each mirrors
+  the controller, logs the email, shows a success/warning notification
+
+### Expiry
+- `requests:expire` (`app/Console/Commands/ExpireRequests.php`) flips
+  past-expiry pending requests to `expired` (`chunkById`, 100). Scheduled
+  daily in `routes/console.php`.
+
+---
+
 ## Authentication
 
 Built manually — Livewire 4 components.
@@ -439,7 +513,8 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - ThemeCommunitiesSeeder — national + WC + Eden DM
 - ContentBlockSeeder — 8 content blocks (4 page-copy + 4 collapsible how-to;
   idempotent, updateOrCreate by key)
-- EmailTemplateSeeder — 3 email templates (idempotent, updateOrCreate by key)
+- EmailTemplateSeeder — 6 email templates (welcome/invitation/reset + 3
+  organisation-approval; idempotent, updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 
 MainPlaceCommunitiesSeeder is idempotent — checks before creating.
@@ -465,10 +540,13 @@ On failure: silent.
 - Full membership system (circle_user pivot + approval workflow)
 - Auth/permission guards on buttons (TODO comments in place)
 - Campaign model fields
-- Filament resources beyond ContentBlock + EmailTemplate
-- Wiring EmailServiceHandler into real flows (registration welcome, circle
-  invitations, password reset) — template infrastructure exists but is not
-  yet triggered by app events
+- Filament resources beyond ContentBlock + EmailTemplate + Request
+- Request types other than organisation_approval — circle_join,
+  location_request, circle_association are reserved type strings only
+- Membership approval (circle_join) + internal-direction request flows
+- Wiring EmailServiceHandler into other flows (registration welcome, circle
+  invitations, password reset) — templates exist but aren't triggered by
+  app events yet (the organisation-approval flow IS fully wired)
 - Map view (SVG sourcing in progress)
 - User profile pages + saved locale preference
 - Language switcher UI
@@ -510,6 +588,13 @@ On failure: silent.
 - Promoting $subject in TemplateMailable — fatal (inherited untyped
   Mailable::$subject); assign it in the constructor body instead
 - Using RefreshDatabase in tests — migrations fail on sqlite (see Testing)
+- Forgetting the Request name clash — the Eloquent model is App\Models\Request;
+  alias it (App\Models\Request as RequestModel) in files that also import
+  Illuminate\Http\Request
+- Linking approval emails to the POST approve/deny routes — email clicks are
+  GET (405); link to route('requests.confirm', $token) (the landing page)
+- Assuming a new circle is Pending — CircleCreationService creates it Active;
+  set CircleStatus::Pending explicitly for approval-gated circles
 - Marking City as terminal — only Place (MainPlace) is terminal
 - Using isTerminal() to decide whether to render a next column —
   use $children->isNotEmpty() for that
