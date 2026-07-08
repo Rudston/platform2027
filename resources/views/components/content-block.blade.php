@@ -59,7 +59,7 @@
                 :aria-expanded="open ? 'true' : 'false'"
                 class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-main"
             >
-                <span class="font-medium">{{ $__title }}</span>
+                <span class="font-bold">{{ $__title }}</span>
 
                 {{-- +/- toggle: server renders the correct glyph, Alpine keeps it in sync. --}}
                 <span
@@ -73,13 +73,15 @@
                 x-show="open"
                 x-collapse
                 @if ($__collapsed) style="display: none;" @endif
-                class="px-4 pb-4 text-main"
+                class="px-4 pb-4"
             >
-                @if ($__isHtml)
-                    {!! $__content !!}
-                @else
-                    {{ $__content }}
-                @endif
+                <div class="prose max-w-none text-main">
+                    @if ($__isHtml)
+                        {!! $__content !!}
+                    @else
+                        {{ $__content }}
+                    @endif
+                </div>
             </div>
 
             @if ($__editUrl)
@@ -98,13 +100,15 @@
             @endif
         </div>
     @else
-        {{-- Non-collapsible: render content directly, as before (no wrapper change). --}}
+        {{-- Non-collapsible: render content directly, as before. --}}
         <div {{ $attributes->merge(['class' => 'group relative']) }}>
-            @if ($__isHtml)
-                {!! $__content !!}
-            @else
-                {{ $__content }}
-            @endif
+            <div class="prose max-w-none text-main">
+                @if ($__isHtml)
+                    {!! $__content !!}
+                @else
+                    {{ $__content }}
+                @endif
+            </div>
 
             @if ($__editUrl)
                 <a
