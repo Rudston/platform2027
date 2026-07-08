@@ -575,6 +575,12 @@ On failure: silent.
 ## Common Mistakes to Avoid
 
 - Using Livewire 3 syntax (wire:model.defer, etc.) — this is Livewire 4
+- Blade component props: declare them with `/** @var … */` hints (in a
+  comment-free `@php` block) so the IDE doesn't flag them as undefined
+  variables — and NEVER put `//` comments inside `@props([...])`, it breaks
+  the IDE's prop parsing (see resources/views/components/content-block.blade.php)
+- Alpine handlers in Blade: use `x-on:click` (not `@click`) so neither the
+  IDE nor Blade mistakes it for a directive
 - Adding tailwind.config.js — never
 - Modifying app.blade.php — never
 - Treating circles.description as a plain string — it is JSON

@@ -539,6 +539,9 @@ requests to expired; scheduled daily in routes/console.php.
     $token), never the POST approve/deny routes (email clicks are GET)
 18. New circles are created Active by CircleCreationService — set
     CircleStatus::Pending explicitly for approval-gated circles
+19. Blade: declare component props with /** @var */ hints (comment-free
+    @props) so the IDE doesn't flag them; use x-on:click (not @click) for
+    Alpine handlers
 
 ---
 
