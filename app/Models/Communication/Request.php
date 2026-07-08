@@ -1,8 +1,10 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Communication;
 
 use App\Models\Circles\Circle;
+use App\Models\Organisation;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

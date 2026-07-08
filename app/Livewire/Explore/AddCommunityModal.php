@@ -6,7 +6,7 @@ use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
 use App\Models\Organisation;
-use App\Models\Request;
+use App\Models\Communication\Request;
 use App\Models\User;
 use App\Services\Circles\CircleCreationService;
 use App\Services\Communication\EmailServiceHandler;

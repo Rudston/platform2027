@@ -5,7 +5,7 @@ namespace App\Filament\Resources\Requests;
 use App\Enums\CircleStatus;
 use App\Filament\Resources\Requests\Pages\ListRequests;
 use App\Filament\Resources\Requests\Pages\ViewRequest;
-use App\Models\Request;
+use App\Models\Communication\Request;
 use App\Services\Communication\EmailServiceHandler;
 use BackedEnum;
 use Filament\Actions\Action;

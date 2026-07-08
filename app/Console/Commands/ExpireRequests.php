@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Request;
+use App\Models\Communication\Request;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
-use App\Models\Request as RequestModel;
+use App\Models\Communication\Request as RequestModel;
 use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
