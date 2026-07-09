@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Log;
 use Spatie\Translatable\HasTranslations;
 
 class Circle extends Model
@@ -259,7 +260,7 @@ class Circle extends Model
         $modelKey = $columns['model_morph_key'] ?? 'model_id';
         $teamKey = $columns['team_foreign_key'] ?? 'circle_id';
 
-        return User::query()
+        $query = User::query()
             ->whereIn(
                 (new User)->getKeyName(),
                 fn ($query) => $query
@@ -269,7 +270,14 @@ class Circle extends Model
                     ->where("{$rolesTable}.name", 'circle_admin')
                     ->where("{$modelHasRoles}.model_type", (new User)->getMorphClass())
                     ->where("{$modelHasRoles}.{$teamKey}", $this->id),
-            )
-            ->get();
+            );
+
+        Log::info('Circle administrators query', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
+        return $query->get();
+
     }
 }
