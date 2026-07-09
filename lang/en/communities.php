@@ -41,11 +41,13 @@ return [
     'status_pending' => 'Pending',
 
     'page' => [
-        'title'    => 'Community',
-        'back'     => '← Explore Communities',
-        'services' => 'Services',
-        'members'  => ':count members',
-        'join'     => 'Join Community',
+        'title'     => 'Community',
+        'back'      => '← Explore Communities',
+        'services'  => 'Services',
+        'members'   => ':count members',
+        'join'      => 'Join Community',
+        'admins'    => 'Admins',
+        'no_admins' => 'None yet',
     ],
 
     'add_modal' => [

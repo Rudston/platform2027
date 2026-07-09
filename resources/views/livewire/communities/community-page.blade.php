@@ -22,6 +22,17 @@
             <span>{{ $circle->locatable?->name ?? '—' }}</span>
         </div>
 
+        {{-- Circle administrators --}}
+        <div class="mt-2 flex items-center gap-1.5 text-sm text-muted">
+            <span aria-hidden="true">🛡️</span>
+            <span class="font-medium text-main">{{ __('communities.page.admins') }}:</span>
+            <span>
+                {{ $this->administrators->isNotEmpty()
+                    ? $this->administrators->pluck('name')->implode(', ')
+                    : __('communities.page.no_admins') }}
+            </span>
+        </div>
+
         {{-- Description --}}
         @if ($circle->description)
             <p class="mt-4 text-muted">{{ $circle->description }}</p>

@@ -4,6 +4,8 @@ namespace App\Livewire\Communities;
 
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
+use Illuminate\Database\Eloquent\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -32,6 +34,18 @@ class CommunityPage extends Component
         }
 
         return route('explore');
+    }
+
+    /**
+     * Users who administer this circle (circle_admin role scoped to it).
+     * Computed so the query runs once per render.
+     *
+     * @return Collection<int, \App\Models\User>
+     */
+    #[Computed]
+    public function administrators(): Collection
+    {
+        return $this->circle->administrators();
     }
 
     /** Type icon for the circle's community type (mirrors CommunityCard). */

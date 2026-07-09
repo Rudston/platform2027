@@ -237,4 +237,39 @@ class Circle extends Model
             }
         });
     }
+
+    /**
+     * Users who hold the 'circle_admin' role scoped to THIS circle.
+     *
+     * Spatie runs in teams mode with the team id stored in
+     * model_has_roles.circle_id, so we query that pivot directly rather than via
+     * the roles() relationship (which is scoped to the *current* permissions
+     * team, not this circle). A circle can have any number of admins (none
+     * initially); a user can be a circle_admin of several circles.
+     *
+     * @return Collection<int, User>
+     */
+    public function administrators(): Collection
+    {
+        $tables = (array) config('permission.table_names');
+        $columns = (array) config('permission.column_names');
+
+        $modelHasRoles = $tables['model_has_roles'] ?? 'model_has_roles';
+        $rolesTable = $tables['roles'] ?? 'roles';
+        $modelKey = $columns['model_morph_key'] ?? 'model_id';
+        $teamKey = $columns['team_foreign_key'] ?? 'circle_id';
+
+        return User::query()
+            ->whereIn(
+                (new User)->getKeyName(),
+                fn ($query) => $query
+                    ->select("{$modelHasRoles}.{$modelKey}")
+                    ->from($modelHasRoles)
+                    ->join($rolesTable, "{$rolesTable}.id", '=', "{$modelHasRoles}.role_id")
+                    ->where("{$rolesTable}.name", 'circle_admin')
+                    ->where("{$modelHasRoles}.model_type", (new User)->getMorphClass())
+                    ->where("{$modelHasRoles}.{$teamKey}", $this->id),
+            )
+            ->get();
+    }
 }
