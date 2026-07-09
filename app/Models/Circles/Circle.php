@@ -3,6 +3,7 @@
 namespace App\Models\Circles;
 
 use App\Enums\CircleStatus;
+use App\Enums\CommunityType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -12,7 +13,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Log;
 use Spatie\Translatable\HasTranslations;
 
 class Circle extends Model
@@ -260,7 +260,7 @@ class Circle extends Model
         $modelKey = $columns['model_morph_key'] ?? 'model_id';
         $teamKey = $columns['team_foreign_key'] ?? 'circle_id';
 
-        $query = User::query()
+        return User::query()
             ->whereIn(
                 (new User)->getKeyName(),
                 fn ($query) => $query
@@ -270,14 +270,60 @@ class Circle extends Model
                     ->where("{$rolesTable}.name", 'circle_admin')
                     ->where("{$modelHasRoles}.model_type", (new User)->getMorphClass())
                     ->where("{$modelHasRoles}.{$teamKey}", $this->id),
-            );
+            )
+            ->get();
+    }
 
-        Log::info('Circle administrators query', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-        ]);
+    /**
+     * Resolve the platform user responsible for a circle (for escalation /
+     * notification / internal routing).
+     *
+     * Walks up the tree — the circle itself, then its ancestors nearest-first —
+     * and returns the first circle_admin of the nearest LocationCommunity that
+     * has one. If no such location admin exists, falls back to the first global
+     * 'admin', then the first 'superadmin'. Null only if the platform has none
+     * of those.
+     */
+    public static function responsibleAdminFor(Circle $circle): ?User
+    {
+        // The circle plus its ancestors, ordered nearest → root.
+        $chain = $circle->ancestors()->reverse()->prepend($circle);
 
-        return $query->get();
+        foreach ($chain as $node) {
+            if ($node->circleable_type !== CommunityType::LocationCommunity->value) {
+                continue;
+            }
 
+            if ($admin = $node->administrators()->first()) {
+                return $admin;
+            }
+        }
+
+        return static::firstUserWithRole('admin')
+            ?? static::firstUserWithRole('superadmin');
+    }
+
+    /** First user (lowest id) holding the given role, or null. */
+    private static function firstUserWithRole(string $role): ?User
+    {
+        $tables = (array) config('permission.table_names');
+        $columns = (array) config('permission.column_names');
+
+        $modelHasRoles = $tables['model_has_roles'] ?? 'model_has_roles';
+        $rolesTable = $tables['roles'] ?? 'roles';
+        $modelKey = $columns['model_morph_key'] ?? 'model_id';
+
+        return User::query()
+            ->whereIn(
+                (new User)->getKeyName(),
+                fn ($query) => $query
+                    ->select("{$modelHasRoles}.{$modelKey}")
+                    ->from($modelHasRoles)
+                    ->join($rolesTable, "{$rolesTable}.id", '=', "{$modelHasRoles}.role_id")
+                    ->where("{$rolesTable}.name", $role)
+                    ->where("{$modelHasRoles}.model_type", (new User)->getMorphClass()),
+            )
+            ->orderBy((new User)->getKeyName())
+            ->first();
     }
 }
