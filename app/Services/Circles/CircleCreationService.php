@@ -39,6 +39,15 @@ class CircleCreationService
         ?Organisation $organisation = null,
         array $courseIds = [],
     ): Circle {
+        // Inherit the parent's location when none is specified — a child circle
+        // sits at its parent's location unless explicitly placed elsewhere.
+        // (Seeders always pass an explicit locatable, so this only affects the
+        // Explore "Add community" flow, which anchors to the selected location.)
+        if ($locatableType === null && $parentCircle !== null) {
+            $locatableType = LocatableType::from($parentCircle->locatable_type);
+            $locatableId   = $parentCircle->locatable_id;
+        }
+
         // Default location: country level, South Africa.
         $locatableType ??= LocatableType::Country;
 
