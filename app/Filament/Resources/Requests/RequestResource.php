@@ -20,6 +20,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Colors\Color;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,7 +64,7 @@ class RequestResource extends Resource
     /** Eager-load the relations shown in the table/view to avoid N+1 queries. */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['requester', 'circle']);
+        return parent::getEloquentQuery()->with(['requester', 'circle', 'responsibleAdmin']);
     }
 
     public static function form(Schema $schema): Schema
@@ -91,6 +92,11 @@ class RequestResource extends Resource
                 Placeholder::make('circle_name')
                     ->label('Circle')
                     ->content(fn (Request $record): string => $record->circle?->name ?? '—'),
+
+                Placeholder::make('responsible_admin_name')
+                    ->label('Responsible admin')
+                    ->helperText('Notified of this request. Any admin/superadmin can still act on it.')
+                    ->content(fn (Request $record): string => $record->responsibleAdmin?->name ?? '—'),
 
                 TextInput::make('respondent_email')
                     ->disabled(),
@@ -346,6 +352,11 @@ class RequestResource extends Resource
                     ->placeholder('—')
                     ->searchable(),
 
+                TextColumn::make('responsibleAdmin.name')
+                    ->label('Responsible admin')
+                    ->placeholder('—')
+                    ->searchable(),
+
                 TextColumn::make('respondent_email')
                     ->placeholder('—')
                     ->searchable(),
@@ -368,6 +379,9 @@ class RequestResource extends Resource
                 SelectFilter::make('status')->options(static::STATUS_OPTIONS),
                 SelectFilter::make('type')->options(static::TYPE_OPTIONS),
                 SelectFilter::make('direction')->options(static::DIRECTION_OPTIONS),
+                Filter::make('mine')
+                    ->label('Assigned to me')
+                    ->query(fn (Builder $query): Builder => $query->where('responsible_admin_id', auth()->id())),
             ])
             ->recordActions([
                 ViewAction::make(),

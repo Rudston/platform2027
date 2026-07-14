@@ -81,6 +81,27 @@ class EmailTemplateSeeder extends Seeder
                 ],
             ],
             [
+                'key' => 'email.organisation_approval_admin_notice',
+                'description' => 'Internal heads-up to the responsible admin when an organisation-approval request lands in their area',
+                'available_variables' => ['admin_name', 'organisation_name', 'requester_name', 'review_url'],
+                'subject' => [
+                    'en' => 'New organisation awaiting review on Platform 2027',
+                    'pt_BR' => '',
+                ],
+                'body' => [
+                    'en' => '<p>Hi {{ admin_name }},</p>'
+                        .'<p>{{ requester_name }} has submitted <strong>{{ organisation_name }}</strong> for approval '
+                        .'in an area you are responsible for. The organisation&rsquo;s contact has been asked to confirm it.</p>'
+                        .'<p>You can review the request in the admin panel:</p>'
+                        .'<p>'
+                        .'<a href="{{ review_url }}" style="display:inline-block;padding:10px 20px;background-color:#4f46e5;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Review in admin</a>'
+                        .'</p>'
+                        .'<p style="font-size:14px;color:#6b7280;">Any administrator can act on this request — you are '
+                        .'notified because it falls within your area.</p>',
+                    'pt_BR' => '',
+                ],
+            ],
+            [
                 'key' => 'email.organisation_approval_confirmed',
                 'description' => 'Sent to the requester when the organisation contact approves the request',
                 'available_variables' => ['requester_name', 'organisation_name', 'community_url'],

@@ -318,10 +318,13 @@ below), description, active services, member-count placeholder, Join button
     theme circles, etc.) are skipped. The intent is "route to the geographic
     steward for that area," NOT "any circle_admin above." Do not broaden this
     to all circle types without an explicit decision.
-  - **NOT wired yet (TODO):** the method currently has NO caller. Nothing
-    computes or stores a responsible admin per request, and no notification is
-    sent to them. Wiring request→responsible-admin routing (compute on request
-    creation, store it, notify that admin) is future work.
+  - **Wired into requests:** `Request::createForOrganisation()` stores the
+    result in `requests.responsible_admin_id` (nullable FK → users) at
+    creation. On submission, `AddCommunityModal` emails that admin the
+    `email.organisation_approval_admin_notice` template (link to the Filament
+    request view; no-op + logged when null). Surfaced in the Governance
+    RequestResource (view field, table column, "Assigned to me" filter) —
+    notification/discovery only; it NEVER gates who can act (see below).
 
 ---
 
@@ -436,10 +439,10 @@ dev DB but is NOT in the seeder yet.
   `is_active` ToggleColumn, updated_at
 
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
-(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 6 keys:
+(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 7 keys:
 `email.welcome`, `email.circle_invitation`, `email.password_reset`,
 `email.organisation_approval_request`, `email.organisation_approval_confirmed`,
-`email.organisation_approval_denied`.
+`email.organisation_approval_denied`, `email.organisation_approval_admin_notice`.
 
 Local mail: MailHog via MAMP — SMTP `localhost:1025`, UI at
 `http://localhost:8025/mailhog` (note the `/mailhog` web path).
@@ -455,7 +458,8 @@ an emailed link. Only `organisation_approval` is implemented end-to-end.
 ### requests table + Request model (`app/Models/Communication/Request.php`)
 Generic request record: `type`, `status` (default pending), `direction`
 (external|internal), `requester_id`, `circle_id`, polymorphic `requestable`,
-`respondent_email`, `respondent_user_id`, `token` (unique) + `token_expires_at`,
+`respondent_email`, `respondent_user_id`, `responsible_admin_id` (FK users,
+nullable — see Circle administrators), `token` (unique) + `token_expires_at`,
 `responded_at`, `response_note`, `metadata` (JSON), `ulid` (public id), soft deletes.
 - `booted()` auto-generates `ulid` (`Str::ulid`) + `token` (`Str::random(64)`)
 - Scopes: `pending()`, `expired()`, `external()`, `internal()`
@@ -495,7 +499,8 @@ Generic request record: `type`, `status` (default pending), `direction`
 
 ### Email templates (EmailTemplateSeeder)
 `email.organisation_approval_request` (single "Review this request" button →
-`review_url`), `…_confirmed`, `…_denied`.
+`review_url`), `…_confirmed`, `…_denied`, and `…_admin_notice` (internal
+heads-up to the responsible admin → `review_url` = Filament request view).
 
 ### Governance admin (Filament)
 - `RequestResource` (`app/Filament/Resources/Requests/`) under a `Governance`
@@ -551,8 +556,9 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - ThemeCommunitiesSeeder — national + WC + Eden DM
 - ContentBlockSeeder — 8 content blocks (4 page-copy + 4 collapsible how-to;
   idempotent, updateOrCreate by key)
-- EmailTemplateSeeder — 6 email templates (welcome/invitation/reset + 3
-  organisation-approval; idempotent, updateOrCreate by key)
+- EmailTemplateSeeder — 7 email templates (welcome/invitation/reset + 4
+  organisation-approval, incl. the responsible-admin notice; idempotent,
+  updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 
 MainPlaceCommunitiesSeeder is idempotent — checks before creating.
@@ -585,10 +591,6 @@ On failure: silent.
 - Role transition after organisation approval: the requester is granted
   circle_admin on approval (intended, even for platform admins) — switching
   that to a dedicated organisation-staff role during onboarding is future work
-- Request→responsible-admin routing: `Circle::responsibleAdminFor()` exists
-  but has no caller. Computing/storing a responsible admin per request and
-  notifying them is future work (Filament actions stay open to all
-  admins/superadmin regardless — see Governance admin)
 - Wiring EmailServiceHandler into other flows (registration welcome, circle
   invitations, password reset) — templates exist but aren't triggered by
   app events yet (the organisation-approval flow IS fully wired)

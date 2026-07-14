@@ -27,6 +27,7 @@ class Request extends Model
         'requestable_id',
         'respondent_email',
         'respondent_user_id',
+        'responsible_admin_id',
         'token',
         'token_expires_at',
         'responded_at',
@@ -62,6 +63,16 @@ class Request extends Model
     public function respondent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'respondent_user_id');
+    }
+
+    /**
+     * The platform user accountable for actioning this request, resolved via
+     * Circle::responsibleAdminFor at creation. Null when no admin was found.
+     * Any admin/superadmin may still act — this only drives notification.
+     */
+    public function responsibleAdmin(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsible_admin_id');
     }
 
     /** The polymorphic subject of the request (e.g. an Organisation). */
@@ -128,6 +139,9 @@ class Request extends Model
             'requestable_type' => $organisation->getMorphClass(),
             'requestable_id' => $organisation->getKey(),
             'respondent_email' => $respondentEmail,
+            // Internal steward accountable for this request (notification only;
+            // any admin/superadmin may still act). Null when none is found.
+            'responsible_admin_id' => Circle::responsibleAdminFor($circle)?->id,
             'token_expires_at' => now()->addDays(7),
             'metadata' => array_merge($metadata, ['email_log' => []]),
         ]);

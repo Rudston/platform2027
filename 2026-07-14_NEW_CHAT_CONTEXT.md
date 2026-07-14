@@ -130,9 +130,13 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     the nearest LocationCommunity admin, falling back to global admin →
     superadmin. Climb rule is intentionally LocationCommunity-only (non-location
     circles skipped) — route to the geographic steward, not any circle_admin
-    above. NOT wired yet: responsibleAdminFor() has no caller — request→
-    responsible-admin routing (compute + store + notify) is future work.
-    Administrators are shown on the Community page.
+    above. WIRED: Request::createForOrganisation() stores it in
+    requests.responsible_admin_id at creation; AddCommunityModal then emails
+    that admin (email.organisation_approval_admin_notice, link to the Filament
+    request view; no-op when null). Surfaced in the Governance RequestResource
+    (view field, table column, "Assigned to me" filter) — notification/
+    discovery only, never gates who can act. Administrators are also shown on
+    the Community page.
 
 ---
 
@@ -342,7 +346,8 @@ DB-backed, locale-aware transactional emails, editable in the admin panel.
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
 (updateOrCreate by key). English stubs, empty pt_BR (falls back). Keys:
 email.welcome, email.circle_invitation, email.password_reset,
-email.organisation_approval_request/confirmed/denied (6 total).
+email.organisation_approval_request/confirmed/denied, and
+email.organisation_approval_admin_notice (7 total).
 
 **Local mail:** MailHog via MAMP — SMTP localhost:1025, UI at
 http://localhost:8025/mailhog (note the /mailhog web path).
@@ -364,7 +369,9 @@ emailed token link. Only `organisation_approval` is implemented end-to-end
 
 **requests table + Request model (app/Models/Communication/Request.php)**
 - type / status / direction (external|internal), requester, circle,
-  polymorphic requestable, respondent_email, token + token_expires_at,
+  polymorphic requestable, respondent_email, respondent_user_id,
+  responsible_admin_id (FK users, nullable — see decision 15),
+  token + token_expires_at,
   responded_at, response_note, metadata (JSON), ulid (public id), soft deletes
 - booted() auto-generates ulid + token; scopes pending/expired/external/internal
 - createForOrganisation(...); logEmail() appends to metadata.email_log; isExpired()
@@ -410,8 +417,9 @@ requests to expired; scheduled daily in routes/console.php.
 - ThemeCommunity circles (national + WC province + Eden DM)
 - 8 content blocks (via ContentBlockSeeder): 4 page-copy blocks + 4
   collapsible how-to blocks (community.how_to_add.{campaign,course,event,theme})
-- 6 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
-  password_reset + organisation_approval_request/confirmed/denied
+- 7 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
+  password_reset + organisation_approval_request/confirmed/denied +
+  organisation_approval_admin_notice
 - Spatie roles: new_user, full_member, curator, trainer,
   admin, superadmin, circle_admin, circle_full_member, circle_visitor
 - 9 service stubs
@@ -520,9 +528,6 @@ requests to expired; scheduled daily in routes/console.php.
   (service stubs exist, full implementation pending)
 - Payment/subscription system
 - API endpoints
-- Request→responsible-admin routing: Circle::responsibleAdminFor() exists but
-  has no caller. Computing/storing a responsible admin per request + notifying
-  them is future work (Filament actions stay open to all admins/superadmin)
 - Notification system + wiring EmailServiceHandler into OTHER flows
   (registration welcome, circle invitations, password reset) — templates
   exist but aren't triggered by app events yet (organisation-approval IS wired)

@@ -4,6 +4,7 @@ namespace App\Livewire\Explore;
 
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
+use App\Filament\Resources\Requests\RequestResource;
 use App\Models\Circles\Circle;
 use App\Models\Organisation;
 use App\Models\Communication\Request;
@@ -152,6 +153,33 @@ class AddCommunityModal extends ModalComponent
             $request->logEmail('email.organisation_approval_request', $this->contactEmail, 'sent');
         } catch (Throwable $e) {
             $request->logEmail('email.organisation_approval_request', $this->contactEmail, 'failed', $e->getMessage());
+        }
+
+        // Heads-up to the internal admin responsible for this request's area, if
+        // one was resolved. Any admin/superadmin can act in Filament — this is
+        // only a notification. Sent and logged separately so it never affects
+        // the contact-facing flow.
+        $responsibleAdmin = $request->responsibleAdmin;
+
+        if ($responsibleAdmin !== null) {
+            try {
+                app(EmailServiceHandler::class)->sendTemplate(
+                    'email.organisation_approval_admin_notice',
+                    $responsibleAdmin->email,
+                    [
+                        'admin_name' => $responsibleAdmin->name,
+                        'organisation_name' => $this->organisationName,
+                        'requester_name' => $user->name,
+                        // Filament request view — where admins actually act.
+                        // Panel named explicitly: this runs outside a panel
+                        // request, so we can't rely on the "current panel".
+                        'review_url' => RequestResource::getUrl('view', ['record' => $request], panel: 'admin'),
+                    ],
+                );
+                $request->logEmail('email.organisation_approval_admin_notice', $responsibleAdmin->email, 'sent');
+            } catch (Throwable $e) {
+                $request->logEmail('email.organisation_approval_admin_notice', $responsibleAdmin->email, 'failed', $e->getMessage());
+            }
         }
 
         $this->closeModal();
