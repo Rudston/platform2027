@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Circles\Circle;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -58,6 +59,11 @@ class User extends Authenticatable implements FilamentUser
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasAnyRole(['admin', 'superadmin']);
+        // Global admins/superadmins, plus any circle_admin (a team-scoped role,
+        // so checked across all teams via Circle::administeredBy, not the
+        // team-scoped hasRole). Circle admins see only the Requests resource,
+        // scoped to their subtree — see RequestResource.
+        return $this->hasAnyRole(['admin', 'superadmin'])
+            || Circle::administeredBy($this)->isNotEmpty();
     }
 }

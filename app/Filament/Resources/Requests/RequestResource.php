@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Requests;
 use App\Enums\CircleStatus;
 use App\Filament\Resources\Requests\Pages\ListRequests;
 use App\Filament\Resources\Requests\Pages\ViewRequest;
+use App\Models\Circles\Circle;
 use App\Models\Communication\Request;
+use App\Models\User;
 use App\Services\Communication\EmailServiceHandler;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -61,10 +63,104 @@ class RequestResource extends Resource
         'internal' => 'Internal',
     ];
 
-    /** Eager-load the relations shown in the table/view to avoid N+1 queries. */
+    /**
+     * Visible to global admins/superadmins and to any circle_admin (a
+     * team-scoped role, so checked across all teams). Circle admins see a
+     * scoped subset — see getEloquentQuery(). canAccess() defaults to this, so
+     * it also gates the resource's pages.
+     */
+    public static function canViewAny(): bool
+    {
+        $user = static::authUser();
+
+        if ($user === null) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['admin', 'superadmin'])
+            || Circle::administeredBy($user)->isNotEmpty();
+    }
+
+    /**
+     * Eager-load the relations shown in the table/view, and scope by role.
+     *
+     * This query is the single choke point for BOTH listing and record
+     * resolution (Filament binds route records through it), so a circle_admin
+     * can neither list nor open a request outside their scope.
+     */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['requester', 'circle', 'responsibleAdmin']);
+        $query = parent::getEloquentQuery()->with(['requester', 'circle', 'responsibleAdmin']);
+
+        $user = static::authUser();
+
+        // Global admins see every request; a circle_admin sees only requests
+        // directed to them (responsible_admin_id) or within a circle they
+        // administer — that circle or any descendant of it (subtree via path).
+        if ($user !== null && ! $user->hasAnyRole(['admin', 'superadmin'])) {
+            $administered = Circle::administeredBy($user);
+
+            $query->where(function (Builder $q) use ($user, $administered): void {
+                $q->where('responsible_admin_id', $user->id);
+
+                if ($administered->isNotEmpty()) {
+                    $q->orWhereHas('circle', function (Builder $c) use ($administered): void {
+                        $c->where(function (Builder $inner) use ($administered): void {
+                            foreach ($administered as $circle) {
+                                $inner->orWhere('circles.id', $circle->id)
+                                    ->orWhere('circles.path', 'like', $circle->path.'/%');
+                            }
+                        });
+                    });
+                }
+            });
+        }
+
+        return $query;
+    }
+
+    /** The current panel user as an App\Models\User (or null). */
+    protected static function authUser(): ?User
+    {
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+
+        return $user;
+    }
+
+    /**
+     * Whether the current user may act (Approve/Deny/Resend) on this request.
+     * Global admins/superadmins may act on any; a circle_admin only on requests
+     * directed to them or within a circle they administer (matches the listing
+     * scope in getEloquentQuery). Mirrors Circle::isNestedIn for the subtree
+     * test, consistent with the app's path-based tree logic.
+     */
+    protected static function userMayActOn(Request $record): bool
+    {
+        $user = static::authUser();
+
+        if ($user === null) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'superadmin'])) {
+            return true;
+        }
+
+        if ($record->responsible_admin_id === $user->id) {
+            return true;
+        }
+
+        $circle = $record->circle;
+
+        if ($circle === null) {
+            return false;
+        }
+
+        return Circle::administeredBy($user)->contains(
+            fn (Circle $administered): bool => $circle->id === $administered->id
+                || $circle->isNestedIn($administered),
+        );
     }
 
     public static function form(Schema $schema): Schema
@@ -162,7 +258,7 @@ class RequestResource extends Resource
             ->label('Approve')
             ->icon('heroicon-o-check-circle')
             ->color('success')
-            ->visible(fn (Request $record): bool => $record->status === 'pending')
+            ->visible(fn (Request $record): bool => $record->status === 'pending' && static::userMayActOn($record))
             ->requiresConfirmation()
             ->modalHeading('Approve request')
             ->modalDescription('Are you sure you want to manually approve this request? An email will be sent to the requester.')
@@ -206,7 +302,7 @@ class RequestResource extends Resource
             ->label('Deny')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
-            ->visible(fn (Request $record): bool => $record->status === 'pending')
+            ->visible(fn (Request $record): bool => $record->status === 'pending' && static::userMayActOn($record))
             ->schema([
                 Textarea::make('response_note')
                     ->label('Reason (optional)')
@@ -247,7 +343,7 @@ class RequestResource extends Resource
             ->label('Resend')
             ->icon('heroicon-o-paper-airplane')
             ->color('gray')
-            ->visible(fn (Request $record): bool => in_array($record->status, ['pending', 'expired'], true))
+            ->visible(fn (Request $record): bool => in_array($record->status, ['pending', 'expired'], true) && static::userMayActOn($record))
             ->requiresConfirmation()
             ->modalHeading('Resend approval email')
             ->modalDescription('This regenerates the approval link (valid for 7 days) and resends it to the respondent.')

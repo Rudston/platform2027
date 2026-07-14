@@ -101,8 +101,9 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     replaces modal for viewing a community; stateless back-link via
     ?from= query parameter
 
-12. **Filament admin panel** — panel at /admin, restricted to admin +
-    superadmin roles (User::canAccessPanel). "Content blocks" is the first
+12. **Filament admin panel** — panel at /admin (User::canAccessPanel: admin +
+    superadmin, plus any circle_admin — see Filament section). "Content blocks"
+    is the first
     resource: an admin-editable, locale-aware CMS for small pieces of copy
     rendered into public views via `<x-content-block>` (see below)
 
@@ -233,8 +234,17 @@ Runs on web middleware group only (covers Livewire XHR automatically).
 ### Admin panel
 - AdminPanelProvider (app/Providers/Filament/AdminPanelProvider.php)
 - Path /admin, panel id `admin`, `->login()`, dark mode on, primary = Amber
-- Access restricted to `admin` + `superadmin` roles via
-  User::canAccessPanel() (User implements FilamentUser)
+- Access via User::canAccessPanel(): `admin` + `superadmin` (global) AND any
+  `circle_admin` (Circle::administeredBy($this)->isNotEmpty() — team-scoped
+  role checked across all teams). Since circle_admins can now reach /admin,
+  every resource gates itself explicitly:
+    - ContentBlockResource, EmailTemplateResource: canViewAny() → admin/super
+      only (canAccess() defaults to it, covering nav + all pages)
+    - Dashboard (app/Filament/Pages/Dashboard.php, subclass): it's the panel
+      HOME (/admin), so canAccess() stays true (denying it 403s the home route,
+      not redirect); shouldRegisterNavigation() hides it from circle_admins and
+      mount() redirects them to the Requests index
+    - RequestResource: visible to admins AND circle_admins, role-scoped (below)
 - Nav group `Platform` registered for platform-management resources
 - Auto-discovers Resources/Pages/Widgets under app/Filament/
 
@@ -392,11 +402,16 @@ landing page (requests.confirm), never the POST routes.
 **Governance admin** — Filament RequestResource (app/Filament/Resources/Requests/)
 under a NEW `Governance` group: badge columns + filters, read-only view page
 with email-log table, and Approve / Deny / Resend row actions (pending/expired).
-Actions are gated by request STATUS only (not by admin): the panel is already
-admin+superadmin only, so ALL admins + superadmin see/act on them — an
-intentional escalation net (if circle_admins don't act, higher-ups can). A
-future directed/responsible-admin concept governs notification routing ONLY,
-never Filament action visibility.
+Role-scoped via getEloquentQuery() (single choke point — Filament resolves
+route records through it, so listing AND record pages are scoped):
+- admin/superadmin: unscoped, see + act on ALL requests (escalation net — if
+  the responsible circle_admin doesn't act, they can).
+- circle_admin (non-privileged): only requests where responsible_admin_id =
+  them, OR whose circle they administer or a DESCENDANT of it (subtree via
+  Circle::administeredBy + path LIKE / isNestedIn; matches responsibleAdminFor's
+  upward walk — NOT ancestors).
+Action visibility (Approve/Deny/Resend) = status AND userMayActOn(): privileged
+act on any pending; circle_admins only within their directed-or-subtree scope.
 
 **Expiry** — `requests:expire` command (chunkById) flips past-expiry pending
 requests to expired; scheduled daily in routes/console.php.
@@ -478,7 +493,8 @@ requests to expired; scheduled daily in routes/console.php.
   see Circle administrators note below
 
 ### Filament Admin Panel
-- AdminPanelProvider at /admin (admin + superadmin only)
+- AdminPanelProvider at /admin (admin + superadmin, plus circle_admins who see
+  only a scoped Requests resource; other resources + Dashboard admin-only)
 - `Platform` nav group → ContentBlockResource (per-locale content editing)
 - `Communication` nav group → EmailTemplateResource (per-locale subject/body)
 - `Governance` nav group → RequestResource (view-only + Approve/Deny/Resend)

@@ -35,6 +35,19 @@ class EmailTemplateResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Communication';
 
     /**
+     * Admin/superadmin only. The panel is now reachable by circle_admins too
+     * (see User::canAccessPanel), so this resource must gate itself explicitly
+     * — canAccess() defaults to canViewAny(), so this covers nav + all pages.
+     */
+    public static function canViewAny(): bool
+    {
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+
+        return (bool) $user?->hasAnyRole(['admin', 'superadmin']);
+    }
+
+    /**
      * Supported locales — read from config, never hardcoded.
      *
      * @return list<string>

@@ -298,6 +298,46 @@ class Circle extends Model
     }
 
     /**
+     * Circles the given user administers — the inverse of administrators().
+     *
+     * Returns every circle on which the user holds the 'circle_admin' role,
+     * queried directly off model_has_roles (Spatie teams mode scopes the
+     * roles() relationship to the *current* team, so it can't answer "which
+     * teams does this user hold this role on"). A user may administer zero or
+     * many circles.
+     *
+     * @return Collection<int, Circle>
+     */
+    public static function administeredBy(?User $user): Collection
+    {
+        if ($user === null) {
+            return new Collection;
+        }
+
+        $tables = (array) config('permission.table_names');
+        $columns = (array) config('permission.column_names');
+
+        $modelHasRoles = $tables['model_has_roles'] ?? 'model_has_roles';
+        $rolesTable = $tables['roles'] ?? 'roles';
+        $modelKey = $columns['model_morph_key'] ?? 'model_id';
+        $teamKey = $columns['team_foreign_key'] ?? 'circle_id';
+
+        return static::query()
+            ->whereIn(
+                'id',
+                fn ($query) => $query
+                    ->select("{$modelHasRoles}.{$teamKey}")
+                    ->from($modelHasRoles)
+                    ->join($rolesTable, "{$rolesTable}.id", '=', "{$modelHasRoles}.role_id")
+                    ->where("{$rolesTable}.name", 'circle_admin')
+                    ->where("{$modelHasRoles}.model_type", $user->getMorphClass())
+                    ->where("{$modelHasRoles}.{$modelKey}", $user->getKey())
+                    ->whereNotNull("{$modelHasRoles}.{$teamKey}"),
+            )
+            ->get();
+    }
+
+    /**
      * Resolve the platform user responsible for a circle (for escalation /
      * notification / internal routing).
      *

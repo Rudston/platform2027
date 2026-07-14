@@ -310,6 +310,10 @@ below), description, active services, member-count placeholder, Join button
 - Exposed on the page via a `#[Computed] administrators()` method so the query
   runs once per render; rendered as a comma-joined name list (or a
   `communities.page.no_admins` string when empty).
+- `Circle::administeredBy(?User): Collection<Circle>` — the INVERSE: every
+  circle a user holds `circle_admin` on (same direct `model_has_roles` query;
+  the pattern for "does this user hold a team-scoped role on ANY team", since
+  `hasRole()` is scoped to the current team). Drives Filament Governance access.
 - `Circle::responsibleAdminFor(Circle): ?User` — escalation/notification
   resolver. Call it on **the circle the request concerns** (e.g.
   `$request->circle` — for an org approval, the pending organisation's own
@@ -335,8 +339,22 @@ below), description, active services, member-count placeholder, Join button
 
 AdminPanelProvider (`app/Providers/Filament/AdminPanelProvider.php`).
 - Path `/admin`, panel id `admin`, `->login()`, dark mode on, primary = Amber
-- Access restricted to `admin` + `superadmin` roles via
-  `User::canAccessPanel()` (User implements `FilamentUser`)
+- `User::canAccessPanel()` admits `admin` + `superadmin` (global roles) AND any
+  `circle_admin` (via `Circle::administeredBy($this)->isNotEmpty()` — a
+  team-scoped role checked across all teams, not `hasRole`)
+- **Because the panel is now reachable by circle_admins, every resource gates
+  itself explicitly** (they were previously protected only by nobody else
+  reaching `/admin`):
+  - `ContentBlockResource`, `EmailTemplateResource`: `canViewAny()` →
+    `admin`/`superadmin` only (canAccess() defaults to canViewAny(), covering
+    nav + all pages)
+  - `Dashboard` (`app/Filament/Pages/Dashboard.php`, subclass registered in the
+    panel): it's the panel HOME (`/admin`), so `canAccess()` stays `true` —
+    denying it would 403 the home route, not redirect. Instead
+    `shouldRegisterNavigation()` hides it from circle_admins and `mount()`
+    redirects them to the Requests index (admins see it normally)
+  - `RequestResource`: visible to admins AND circle_admins, but role-scoped —
+    see Governance admin below
 - Nav group `Platform` registered for platform-management resources
 - Auto-discovers Resources/Pages/Widgets under `app/Filament/`
 
@@ -513,13 +531,19 @@ heads-up to the responsible admin → `review_url` = Filament request view).
 - Row actions (pending/expired only): **Approve**, **Deny** (optional note),
   **Resend** (regenerates token+expiry, resends request email). Each mirrors
   the controller, logs the email, shows a success/warning notification
-- **Action visibility is gated ONLY by request status** — NOT by which admin.
-  The panel itself is already `admin` + `superadmin` only, so **every** admin
-  and superadmin sees and can act on Approve/Deny/Resend. This is an
-  intentional escalation net: if the circle_admins responsible for a request
-  do not act, higher-ups can. A future "directed/responsible admin" concept
-  (see `responsibleAdminFor`) must govern **notification/email routing ONLY** —
-  it must NEVER narrow Filament action visibility to a single admin.
+- **Role-scoped visibility.** `getEloquentQuery()` is the single choke point
+  (Filament resolves route records through it, so it scopes BOTH listing and
+  record pages):
+  - `admin`/`superadmin`: unscoped — see and act on ALL requests (the
+    escalation net: if the responsible circle_admin doesn't act, they can).
+  - `circle_admin` (non-privileged): only requests where
+    `responsible_admin_id = them`, OR whose circle is one they administer or a
+    **descendant** of it (`Circle::administeredBy` + `path LIKE`/`isNestedIn` —
+    subtree, matching `responsibleAdminFor`'s upward walk). NOT ancestors.
+- **Action visibility** (Approve/Deny/Resend) = request status AND
+  `userMayActOn($record)`: privileged act on any; circle_admins only within the
+  same directed-or-subtree scope. So a circle_admin cannot act on a request
+  outside their subtree even though admins can act on any pending request.
 
 ### Expiry
 - `requests:expire` (`app/Console/Commands/ExpireRequests.php`) flips
