@@ -20,14 +20,16 @@
                 <span class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
                     {{ __('communities.status_pending') }}
                 </span>
+            @else
+                {{-- Pending circles show the card + badge but no View link. --}}
+                <a
+                    href="{{ $from ? route('communities.show', ['circle' => $circle, 'from' => $from]) : route('communities.show', $circle) }}"
+                    wire:navigate
+                    class="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+                >
+                    {{ __('ui.view') }}
+                </a>
             @endif
-            <a
-                href="{{ $from ? route('communities.show', ['circle' => $circle, 'from' => $from]) : route('communities.show', $circle) }}"
-                wire:navigate
-                class="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-            >
-                {{ __('ui.view') }}
-            </a>
         </div>
     </div>
 </div>
