@@ -308,9 +308,20 @@ below), description, active services, member-count placeholder, Join button
   runs once per render; rendered as a comma-joined name list (or a
   `communities.page.no_admins` string when empty).
 - `Circle::responsibleAdminFor(Circle): ?User` — escalation/notification
-  resolver. Walks the circle + its ancestors nearest→root, returns the first
+  resolver. Call it on **the circle the request concerns** (e.g.
+  `$request->circle` — for an org approval, the pending organisation's own
+  circle). Walks the circle + its ancestors nearest→root, returns the first
   `circle_admin` of the nearest **LocationCommunity** that has one; falls back
   to the first global `admin`, then `superadmin`. Null only if none exist.
+  - **Climb rule (intentional):** only `circle_admin`s on **LocationCommunity**
+    circles count on the way up — non-location circles (the org circle itself,
+    theme circles, etc.) are skipped. The intent is "route to the geographic
+    steward for that area," NOT "any circle_admin above." Do not broaden this
+    to all circle types without an explicit decision.
+  - **NOT wired yet (TODO):** the method currently has NO caller. Nothing
+    computes or stores a responsible admin per request, and no notification is
+    sent to them. Wiring request→responsible-admin routing (compute on request
+    creation, store it, notify that admin) is future work.
 
 ---
 
@@ -494,6 +505,13 @@ Generic request record: `type`, `status` (default pending), `direction`
 - Row actions (pending/expired only): **Approve**, **Deny** (optional note),
   **Resend** (regenerates token+expiry, resends request email). Each mirrors
   the controller, logs the email, shows a success/warning notification
+- **Action visibility is gated ONLY by request status** — NOT by which admin.
+  The panel itself is already `admin` + `superadmin` only, so **every** admin
+  and superadmin sees and can act on Approve/Deny/Resend. This is an
+  intentional escalation net: if the circle_admins responsible for a request
+  do not act, higher-ups can. A future "directed/responsible admin" concept
+  (see `responsibleAdminFor`) must govern **notification/email routing ONLY** —
+  it must NEVER narrow Filament action visibility to a single admin.
 
 ### Expiry
 - `requests:expire` (`app/Console/Commands/ExpireRequests.php`) flips
@@ -567,6 +585,10 @@ On failure: silent.
 - Role transition after organisation approval: the requester is granted
   circle_admin on approval (intended, even for platform admins) — switching
   that to a dedicated organisation-staff role during onboarding is future work
+- Request→responsible-admin routing: `Circle::responsibleAdminFor()` exists
+  but has no caller. Computing/storing a responsible admin per request and
+  notifying them is future work (Filament actions stay open to all
+  admins/superadmin regardless — see Governance admin)
 - Wiring EmailServiceHandler into other flows (registration welcome, circle
   invitations, password reset) — templates exist but aren't triggered by
   app events yet (the organisation-approval flow IS fully wired)

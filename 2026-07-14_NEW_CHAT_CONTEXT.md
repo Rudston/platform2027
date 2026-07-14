@@ -125,9 +125,14 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     holding the `circle_admin` role scoped to that circle (queries the
     model_has_roles pivot on circle_id directly, since Spatie runs in teams
     mode; a circle can have zero or many). Circle::responsibleAdminFor(Circle)
-    is an escalation resolver: walks the circle + ancestors nearest→root for
+    is an escalation resolver: call it on the circle the request concerns
+    (e.g. $request->circle); it walks the circle + ancestors nearest→root for
     the nearest LocationCommunity admin, falling back to global admin →
-    superadmin. Administrators are shown on the Community page.
+    superadmin. Climb rule is intentionally LocationCommunity-only (non-location
+    circles skipped) — route to the geographic steward, not any circle_admin
+    above. NOT wired yet: responsibleAdminFor() has no caller — request→
+    responsible-admin routing (compute + store + notify) is future work.
+    Administrators are shown on the Community page.
 
 ---
 
@@ -380,6 +385,11 @@ landing page (requests.confirm), never the POST routes.
 **Governance admin** — Filament RequestResource (app/Filament/Resources/Requests/)
 under a NEW `Governance` group: badge columns + filters, read-only view page
 with email-log table, and Approve / Deny / Resend row actions (pending/expired).
+Actions are gated by request STATUS only (not by admin): the panel is already
+admin+superadmin only, so ALL admins + superadmin see/act on them — an
+intentional escalation net (if circle_admins don't act, higher-ups can). A
+future directed/responsible-admin concept governs notification routing ONLY,
+never Filament action visibility.
 
 **Expiry** — `requests:expire` command (chunkById) flips past-expiry pending
 requests to expired; scheduled daily in routes/console.php.
@@ -510,6 +520,9 @@ requests to expired; scheduled daily in routes/console.php.
   (service stubs exist, full implementation pending)
 - Payment/subscription system
 - API endpoints
+- Request→responsible-admin routing: Circle::responsibleAdminFor() exists but
+  has no caller. Computing/storing a responsible admin per request + notifying
+  them is future work (Filament actions stay open to all admins/superadmin)
 - Notification system + wiring EmailServiceHandler into OTHER flows
   (registration welcome, circle invitations, password reset) — templates
   exist but aren't triggered by app events yet (organisation-approval IS wired)
