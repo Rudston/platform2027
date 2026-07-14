@@ -283,10 +283,11 @@ Toggle visible, disabled. "Coming soon" tooltip. Deferred to Phase 2.
 
 ## Community Page (/communities/{circle})
 
-Route: GET /communities/{circle} — route-model bound to Circle.
-Public. No auth middleware yet.
-Component: CommunityPage (app/Livewire/Explore/CommunityPage.php)
-Layout: layouts/public.blade.php (temporary — pre-auth)
+Route: GET /communities/{circle} — route-model bound to Circle, name
+`communities.show`. Public. No auth middleware yet.
+Component: CommunityPage (`app/Livewire/Communities/CommunityPage.php`)
+View: `resources/views/livewire/communities/community-page.blade.php`
+Layout: layouts/main.blade.php (with nav)
 
 ### Back link (stateless)
 "View →" on CommunityCard generates:
@@ -294,8 +295,22 @@ Layout: layouts/public.blade.php (temporary — pre-auth)
 CommunityPage reads ?from= for back link. Falls back to /explore.
 
 ### Content
-Currently: placeholder (same as former CommunityDetail modal).
-Type-specific nested components: future work.
+Name + type icon, geographic breadcrumb, **circle administrators** (see
+below), description, active services, member-count placeholder, Join button
+(stub). Type-specific nested components: future work.
+
+### Circle administrators (shown on this page)
+- `Circle::administrators(): Collection<User>` — users holding the
+  `circle_admin` role scoped to THIS circle. Queries the `model_has_roles`
+  pivot directly on `circle_id` (Spatie teams mode), NOT via `roles()` (which
+  is scoped to the *current* permissions team). A circle can have zero or many.
+- Exposed on the page via a `#[Computed] administrators()` method so the query
+  runs once per render; rendered as a comma-joined name list (or a
+  `communities.page.no_admins` string when empty).
+- `Circle::responsibleAdminFor(Circle): ?User` — escalation/notification
+  resolver. Walks the circle + its ancestors nearest→root, returns the first
+  `circle_admin` of the nearest **LocationCommunity** that has one; falls back
+  to the first global `admin`, then `superadmin`. Null only if none exist.
 
 ---
 
@@ -410,8 +425,10 @@ dev DB but is NOT in the seeder yet.
   `is_active` ToggleColumn, updated_at
 
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
-(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). Keys:
-`email.welcome`, `email.circle_invitation`, `email.password_reset`.
+(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 6 keys:
+`email.welcome`, `email.circle_invitation`, `email.password_reset`,
+`email.organisation_approval_request`, `email.organisation_approval_confirmed`,
+`email.organisation_approval_denied`.
 
 Local mail: MailHog via MAMP — SMTP `localhost:1025`, UI at
 `http://localhost:8025/mailhog` (note the `/mailhog` web path).
@@ -436,8 +453,9 @@ Generic request record: `type`, `status` (default pending), `direction`
 - `logEmail(template, recipient, status, error?)` — appends to
   `metadata.email_log` (audit of every send attempt)
 - `isExpired()` — `token_expires_at` in the past
-- The model is `App\Models\Request` — alias it (`as RequestModel`) wherever
-  `Illuminate\Http\Request` is also used
+- The model is `App\Models\Communication\Request` — alias it
+  (`as RequestModel`) wherever `Illuminate\Http\Request` is also used
+  (e.g. RequestController)
 
 ### Submission (Explore → AddCommunityModal)
 - Auth-guarded org form (name, website, description, contact name/email/job
@@ -492,7 +510,9 @@ NO Breeze, NO Jetstream, EVER.
 Components: Login, Register, ForgotPassword, ResetPassword
 Controller: LogoutController
 Layouts: guest.blade.php, authenticated.blade.php
-Public layout: public.blade.php (temporary — used by Explore + CommunityPage)
+main.blade.php: public pages with nav — used by Explore + CommunityPage
+public.blade.php: nav-free layout — used ONLY by the external request
+approval pages (resources/views/requests/*)
 
 ---
 
@@ -601,9 +621,9 @@ On failure: silent.
 - Promoting $subject in TemplateMailable — fatal (inherited untyped
   Mailable::$subject); assign it in the constructor body instead
 - Using RefreshDatabase in tests — migrations fail on sqlite (see Testing)
-- Forgetting the Request name clash — the Eloquent model is App\Models\Request;
-  alias it (App\Models\Request as RequestModel) in files that also import
-  Illuminate\Http\Request
+- Forgetting the Request name clash — the Eloquent model is
+  App\Models\Communication\Request; alias it (…\Communication\Request as
+  RequestModel) in files that also import Illuminate\Http\Request
 - Linking approval emails to the POST approve/deny routes — email clicks are
   GET (405); link to route('requests.confirm', $token) (the landing page)
 - Assuming a new circle is Pending — CircleCreationService creates it Active;

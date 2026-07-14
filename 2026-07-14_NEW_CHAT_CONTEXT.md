@@ -121,6 +121,14 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     `requests:expire` command. CircleStatus enum + circles.status gate the
     circle's lifecycle. (See Organisation Approval & Requests section below.)
 
+15. **Circle administrators** — Circle::administrators() returns the users
+    holding the `circle_admin` role scoped to that circle (queries the
+    model_has_roles pivot on circle_id directly, since Spatie runs in teams
+    mode; a circle can have zero or many). Circle::responsibleAdminFor(Circle)
+    is an escalation resolver: walks the circle + ancestors nearest→root for
+    the nearest LocationCommunity admin, falling back to global admin →
+    superadmin. Administrators are shown on the Community page.
+
 ---
 
 ## Geographic Abstraction Layer (Multi-Country)
@@ -355,7 +363,7 @@ emailed token link. Only `organisation_approval` is implemented end-to-end
   responded_at, response_note, metadata (JSON), ulid (public id), soft deletes
 - booted() auto-generates ulid + token; scopes pending/expired/external/internal
 - createForOrganisation(...); logEmail() appends to metadata.email_log; isExpired()
-- Model is App\Models\Request — alias as RequestModel where Illuminate\Http\Request is used
+- Model is App\Models\Communication\Request — alias as RequestModel where Illuminate\Http\Request is used
 
 **Submission (AddCommunityModal)** — auth-guarded org form + duplicate check;
 submitOrganisation() creates Organisation + a Pending circle + Request, then
@@ -444,10 +452,12 @@ requests to expired; scheduled daily in routes/console.php.
   controls left column max-height with overflow-y-auto
 
 ### Community Page
-- Route: GET /communities/{circle} (public, no auth yet)
-- CommunityPage Livewire component
+- Route: GET /communities/{circle} (public, no auth yet), name communities.show
+- CommunityPage Livewire component (app/Livewire/Communities/CommunityPage.php)
 - Stateless back-link via ?from= query parameter
-- layouts/public.blade.php (temporary — pre-auth)
+- layouts/main.blade.php (public layout with nav)
+- Displays the circle's administrators (Circle::administrators()) —
+  see Circle administrators note below
 
 ### Filament Admin Panel
 - AdminPanelProvider at /admin (admin + superadmin only)
@@ -536,8 +546,8 @@ requests to expired; scheduled daily in routes/console.php.
     countries migration) and never hit MailHog (phpunit.xml MAIL_MAILER=array
     + Mail::fake()); build only the tables a test needs
 15. All lang keys must exist in lang/en/ before being used in views
-16. The Eloquent model is App\Models\Request — alias it (as RequestModel)
-    wherever Illuminate\Http\Request is also imported
+16. The Eloquent model is App\Models\Communication\Request — alias it (as
+    RequestModel) wherever Illuminate\Http\Request is also imported
 17. Approval emails link to the GET landing page route('requests.confirm',
     $token), never the POST approve/deny routes (email clicks are GET)
 18. New circles are created Active by CircleCreationService — set
@@ -567,8 +577,8 @@ app/
   Http/Controllers/   RequestController (+ Auth/LogoutController)
   Http/Middleware/    SetLocaleFromBrowser
   Livewire/Auth/      Login, Register, ForgotPassword, ResetPassword
+  Livewire/Communities/ CommunityPage
   Livewire/Explore/   ExploreCommunities + sub-components
-                      CommunityPage
                       RequestLocationModal
   Models/Circles/     Circle, Service
   Models/Communities/ OrganisationCommunity, Campaign, CourseCommunity,
@@ -594,7 +604,7 @@ resources/
                       public.blade.php (nav-free, external request pages)
     livewire/auth/    login, register, forgot-password, reset-password
     livewire/explore/ all explore components
-    livewire/         community-page
+    livewire/communities/ community-page
     requests/         confirm, confirmed, denied, expired (approval pages)
     mail/             template.blade.php, template-plain.blade.php
     components/       content-block.blade.php
@@ -922,9 +932,9 @@ Restores full state on direct URL load including correct breadcrumb trail.
 
 ## Community Page (/communities/{circle})
 
-Route: GET /communities/{circle} — public, no auth yet.
-Component: CommunityPage Livewire component.
-Layout: layouts/public.blade.php (temporary — pre-auth).
+Route: GET /communities/{circle} — public, no auth yet (name communities.show).
+Component: CommunityPage (app/Livewire/Communities/CommunityPage.php).
+Layout: layouts/main.blade.php (public layout with nav).
 
 ### Back link
 Stateless — reads ?from= query parameter.
@@ -932,9 +942,11 @@ Stateless — reads ?from= query parameter.
 ?from={urlencoded explore URL with full query string}.
 Falls back to /explore if from is absent or invalid.
 
-### Content (temporary — same as former CommunityDetail modal)
+### Content
 - Community name + type icon
 - Geographic breadcrumb
+- Circle administrators (Circle::administrators() — comma-joined names, or a
+  "no admins" string when empty; rendered via a #[Computed] method)
 - Description
 - Services as icon badges
 - Member count placeholder
