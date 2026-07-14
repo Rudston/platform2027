@@ -54,6 +54,19 @@ class CommunityPage extends Component
         return $this->circle->administrators();
     }
 
+    /**
+     * Displayed member count. The membership system isn't built yet, so the
+     * base is a placeholder 0; a circle_admin counts as a member, so add one
+     * when the circle has an administrator.
+     */
+    #[Computed]
+    public function memberCount(): int
+    {
+        $baseMembers = 0; // TODO: real count once the membership system exists.
+
+        return $baseMembers + ($this->administrators->isNotEmpty() ? 1 : 0);
+    }
+
     /** Type icon for the circle's community type (mirrors CommunityCard). */
     public function icon(): string
     {

@@ -19,15 +19,14 @@ class ServicesSeeder extends Seeder
     public function run(): void
     {
         $services = [
-            ['name' => 'Store Assets',        'key' => 'store_assets',        'handler_class' => StoreAssetsService::class],
-            ['name' => 'Notifications',       'key' => 'notifications',       'handler_class' => NotificationsService::class],
-            ['name' => 'Manage Interaction',  'key' => 'manage_interaction',  'handler_class' => ManageInteractionService::class],
-            ['name' => 'Manage Media',        'key' => 'manage_media',        'handler_class' => ManageMediaService::class],
-            ['name' => 'Manage Users',        'key' => 'manage_users',        'handler_class' => ManageUsersService::class],
-            ['name' => 'Manage Events',       'key' => 'manage_events',       'handler_class' => ManageEventsService::class],
-            ['name' => 'Manage Voting',       'key' => 'manage_voting',       'handler_class' => ManageVotingService::class],
-            ['name' => 'Manage Learning',     'key' => 'manage_learning',     'handler_class' => ManageLearningService::class],
-            ['name' => 'Manage Social Media', 'key' => 'manage_social_media', 'handler_class' => ManageSocialMediaService::class],
+            ['name' => 'Media',        'key' => 'media',        'handler_class' => MediaService::class],
+            ['name' => 'Notifications', 'key' => 'notifications',       'handler_class' => NotificationsService::class],
+            ['name' => 'News',  'key' => 'news',  'handler_class' => NewsService::class],
+            ['name' => 'Manage Users',  'key' => 'manage_users',        'handler_class' => ManageUsersService::class],
+            ['name' => 'Events',       'key' => 'events',       'handler_class' => EventsService::class],
+            ['name' => 'Voting',       'key' => 'voting',       'handler_class' => VotingService::class],
+            ['name' => 'Learning',     'key' => 'learning',     'handler_class' => ManageLearningService::class],
+            ['name' => 'Social Media', 'key' => 'social_media', 'handler_class' => ManageSocialMediaService::class],
         ];
 
         foreach ($services as $service) {

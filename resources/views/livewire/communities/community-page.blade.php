@@ -33,6 +33,12 @@
             </span>
         </div>
 
+        {{-- Member count (admins count as members) --}}
+        <div class="mt-2 flex items-center gap-1.5 text-sm text-muted">
+            <span aria-hidden="true">👥</span>
+            <span>{{ __('communities.page.members', ['count' => $this->memberCount]) }}</span>
+        </div>
+
         {{-- Description --}}
         @if ($circle->description)
             <p class="mt-4 text-muted">{{ $circle->description }}</p>
@@ -53,11 +59,8 @@
             </div>
         @endif
 
-        {{-- Member count placeholder --}}
-        <div class="mt-6 text-sm text-muted">{{ __('communities.page.members', ['count' => 0]) }}</div>
-
-        {{-- Join (placeholder) --}}
-        <div class="mt-6">
+        {{-- Join (placeholder) — right-aligned at the bottom --}}
+        <div class="mt-6 flex justify-end">
             <button
                 type="button"
                 wire:click="joinCommunity"
