@@ -950,7 +950,9 @@ Restores full state on direct URL load including correct breadcrumb trail.
 
 ## Community Page (/communities/{circle})
 
-Route: GET /communities/{circle} — public, no auth yet (name communities.show).
+Route: GET /communities/{circle} — public (name communities.show), but mount()
+404s circles not visible to the viewer via Circle::isVisibleTo() (pending only
+for admin/superadmin; mirrors the Explore visibleTo() scope).
 Component: CommunityPage (app/Livewire/Communities/CommunityPage.php).
 Layout: layouts/main.blade.php (public layout with nav).
 

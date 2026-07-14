@@ -19,6 +19,12 @@ class CommunityPage extends Component
 
     public function mount(Circle $circle): void
     {
+        // Pending circles are not publicly viewable — only admins/superadmins
+        // may reach them by direct URL (mirrors the Explore visibleTo() scope).
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+        abort_unless($circle->isVisibleTo($user), 404);
+
         // Route-model-bound circle; eager-load the relations the page renders.
         $this->circle = $circle->load(['circleable', 'locatable', 'services']);
 

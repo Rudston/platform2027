@@ -188,13 +188,36 @@ class Circle extends Model
      */
     public function scopeVisibleTo(Builder $query, ?User $user): Builder
     {
-        $statuses = [CircleStatus::Active->value];
-
-        if ($user?->hasAnyRole(['admin', 'superadmin'])) {
-            $statuses[] = CircleStatus::Pending->value;
-        }
+        $statuses = array_map(
+            fn (CircleStatus $status): string => $status->value,
+            static::visibleStatusesFor($user),
+        );
 
         return $query->whereIn('circles.status', $statuses);
+    }
+
+    /**
+     * The circle statuses a given user may see: active always, plus pending for
+     * platform admins/superadmins. Single source of truth for scopeVisibleTo()
+     * and isVisibleTo().
+     *
+     * @return list<CircleStatus>
+     */
+    public static function visibleStatusesFor(?User $user): array
+    {
+        $statuses = [CircleStatus::Active];
+
+        if ($user?->hasAnyRole(['admin', 'superadmin'])) {
+            $statuses[] = CircleStatus::Pending;
+        }
+
+        return $statuses;
+    }
+
+    /** Whether this circle is visible to the given user (see visibleStatusesFor). */
+    public function isVisibleTo(?User $user): bool
+    {
+        return in_array($this->status, static::visibleStatusesFor($user), true);
     }
 
     /*

@@ -284,7 +284,10 @@ Toggle visible, disabled. "Coming soon" tooltip. Deferred to Phase 2.
 ## Community Page (/communities/{circle})
 
 Route: GET /communities/{circle} — route-model bound to Circle, name
-`communities.show`. Public. No auth middleware yet.
+`communities.show`. Public, but `mount()` calls `abort_unless($circle->
+isVisibleTo($user), 404)` — pending circles are reachable only by
+admin/superadmin (mirrors the Explore `visibleTo()` scope; single source of
+truth is `Circle::visibleStatusesFor()`).
 Component: CommunityPage (`app/Livewire/Communities/CommunityPage.php`)
 View: `resources/views/livewire/communities/community-page.blade.php`
 Layout: layouts/main.blade.php (with nav)
