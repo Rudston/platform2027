@@ -3,15 +3,15 @@
 namespace Database\Seeders\Circles;
 
 use App\Models\Circles\Service;
-use App\Services\Circles\ManageEventsService;
-use App\Services\Circles\ManageInteractionService;
+use App\Services\Circles\EventsService;
+use App\Services\Circles\ForumService;
 use App\Services\Circles\ManageLearningService;
-use App\Services\Circles\ManageMediaService;
 use App\Services\Circles\ManageSocialMediaService;
 use App\Services\Circles\ManageUsersService;
-use App\Services\Circles\ManageVotingService;
+use App\Services\Circles\MediaService;
+use App\Services\Circles\NewsService;
 use App\Services\Circles\NotificationsService;
-use App\Services\Circles\StoreAssetsService;
+use App\Services\Circles\VotingService;
 use Illuminate\Database\Seeder;
 
 class ServicesSeeder extends Seeder
@@ -27,6 +27,7 @@ class ServicesSeeder extends Seeder
             ['name' => 'Voting',       'key' => 'voting',       'handler_class' => VotingService::class],
             ['name' => 'Learning',     'key' => 'learning',     'handler_class' => ManageLearningService::class],
             ['name' => 'Social Media', 'key' => 'social_media', 'handler_class' => ManageSocialMediaService::class],
+            ['name' => 'Forums',       'key' => 'forums',       'handler_class' => ForumService::class],
         ];
 
         foreach ($services as $service) {

@@ -5,7 +5,7 @@ namespace App\Services\Circles;
 use App\Contracts\CircleServiceContract;
 use App\Models\Circles\Circle;
 
-class ManageInteractionService implements CircleServiceContract
+class MediaService implements CircleServiceContract
 {
     public function boot(Circle $circle): void
     {
@@ -14,7 +14,7 @@ class ManageInteractionService implements CircleServiceContract
 
     public function getKey(): string
     {
-        return 'manage_interaction';
+        return 'media';
     }
 
     public function getPermissions(): array

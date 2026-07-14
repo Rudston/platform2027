@@ -5,7 +5,7 @@ namespace App\Services\Circles;
 use App\Contracts\CircleServiceContract;
 use App\Models\Circles\Circle;
 
-class StoreAssetsService implements CircleServiceContract
+class NewsService implements CircleServiceContract
 {
     public function boot(Circle $circle): void
     {
@@ -14,7 +14,7 @@ class StoreAssetsService implements CircleServiceContract
 
     public function getKey(): string
     {
-        return 'store_assets';
+        return 'news';
     }
 
     public function getPermissions(): array

@@ -14,7 +14,7 @@ class ManageSocialMediaService implements CircleServiceContract
 
     public function getKey(): string
     {
-        return 'manage_social_media';
+        return 'social_media';
     }
 
     public function getPermissions(): array

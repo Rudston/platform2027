@@ -14,7 +14,7 @@ class ManageLearningService implements CircleServiceContract
 
     public function getKey(): string
     {
-        return 'manage_learning';
+        return 'learning';
     }
 
     public function getPermissions(): array

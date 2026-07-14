@@ -5,7 +5,7 @@ namespace App\Services\Circles;
 use App\Contracts\CircleServiceContract;
 use App\Models\Circles\Circle;
 
-class ManageVotingService implements CircleServiceContract
+class VotingService implements CircleServiceContract
 {
     public function boot(Circle $circle): void
     {
@@ -14,7 +14,7 @@ class ManageVotingService implements CircleServiceContract
 
     public function getKey(): string
     {
-        return 'manage_voting';
+        return 'voting';
     }
 
     public function getPermissions(): array
