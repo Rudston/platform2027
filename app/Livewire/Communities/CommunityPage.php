@@ -2,9 +2,12 @@
 
 namespace App\Livewire\Communities;
 
+use App\Contracts\Circles\HasDefaultServices;
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
+use App\Models\Circles\Service;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -16,6 +19,9 @@ class CommunityPage extends Component
 
     /** Where the "back" link returns to — the Explore view we came from. */
     public string $backUrl;
+
+    /** Key of the currently-selected service tab. TODO: #[Url] sync (stub). */
+    public string $activeServiceKey = '';
 
     public function mount(Circle $circle): void
     {
@@ -31,6 +37,9 @@ class CommunityPage extends Component
         // Restore the exact Explore view we came from (?from=…); fall back to
         // bare /explore. Only accept an internal /explore path (no open redirects).
         $this->backUrl = $this->resolveBackUrl(request()->query('from'));
+
+        // First service tab is active by default. TODO: #[Url] sync (stub).
+        $this->activeServiceKey = $this->serviceTabs()->first()['key'] ?? '';
     }
 
     private function resolveBackUrl(mixed $from): string
@@ -65,6 +74,49 @@ class CommunityPage extends Component
         $baseMembers = 0; // TODO: real count once the membership system exists.
 
         return $baseMembers + ($this->administrators->isNotEmpty() ? 1 : 0);
+    }
+
+    /**
+     * Attached services that have a UI container, as tabs. Ordered by the
+     * circleable's declared defaultServices() when it opts in, else by
+     * attachment order. Each entry: ['key','name','component'].
+     *
+     * @return SupportCollection<int, array{key:string, name:string, component:string}>
+     */
+    #[Computed]
+    public function serviceTabs(): SupportCollection
+    {
+        $services = $this->circle->services
+            ->where('pivot.is_active', true)
+            ->filter(fn (Service $s): bool => filled($s->container_component));
+
+        $owner = $this->circle->circleable;
+
+        if ($owner instanceof HasDefaultServices) {
+            $order = array_flip($owner->defaultServices());
+            $services = $services->sortBy(fn (Service $s): int => $order[$s->key] ?? PHP_INT_MAX);
+        }
+
+        return $services->map(fn (Service $s): array => [
+            'key' => $s->key,
+            'name' => $s->name,
+            'component' => $s->container_component,
+        ])->values();
+    }
+
+    /** FQCN of the Livewire container for the active tab, or null. */
+    #[Computed]
+    public function activeContainer(): ?string
+    {
+        return $this->serviceTabs()->firstWhere('key', $this->activeServiceKey)['component'] ?? null;
+    }
+
+    /** Switch the active service tab (guarded to a real tab). */
+    public function selectService(string $key): void
+    {
+        if ($this->serviceTabs()->contains('key', $key)) {
+            $this->activeServiceKey = $key;
+        }
     }
 
     /** Type icon for the circle's community type (mirrors CommunityCard). */

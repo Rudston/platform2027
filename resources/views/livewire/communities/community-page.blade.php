@@ -44,18 +44,37 @@
             <p class="mt-4 text-muted">{{ $circle->description }}</p>
         @endif
 
-        {{-- Active services --}}
-        @php($services = $circle->services->where('pivot.is_active', true))
-        @if ($services->isNotEmpty())
+        {{-- Service tabs (replaces the old service badges). Each attached
+             service with a container component renders as a tab; the active
+             tab's Livewire container is rendered below. TODO: #[Url] sync for
+             the active tab (stub, consistent with the rest of this page). --}}
+        @if ($this->serviceTabs->isNotEmpty())
             <div class="mt-6">
-                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('communities.page.services') }}</h2>
-                <div class="mt-2 flex flex-wrap gap-2">
-                    @foreach ($services as $service)
-                        <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
-                            ⚙️ {{ $service->name }}
-                        </span>
+                <div class="flex flex-wrap gap-1 border-b border-border-muted">
+                    @foreach ($this->serviceTabs as $tab)
+                        <button
+                            type="button"
+                            wire:click="selectService('{{ $tab['key'] }}')"
+                            @class([
+                                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition',
+                                'border-indigo-600 text-indigo-600' => $activeServiceKey === $tab['key'],
+                                'border-transparent text-muted hover:text-main' => $activeServiceKey !== $tab['key'],
+                            ])
+                        >
+                            {{ $tab['name'] }}
+                        </button>
                     @endforeach
                 </div>
+
+                @if ($this->activeContainer)
+                    <div class="mt-4">
+                        <livewire:dynamic-component
+                            :component="$this->activeContainer"
+                            :circle="$circle"
+                            :key="$activeServiceKey"
+                        />
+                    </div>
+                @endif
             </div>
         @endif
 

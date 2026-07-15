@@ -3,6 +3,7 @@
 namespace App\Services\Circles;
 
 use App\Contracts\CircleServiceContract;
+use App\Livewire\Communities\Services\NotificationsServiceContainer;
 use App\Models\Circles\Circle;
 
 class NotificationsService implements CircleServiceContract
@@ -20,5 +21,10 @@ class NotificationsService implements CircleServiceContract
     public function getPermissions(): array
     {
         return [];
+    }
+
+    public function containerComponent(): ?string
+    {
+        return NotificationsServiceContainer::class;
     }
 }

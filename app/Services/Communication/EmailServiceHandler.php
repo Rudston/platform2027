@@ -6,11 +6,14 @@ use App\Contracts\CircleServiceContract;
 use App\Mail\TemplateMailable;
 use App\Models\Circles\Circle;
 use App\Models\Communication\EmailTemplate;
+use App\Services\Circles\Concerns\HasNoContainerComponent;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 
 class EmailServiceHandler implements CircleServiceContract
 {
+    use HasNoContainerComponent;
+
     public function boot(Circle $circle): void
     {
         //

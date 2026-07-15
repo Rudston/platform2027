@@ -31,10 +31,17 @@ class ServicesSeeder extends Seeder
         ];
 
         foreach ($services as $service) {
+            // The handler is the single source of truth for its UI container,
+            // so read container_component off it rather than duplicating FQCNs.
+            $handler = app($service['handler_class']);
+
             // Keyed on the unique `key` so the seeder is safe to re-run.
             Service::updateOrCreate(
                 ['key' => $service['key']],
-                $service + ['is_active' => true],
+                $service + [
+                    'is_active' => true,
+                    'container_component' => $handler->containerComponent(),
+                ],
             );
         }
 

@@ -151,7 +151,8 @@ Pending explicitly. See Organisation Approval & Requests below.
 ### CircleCreationService
 Single entry point for creating any circle type.
 - Handles name/description auto-population
-- Attaches default services
+- Default services are attached by `Circle::booted()` (see Circle services
+  below), not here — the service just triggers it via `Circle::create()`
 - Wrapped in DB transaction
 - Signature: create(type, data, parentCircle?, locatableType, locatableId)
 - Circles are created with status Active (DB default) — set
@@ -159,6 +160,36 @@ Single entry point for creating any circle type.
 
 ### CircleMembershipService
 Membership management (partially built).
+
+### Circle services (as Livewire UI containers)
+Services are rows in the `services` table (`key`, `handler_class`,
+`container_component`) with a `CircleServiceContract` handler under
+`App\Services\Circles\`. Registered/seeded by `ServicesSeeder` (9 services;
+`container_component` is read off each handler, the single source of truth).
+
+- **CircleServiceContract::containerComponent(): ?string** — FQCN of the
+  Livewire component that renders the service's UI, or null (no UI). Handlers
+  with no UI use the `HasNoContainerComponent` trait
+  (`App\Services\Circles\Concerns\`) — e.g. Email, Manage Users. The 8 UI
+  handlers return an `App\Livewire\Communities\Services\*ServiceContainer`.
+- **Container components** (`App\Livewire\Communities\Services\*ServiceContainer`)
+  are thin: `mount(Circle $circle)` stores the circle; a `service()` accessor
+  resolves the backend handler that real data ops delegate to. Views are
+  placeholders for now.
+- **Default attachment** — a circleable that implements
+  `App\Contracts\Circles\HasDefaultServices` (declares `defaultServices():
+  array`) gets exactly those keys attached, IN ORDER, when its circle is
+  created. This runs in `Circle::booted()` (created hook), so it covers ALL
+  circle creation (service, seeders, tests), NOT just CircleCreationService.
+  Only `LocationCommunity` implements it today
+  (`news, events, forums, media, voting`); every other circleable attaches
+  nothing. Check the capability via `instanceof HasDefaultServices` (NOT
+  method_exists — the HasCircle trait gives everyone a `defaultServices()`
+  returning []).
+- **`circles:backfill-services`** (`app/Console/Commands/BackfillCircleServices.php`)
+  — attaches any MISSING default services to existing HasDefaultServices
+  circles (chunkById, idempotent, adds only; skips non-implementers; reports a
+  count). Manual/occasional; NOT scheduled.
 
 ### CoordinateData::nearest(float $lat, float $lng): ?static
 Nearest-neighbour lookup:
@@ -299,8 +330,17 @@ CommunityPage reads ?from= for back link. Falls back to /explore.
 
 ### Content
 Name + type icon, geographic breadcrumb, **circle administrators** (see
-below), description, active services, member-count placeholder, Join button
-(stub). Type-specific nested components: future work.
+below), member count (👥; admins count as members), description, **service
+tabs**, Join button (stub, right-aligned).
+
+**Service tabs** (replaced the old service icon-badges — badges are gone):
+every attached service with a non-null `container_component` renders as a tab,
+ordered per `defaultServices()` when the circleable implements
+`HasDefaultServices`, else attachment order. First tab active; switch via
+`selectService($key)`. The active tab's container renders through Livewire 4's
+`<livewire:dynamic-component :component="$this->activeContainer" :circle=…
+:key=…/>`. No `#[Url]` sync yet (TODO). The community-TYPE icon next to the name
+is unrelated and unchanged.
 
 ### Circle administrators (shown on this page)
 - `Circle::administrators(): Collection<User>` — users holding the

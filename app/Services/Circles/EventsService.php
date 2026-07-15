@@ -3,6 +3,7 @@
 namespace App\Services\Circles;
 
 use App\Contracts\CircleServiceContract;
+use App\Livewire\Communities\Services\EventsServiceContainer;
 use App\Models\Circles\Circle;
 
 class EventsService implements CircleServiceContract
@@ -20,5 +21,10 @@ class EventsService implements CircleServiceContract
     public function getPermissions(): array
     {
         return [];
+    }
+
+    public function containerComponent(): ?string
+    {
+        return EventsServiceContainer::class;
     }
 }

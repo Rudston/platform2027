@@ -2,6 +2,7 @@
 
 namespace App\Models\Circles;
 
+use App\Contracts\Circles\HasDefaultServices;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\User;
@@ -252,11 +253,17 @@ class Circle extends Model
 
             $owner = $circle->circleable;
 
-            if ($owner && method_exists($owner, 'defaultServices')) {
-                $serviceIds = Service::whereIn('key', $owner->defaultServices())->pluck('id');
+            // Attach the circleable's default services in the order it declares
+            // them (only circleables that opt in via HasDefaultServices).
+            if ($owner instanceof HasDefaultServices) {
+                $servicesByKey = Service::whereIn('key', $owner->defaultServices())
+                    ->get()
+                    ->keyBy('key');
 
-                if ($serviceIds->isNotEmpty()) {
-                    $circle->services()->attach($serviceIds, ['is_active' => true]);
+                foreach ($owner->defaultServices() as $key) {
+                    if ($service = $servicesByKey->get($key)) {
+                        $circle->services()->attach($service->id, ['is_active' => true]);
+                    }
                 }
             }
         });

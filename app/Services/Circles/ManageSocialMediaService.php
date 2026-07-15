@@ -3,6 +3,7 @@
 namespace App\Services\Circles;
 
 use App\Contracts\CircleServiceContract;
+use App\Livewire\Communities\Services\ManageSocialMediaServiceContainer;
 use App\Models\Circles\Circle;
 
 class ManageSocialMediaService implements CircleServiceContract
@@ -20,5 +21,10 @@ class ManageSocialMediaService implements CircleServiceContract
     public function getPermissions(): array
     {
         return [];
+    }
+
+    public function containerComponent(): ?string
+    {
+        return ManageSocialMediaServiceContainer::class;
     }
 }

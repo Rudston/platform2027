@@ -139,6 +139,20 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     discovery only, never gates who can act. Administrators are also shown on
     the Community page.
 
+16. **Services as Livewire UI containers** — services (`services` table:
+    key, handler_class, container_component) each have a CircleServiceContract
+    handler. containerComponent(): ?string returns the FQCN of a
+    App\Livewire\Communities\Services\*ServiceContainer (thin: mount(Circle)
+    + service() delegating to the handler), or null (HasNoContainerComponent
+    trait — Email, Manage Users). A circleable implementing
+    App\Contracts\Circles\HasDefaultServices (only LocationCommunity today:
+    news,events,forums,media,voting) gets those keys attached IN ORDER at
+    creation, in Circle::booted() (covers all creation paths; checked via
+    instanceof, not method_exists). `circles:backfill-services` attaches
+    missing defaults to existing circles (idempotent, chunkById, manual — not
+    scheduled). The Community Page renders each attached service with a
+    container as a TAB (badges removed) via <livewire:dynamic-component>.
+
 ---
 
 ## Geographic Abstraction Layer (Multi-Country)
@@ -598,11 +612,14 @@ requests to expired; scheduled daily in routes/console.php.
 app/
   Contracts/
     Geographic/       HasLocationLevel
+    Circles/          HasDefaultServices
     Circleable, Locatable,
-    CircleServiceContract, ProvidesCircleIdentity
-  Console/Commands/   ExpireRequests (requests:expire)
+    CircleServiceContract (+ containerComponent()), ProvidesCircleIdentity
+  Console/Commands/   ExpireRequests (requests:expire),
+                      BackfillCircleServices (circles:backfill-services)
   Enums/              CommunityType, LocatableType, LocationLevel, CircleStatus
   Filament/
+    Pages/            Dashboard (admin-only nav; redirects circle_admins)
     Resources/
       ContentBlocks/  ContentBlockResource + Pages/
       EmailTemplates/ EmailTemplateResource + Pages/
@@ -612,6 +629,8 @@ app/
   Http/Middleware/    SetLocaleFromBrowser
   Livewire/Auth/      Login, Register, ForgotPassword, ResetPassword
   Livewire/Communities/ CommunityPage
+    Services/         {Forum,News,Events,Media,Voting,Notifications,
+                      ManageLearning,ManageSocialMedia}ServiceContainer
   Livewire/Explore/   ExploreCommunities + sub-components
                       RequestLocationModal
   Models/Circles/     Circle, Service
@@ -979,14 +998,18 @@ Stateless — reads ?from= query parameter.
 Falls back to /explore if from is absent or invalid.
 
 ### Content
-- Community name + type icon
+- Community name + type icon (unchanged)
 - Geographic breadcrumb
 - Circle administrators (Circle::administrators() — comma-joined names, or a
   "no admins" string when empty; rendered via a #[Computed] method)
+- Member count (👥; admins count as members — see decision 15/16)
 - Description
-- Services as icon badges
-- Member count placeholder
-- Join Community button placeholder
+- Service TABS (badges removed) — every attached service with a
+  container_component is a tab, ordered per defaultServices() when the
+  circleable implements HasDefaultServices, else attachment order; first tab
+  active; active container rendered via <livewire:dynamic-component>. No #[Url]
+  sync yet (TODO). See decision 16.
+- Join Community button placeholder (right-aligned)
 
 Type-specific nested components: future work (TODO).
 
