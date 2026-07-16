@@ -133,7 +133,7 @@
             @if ($this->rightColumnCircle)
                 {{-- Same card component/styling used for other community types. --}}
                 <div class="mt-auto">
-                    <livewire:explore.community-card :circle="$this->rightColumnCircle" :from="$this->exploreUrl" :is-member="$this->viewerIsMemberOf($this->rightColumnCircle->id)" :key="'location-card-'.$this->rightColumnCircle->id" />
+                    <livewire:explore.community-card :circle="$this->rightColumnCircle" :from="$this->exploreUrl" :is-member="$this->viewerIsMemberOf($this->rightColumnCircle->id)" :member-count="$this->memberCountFor($this->rightColumnCircle->id)" :key="'location-card-'.$this->rightColumnCircle->id" />
                 </div>
             @else
                 <div class="mt-auto flex min-h-40 items-center justify-center rounded-lg border border-dashed border-border-muted bg-surface p-10 text-center text-sm text-muted">
@@ -185,6 +185,7 @@
                     :selected-circle-id="$selectedCircleId"
                     :from="$this->exploreUrl"
                     :member-circle-ids="$this->memberCircleIds"
+                    :member-counts="$this->memberCounts"
                 />
             @elseif ($this->typeCommunitiesCountBelow > 0)
                 <x-explore.empty-state

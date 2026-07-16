@@ -229,4 +229,13 @@ class CircleMembershipTest extends TestCase
         Livewire::test(CommunityCard::class, ['circle' => $circle, 'isMember' => true])->assertSee('Enter');
         Livewire::test(CommunityCard::class, ['circle' => $circle, 'isMember' => false])->assertSee('Visit');
     }
+
+    public function test_community_card_shows_the_member_count_passed_in(): void
+    {
+        $circle = $this->makeCampaignCircle();
+
+        // Count is passed in (batch-loaded by the list), never queried per-card.
+        Livewire::test(CommunityCard::class, ['circle' => $circle, 'memberCount' => 5])
+            ->assertSee('5 members');
+    }
 }

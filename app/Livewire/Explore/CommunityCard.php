@@ -17,6 +17,10 @@ class CommunityCard extends Component
         "Enter" vs "Visit"). Passed in from the list; never queried per-card. */
     public bool $isMember = false;
 
+    /** Active member count for this circle. Batch-loaded by the list (one grouped
+        query keyed by circle_id); never queried per-card. */
+    public int $memberCount = 0;
+
     public function icon(): string
     {
         return match ($this->circle->circleable_type) {

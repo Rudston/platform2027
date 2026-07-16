@@ -245,6 +245,9 @@ overrides `allowedInternalRoles()` → `['organisation_member']`.
   **Visit** (otherwise). Membership is batch-loaded ONCE per request in
   `ExploreCommunities::memberCircleIds()` (a small set — active memberships are
   capped) and read in-memory via `viewerIsMemberOf()`; never a per-card query.
+  The card's member count is likewise batch-loaded — `memberCounts()` runs ONE
+  grouped query keyed by `circle_id` for the displayed cards, read via
+  `memberCountFor()`; passed in as `:member-count` (no per-card query).
 - **Filament:** `CircleMembershipResource` (Governance, admin/superadmin only) —
   **read-only** list of all memberships, filterable by circle/user and
   active/closed. No create/edit.

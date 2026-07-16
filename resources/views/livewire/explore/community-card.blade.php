@@ -13,7 +13,7 @@
     <p class="mt-1 line-clamp-2 text-sm text-muted">{{ $circle->description }}</p>
 
     <div class="mt-4 flex items-center justify-between">
-        <span class="text-xs text-muted">{{ __('communities.card.members', ['count' => 0]) }}</span>
+        <span class="text-xs text-muted">{{ __('communities.card.members', ['count' => $memberCount]) }}</span>
         <div class="flex items-center gap-2">
             {{-- Pending badge: only pending circles reach the card (admins/superadmins). --}}
             @if ($circle->status === \App\Enums\CircleStatus::Pending)

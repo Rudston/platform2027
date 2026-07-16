@@ -870,9 +870,10 @@ Shown in all states (empty and non-empty):
 - LocalMunicipality:    "LM"
 - City/Metro:           "City" (or "Metro" if locatable->metropolis)
 
-Member count on the CARD is still a placeholder (0) — a real count here would
-be a per-card query in list views. The community PAGE shows the real count
-(CommunityPage::memberCount() = active circle_memberships).
+Member count is the real active-membership count. Cards get it batch-loaded by
+the list (ExploreCommunities::memberCounts() — one grouped query keyed by
+circle_id, passed in as :member-count; never a per-card query). The community
+PAGE uses CommunityPage::memberCount() (active circle_memberships).
 
 ---
 

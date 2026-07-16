@@ -114,6 +114,42 @@ class ExploreCommunities extends Component
         return in_array($circleId, $this->memberCircleIds, true);
     }
 
+    /**
+     * Active member counts for the circles shown as cards (bottom grid + the
+     * right-column card), keyed by circle_id. ONE grouped query; cards read it
+     * in-memory via memberCountFor() — never a per-card query.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function memberCounts(): array
+    {
+        $ids = $this->typeCommunities->pluck('id');
+
+        if ($this->rightColumnCircle) {
+            $ids = $ids->push($this->rightColumnCircle->id);
+        }
+
+        $ids = $ids->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return CircleMembership::query()
+            ->whereNull('left_at')
+            ->whereIn('circle_id', $ids)
+            ->selectRaw('circle_id, count(*) as aggregate')
+            ->groupBy('circle_id')
+            ->pluck('aggregate', 'circle_id')
+            ->all();
+    }
+
+    public function memberCountFor(int $circleId): int
+    {
+        return (int) ($this->memberCounts[$circleId] ?? 0);
+    }
+
     #[Computed]
     public function selectedCircle(): ?Circle
     {
