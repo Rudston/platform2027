@@ -39,7 +39,11 @@
                 </button>
 
                 @auth
-                    <span class="text-muted">{{ auth()->user()?->name }}</span>
+                    @php($navUser = auth()->user())
+                    @if ($navUser?->hasAnyRole(['admin', 'superadmin']))
+                        <a href="{{ url('/admin') }}" class="font-medium hover:underline">{{ __('navigation.admin') }}</a>
+                    @endif
+                    <span class="text-muted">{{ $navUser?->name }}</span>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit"

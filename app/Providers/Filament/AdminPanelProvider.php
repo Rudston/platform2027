@@ -11,6 +11,8 @@ use App\Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -33,6 +35,12 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Amber,
             ])
+            // Render the site top-bar at the top of every admin page (matches
+            // the main layout's nav; self-contained styling — see the view).
+            ->renderHook(
+                PanelsRenderHook::BODY_START,
+                fn (): View => view('filament.top-bar'),
+            )
             // Sidebar group for platform-management resources (added later).
             ->navigationGroups([
                 NavigationGroup::make('Platform'),
