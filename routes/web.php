@@ -8,6 +8,7 @@ use App\Livewire\Auth\Login;
 use App\Livewire\Auth\Register;
 use App\Livewire\Auth\ResetPassword;
 use App\Livewire\Communities\CommunityPage;
+use App\Livewire\Communities\ForumGroupPage;
 use App\Livewire\Explore\ExploreCommunities;
 use Illuminate\Support\Facades\Route;
 
@@ -24,6 +25,12 @@ Route::get('/locale/{locale}', LocaleController::class)->name('locale.update');
 
 // Single community (circle) full page. Public for now — permissions later.
 Route::get('/communities/{circle}', CommunityPage::class)->name('communities.show');
+
+// A forum group's Discussions page. scopeBindings() resolves {forumGroup:slug}
+// within {circle} (slugs are unique per circle, not globally).
+Route::get('/communities/{circle}/forums/{forumGroup:slug}', ForumGroupPage::class)
+    ->scopeBindings()
+    ->name('communities.forums.show');
 
 /*
 |--------------------------------------------------------------------------

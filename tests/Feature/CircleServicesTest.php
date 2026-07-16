@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Contracts\Circles\HasDefaultServices;
 use App\Enums\CommunityType;
 use App\Livewire\Communities\CommunityPage;
+use App\Livewire\Communities\Services\EventsServiceContainer;
 use App\Livewire\Communities\Services\ForumServiceContainer;
 use App\Livewire\Communities\Services\NewsServiceContainer;
 use App\Models\Circles\Circle;
@@ -228,11 +229,12 @@ class CircleServicesTest extends TestCase
     {
         $circle = $this->makeLocationCircle();
 
+        // Still-placeholder containers (Forum now has its own real UI + test).
         Livewire::test(NewsServiceContainer::class, ['circle' => $circle])
             ->assertSee('NewsServiceContainer')
             ->assertSee('circle #'.$circle->id);
 
-        Livewire::test(ForumServiceContainer::class, ['circle' => $circle])
-            ->assertSee('ForumServiceContainer');
+        Livewire::test(EventsServiceContainer::class, ['circle' => $circle])
+            ->assertSee('EventsServiceContainer');
     }
 }

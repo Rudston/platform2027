@@ -292,6 +292,54 @@ A claimed internal role is NOT trusted until the org contact confirms it.
 
 ---
 
+## Forums (groups)
+
+The real implementation behind the `ForumService` / `ForumServiceContainer`
+skeleton. **This pass = groups only** (overview + create/edit/deactivate).
+Discussion list/detail UI, join, moderation, pin/lock are deferred.
+
+### Tables & models
+- **forum_groups** (`app/Models/Forums/ForumGroup.php`): `circle_id` (FK cascade),
+  `created_by` (FK users, **nullable + nullOnDelete** — preserve content if the
+  user is deleted; SET NULL requires nullable), `name`, `slug` (nullable),
+  `description`, `visibility`, `settings` (json), `status`, `archived_at`, soft
+  deletes. **Unique (circle_id, slug)** — slugs are per-circle, NOT global.
+  belongsTo Circle + creator (User); hasMany discussions.
+- **forum_discussions** (`ForumDiscussion`): `forum_group_id` (FK cascade),
+  `created_by` (nullable FK), `title`, `content`, `slug`, `is_pinned`,
+  `is_locked`, `status`, `moderation_status`, `moderation_reason`, soft deletes,
+  FULLTEXT(title, content) **MySQL-only** (guarded — sqlite tests skip it). No UI
+  reads/writes it yet; it exists so the discussion-count stats are real now.
+- **Enums** (`app/Enums/Forums/`, plain backed like CircleStatus):
+  `ForumGroupVisibility` (public/private/invite-only), `ForumGroupStatus`
+  (active/deactivated/archived), `ForumDiscussionStatus` (active/deactivated),
+  `ForumDiscussionModerationStatus` (pending/approved/rejected). Cast on the models.
+
+### Service & UI
+- **ForumService** (the `CircleServiceContract` handler) now holds the writes:
+  `createGroup`, `updateGroup` (slug kept stable on edit), `deactivateGroup`,
+  `slugFor`/`slugTaken`.
+- **ForumServiceContainer** (the Forums tab): stats (Total Groups, Participants
+  [hardcoded 0 — later], real Total Discussions), search (name LIKE) + status
+  filter (default = active only), group grid. Create/Manage/⋯-menu gated by
+  `$this->canManage`. Reads via computeds; writes via ForumService.
+- **ForumGroupModal** (wire-elements `ModalComponent`, opened via `openModal`):
+  create/edit form (name, description, visibility); friendly slug-collision
+  error (not a raw DB error); manage-gated in `save()`. The community page hosts
+  `<livewire:wire-elements-modal />`.
+- **Discussions page**: `GET /communities/{circle}/forums/{forumGroup:slug}`
+  (route `communities.forums.show`, **`->scopeBindings()`** so the slug resolves
+  within the circle), `ForumGroupPage` — placeholder body this pass, but real
+  route + circle-scoped binding + stateless `?from=` back-link.
+
+### Authorization (reused, not re-stubbed)
+`Circle::isManageableBy(?User): bool` = admin/superadmin OR circle_admin of THIS
+circle — composes the existing `Circle::administeredBy()` primitive (the same
+one RequestResource uses). Both consumers rest on `administeredBy`; no parallel
+mechanism. (RequestResource keeps its own subtree-based inline composition.)
+
+---
+
 ## Internationalisation
 
 ### Key decisions

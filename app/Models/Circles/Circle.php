@@ -7,6 +7,7 @@ use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\Communication\Request;
+use App\Models\Forums\ForumGroup;
 use App\Models\User;
 use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Database\Eloquent\Builder;
@@ -522,6 +523,31 @@ class Circle extends Model
                     ->whereNotNull("{$modelHasRoles}.{$teamKey}"),
             )
             ->get();
+    }
+
+    /**
+     * Whether $user may MANAGE this circle: a global admin/superadmin, or a
+     * circle_admin of THIS circle. Composes the existing administeredBy()
+     * primitive — the single authorization check reused by both Filament and
+     * public-facing components (e.g. the Forums tab).
+     */
+    public function isManageableBy(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'superadmin'])) {
+            return true;
+        }
+
+        return static::administeredBy($user)->contains(fn (Circle $c) => $c->id === $this->id);
+    }
+
+    /** Forum groups created under this circle's Forums tab. */
+    public function forumGroups(): HasMany
+    {
+        return $this->hasMany(ForumGroup::class);
     }
 
     /**

@@ -171,9 +171,27 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     Filament CircleMembershipResource (Governance, admin/superadmin).
     circles:backfill-admin-memberships (idempotent, manual): gives existing
     circle_admins a membership; org-community admins get organisation_member.
-    NOTE: the "Forums Groups overview visibility" addendum was NOT actionable —
-    no ForumGroup/forum_groups/visibility exists yet (only the skeleton
-    ForumServiceContainer); deferred until a Forums groups system is built.
+    (The forum-groups system now exists — see decision 20. Membership-BASED
+    forum visibility filtering [$isVisitor gating public vs private groups] is
+    still deferred to a later Forums pass.)
+
+19. **RequestType enum + org-member-claim flow** — see the CLAUDE.md "Enums" +
+    membership sections (introduced alongside decision 18's approval work).
+
+20. **Forums groups (overview + CRUD)** — real implementation behind
+    ForumService/ForumServiceContainer. forum_groups + forum_discussions tables
+    (created_by nullable+nullOnDelete; forum_groups unique per (circle_id,slug);
+    forum_discussions FULLTEXT is MySQL-only/guarded). Models in app/Models/Forums;
+    4 plain enums in app/Enums/Forums (ForumGroupVisibility/Status,
+    ForumDiscussionStatus/ModerationStatus). ForumService does the writes
+    (create/update/deactivate + slug). ForumServiceContainer tab: stats (Total
+    Groups, Participants=0 stub, real Total Discussions), search + status filter
+    (default active), gated Create/Manage via Circle::isManageableBy() (composes
+    the existing administeredBy() primitive). Create/edit via a wire-elements
+    ForumGroupModal (friendly slug-collision error). Discussions page at
+    /communities/{circle}/forums/{forumGroup:slug} (scopeBindings, ?from=
+    back-link) — placeholder body this pass. Deferred: discussion list/detail,
+    join, moderation, pin/lock, membership-based visibility filtering.
 
 18. **RequestType enum + organisation-member-claim flow** — requests.type is now
     backed by App\Enums\RequestType (cast on Request): OrganisationApproval,

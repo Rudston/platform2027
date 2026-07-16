@@ -203,4 +203,7 @@
         {{-- Future: type-specific panels (Organisation / Campaign / Course /
              ThemeCommunity / Event / LocationCommunity) slot in below here. --}}
     </div>
+
+    {{-- Modal host (wire-elements/modal) — used by the Forums create/edit modal. --}}
+    <livewire:wire-elements-modal />
 </div>
