@@ -15,6 +15,12 @@ use Illuminate\Support\Facades\DB;
  * circle_memberships row yet. Admins of an organisation community get the
  * 'organisation_member' internal role. Idempotent, adds-only — safe to re-run.
  * Manual/occasional maintenance; NOT scheduled.
+ *
+ * ONE-OFF MIGRATION AID: this should not be needed going forward. New
+ * circle_admins now receive a membership automatically at approval time
+ * (RequestController::approve() and RequestResource::approveAction()). Once the
+ * pre-membership-system data has been backfilled, this command is only useful
+ * if legacy circle_admins are created by some other path that skips that grant.
  */
 class BackfillAdminMemberships extends Command
 {
