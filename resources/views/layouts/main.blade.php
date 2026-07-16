@@ -29,8 +29,21 @@
                 @endauth
             </div>
 
-            {{-- Right: theme toggle + auth actions --}}
+            {{-- Right: language switcher + theme toggle + auth actions --}}
             <div class="flex items-center gap-3">
+                {{-- Language switcher (available to guests too) --}}
+                @php($localeLabels = ['en' => 'EN', 'pt_BR' => 'PT'])
+                <div class="flex items-center gap-1 text-xs">
+                    @foreach (config('app.supported_locales', []) as $loc)
+                        <a href="{{ route('locale.update', $loc) }}"
+                           @class([
+                               'rounded px-1.5 py-1 transition',
+                               'font-semibold text-main' => app()->getLocale() === $loc,
+                               'text-muted hover:text-main' => app()->getLocale() !== $loc,
+                           ])>{{ $localeLabels[$loc] ?? strtoupper($loc) }}</a>
+                    @endforeach
+                </div>
+
                 <button type="button" x-on:click="darkMode = !darkMode"
                         class="rounded-lg border border-border-muted px-2 py-1.5 text-xs font-semibold transition hover:opacity-80"
                         aria-label="Toggle dark mode">

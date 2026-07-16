@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LogoutController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\RequestController;
 use App\Livewire\Auth\ForgotPassword;
 use App\Livewire\Auth\Login;
@@ -17,6 +18,9 @@ Route::get('/', function () {
 Route::livewire('/counter', 'counter');
 
 Route::get('/explore', ExploreCommunities::class)->name('explore');
+
+// Language switcher — sets the session locale, then redirects back.
+Route::get('/locale/{locale}', LocaleController::class)->name('locale.update');
 
 // Single community (circle) full page. Public for now — permissions later.
 Route::get('/communities/{circle}', CommunityPage::class)->name('communities.show');

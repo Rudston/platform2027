@@ -231,6 +231,15 @@ header → app default.
 Sets App::setLocale() AND Carbon::setLocale().
 Registered on web middleware group only.
 
+### Language switcher
+`LocaleController` (invokable) on `GET /locale/{locale}` (route
+`locale.update`) stores a supported locale in `session('locale')` and redirects
+back; the middleware applies it next request. Unsupported values ignored. UI:
+per-locale links in the main nav (`layouts/main.blade.php`) AND the Filament
+admin top-bar (`resources/views/filament/top-bar.blade.php`), highlighting the
+active locale. Shown to guests too (Explore is public). No `users.locale`
+column yet, so preference is session-scoped.
+
 ### Lang file structure
 ```
 lang/en/
@@ -663,7 +672,6 @@ On failure: silent.
   app events yet (the organisation-approval flow IS fully wired)
 - Map view (SVG sourcing in progress)
 - User profile pages + saved locale preference
-- Language switcher UI
 - CommunityPage type-specific nested components
 - Notification, voting, social media, learning service implementations
 - Payment/subscription system

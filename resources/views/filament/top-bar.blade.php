@@ -19,7 +19,13 @@
     :is(html.dark) .site-top-bar__btn{border-color:#334155}
     .site-top-bar__btn:hover{opacity:.8}
     .site-top-bar form{margin:0}
+    .site-top-bar__lang{display:flex;align-items:center;gap:.25rem;font-size:.75rem}
+    .site-top-bar__lang a{padding:.125rem .375rem;border-radius:.25rem}
+    .site-top-bar__lang a.is-active{font-weight:600}
+    .site-top-bar__lang a:not(.is-active){color:#6b7280}
+    :is(html.dark) .site-top-bar__lang a:not(.is-active){color:#9ca3af}
 </style>
+@php($localeLabels = ['en' => 'EN', 'pt_BR' => 'PT'])
 <nav class="site-top-bar">
     <div class="site-top-bar__inner">
         <div class="site-top-bar__group">
@@ -28,6 +34,12 @@
             <a href="{{ route('dashboard') }}">{{ __('navigation.dashboard') }}</a>
         </div>
         <div class="site-top-bar__right">
+            <span class="site-top-bar__lang">
+                @foreach (config('app.supported_locales', []) as $loc)
+                    <a href="{{ route('locale.update', $loc) }}"
+                       class="{{ app()->getLocale() === $loc ? 'is-active' : '' }}">{{ $localeLabels[$loc] ?? strtoupper($loc) }}</a>
+                @endforeach
+            </span>
             @if ($navUser?->hasAnyRole(['admin', 'superadmin']))
                 <a href="{{ url('/admin') }}" class="site-top-bar__admin">{{ __('navigation.admin') }}</a>
             @endif

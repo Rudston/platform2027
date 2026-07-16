@@ -236,6 +236,13 @@ Priority chain (highest to lowest):
 Sets both `App::setLocale()` and `Carbon::setLocale()`.
 Runs on web middleware group only (covers Livewire XHR automatically).
 
+### Language switcher
+LocaleController (invokable) on GET /locale/{locale} (route locale.update) puts
+a supported locale in session('locale') and redirects back; middleware applies
+it next request (unsupported ignored). Per-locale links in the main nav AND the
+Filament admin top-bar highlight the active locale; shown to guests too. No
+users.locale column yet — session-scoped.
+
 ### config/app.php additions
 ```php
 'supported_locales' => ['en', 'pt_BR'],
@@ -553,7 +560,6 @@ requests to expired; scheduled daily in routes/console.php.
   organisation-staff role during onboarding is future work
 - Map view for Explore page (SVG sourcing in progress)
 - User profile pages with saved locale preference
-- Language switcher UI
 - Notification, voting, social media, learning systems
   (service stubs exist, full implementation pending)
 - Payment/subscription system
