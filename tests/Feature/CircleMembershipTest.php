@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\CommunityType;
+use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Explore\CommunityCard;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
@@ -203,6 +204,22 @@ class CircleMembershipTest extends TestCase
         $membership = $circle->joinAsMember($user, internalRole: 'organisation_member');
 
         $this->assertSame('organisation_member', $membership->internal_role);
+    }
+
+    public function test_member_count_reflects_active_memberships(): void
+    {
+        $circle = $this->makeCampaignCircle();
+        $a = User::factory()->create();
+        $b = User::factory()->create();
+        $circle->joinAsMember($a);
+        $circle->joinAsMember($b);
+
+        $page = new CommunityPage;
+        $page->circle = $circle;
+        $this->assertSame(2, $page->memberCount());
+
+        $circle->leave($a);
+        $this->assertSame(1, $page->memberCount());
     }
 
     public function test_community_card_label_reflects_membership(): void

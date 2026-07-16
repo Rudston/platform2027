@@ -124,16 +124,14 @@ class CommunityPage extends Component
     }
 
     /**
-     * Displayed member count. The membership system isn't built yet, so the
-     * base is a placeholder 0; a circle_admin counts as a member, so add one
-     * when the circle has an administrator.
+     * Displayed member count — active rows in circle_memberships. Admins are
+     * themselves members now (granted at approval / via the backfill command),
+     * so they're already included; no separate admin adjustment needed.
      */
     #[Computed]
     public function memberCount(): int
     {
-        $baseMembers = 0; // TODO: real count once the membership system exists.
-
-        return $baseMembers + ($this->administrators->isNotEmpty() ? 1 : 0);
+        return $this->circle->memberships()->whereNull('left_at')->count();
     }
 
     /**
