@@ -207,6 +207,7 @@ class CommunityPage extends Component
             ->with('user')
             ->get()
             ->filter->hasApprovedInternalRole()
+            ->sortBy(fn ($m) => mb_strtolower((string) $m->user?->name))
             ->values();
     }
 

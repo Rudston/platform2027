@@ -191,18 +191,23 @@ class OrganisationMemberClaimTest extends TestCase
     {
         $circle = $this->makeOrgCircle();
 
-        $approved = User::factory()->create(['name' => 'Approved One']);
+        // Two approved members created out of alphabetical order + one pending.
+        $zoe = User::factory()->create(['name' => 'Zoe Approved']);
+        $amy = User::factory()->create(['name' => 'amy approved']); // lower-case: case-insensitive sort
         $pending = User::factory()->create(['name' => 'Pending One']);
 
         $circle->joinAsMember($pending, internalRole: 'organisation_member'); // stays pending
-        $approvedMembership = $circle->joinAsMember($approved, internalRole: 'organisation_member');
-        $approvedMembership->update(['metadata' => ['internal_role_approved' => 'approved']]);
+        foreach ([$zoe, $amy] as $user) {
+            $circle->joinAsMember($user, internalRole: 'organisation_member')
+                ->update(['metadata' => ['internal_role_approved' => 'approved']]);
+        }
 
         $page = new CommunityPage;
         $page->circle = $circle;
         $names = $page->organisationMembers()->map(fn ($m) => $m->user->name)->all();
 
-        $this->assertContains('Approved One', $names);
+        // Approved only, alphabetical (case-insensitive): amy before Zoe.
+        $this->assertSame(['amy approved', 'Zoe Approved'], $names);
         $this->assertNotContains('Pending One', $names);
     }
 
