@@ -18,8 +18,12 @@
 
         {{-- Top meta: location / admins / members on the left; for organisation
              communities, the organisation's contact details on the right. --}}
-        <div class="mt-3 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div class="space-y-2">
+        {{-- For organisation communities the top row splits into two halves:
+             left = the existing columns, right = approved organisation members. --}}
+        <div @class(['mt-3', 'grid gap-6 lg:grid-cols-2' => (bool) $this->organisation])>
+            {{-- LEFT half: location/admins/members + org contact columns --}}
+            <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+                <div class="space-y-2">
                 {{-- Geographic breadcrumb (temporary: single location line) --}}
                 <div class="flex items-center gap-1.5 text-sm text-muted">
                     <span aria-hidden="true">📍</span>
@@ -62,6 +66,21 @@
                             <a href="{{ $org->website }}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">{{ $org->website }}</a>
                         </div>
                     @endif
+                </div>
+            @endif
+            </div>{{-- /left half --}}
+
+            {{-- RIGHT half: approved organisation members (org communities only) --}}
+            @if ($this->organisation)
+                <div>
+                    <p class="text-sm font-medium text-main">{{ __('communities.page.organisation_members') }}:</p>
+                    <ul class="mt-2 max-h-40 space-y-1 overflow-y-auto pr-1 text-sm text-muted">
+                        @forelse ($this->organisationMembers as $member)
+                            <li>{{ $member->user?->name ?? '—' }}</li>
+                        @empty
+                            <li>{{ __('communities.page.no_organisation_members') }}</li>
+                        @endforelse
+                    </ul>
                 </div>
             @endif
         </div>

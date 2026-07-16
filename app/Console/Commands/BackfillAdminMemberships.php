@@ -79,6 +79,9 @@ class BackfillAdminMemberships extends Command
                         'user_id' => $row->user_id,
                         'internal_role' => $internalRole,
                         'joined_at' => now(),
+                        // Admins are trusted, so the role is approved outright —
+                        // required for hasApprovedInternalRole() / the members list.
+                        'metadata' => $internalRole !== null ? ['internal_role_approved' => 'approved'] : null,
                     ]);
 
                     $created++;

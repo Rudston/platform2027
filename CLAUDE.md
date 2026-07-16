@@ -274,6 +274,10 @@ A claimed internal role is NOT trusted until the org contact confirms it.
   respondent = the org's contact email), and emails the contact
   (`email.organisation_member_claim_request`) — the user IS a member right away;
   only the ROLE is gated.
+- A **trusted** role grant (`skipChecks` — the org creator at approval, and the
+  `circles:backfill-admin-memberships` command) sets `internal_role_approved =
+  'approved'` outright (no claim). Any assigned `internal_role` therefore always
+  carries a status; a plain member (no role) has null metadata.
 - `RequestController` (same token routes) dispatches on type: approve →
   `internal_role_approved = 'approved'` + `email.organisation_member_claim_approved`
   to the claimer; reject → `'rejected'` (internal_role KEPT for audit, never
@@ -429,6 +433,12 @@ CommunityPage reads ?from= for back link. Falls back to /explore.
 Name + type icon, geographic breadcrumb, **circle administrators** (see
 below), member count (👥; admins count as members), description, **service
 tabs**, Join button (stub, right-aligned).
+
+For **organisation communities** the top row splits into two halves: left =
+location/admins/members + the org contact (contact/email/website); right =
+"Organisation members" — the APPROVED `organisation_member`s
+(`CommunityPage::organisationMembers()`, filtered by `hasApprovedInternalRole`),
+in an `overflow-y` list. Non-org communities keep the single (unsplit) top row.
 
 **Service tabs** (replaced the old service icon-badges — badges are gone):
 every attached service with a non-null `container_component` renders as a tab,

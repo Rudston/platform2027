@@ -1059,6 +1059,12 @@ Falls back to /explore if from is absent or invalid.
   sync yet (TODO). See decision 16.
 - Join Community button placeholder (right-aligned)
 
+For ORGANISATION communities the top row splits into two halves: left = the
+existing location/admins/members + org contact columns; right = "Organisation
+members" listing the APPROVED organisation_members
+(CommunityPage::organisationMembers(), filtered via hasApprovedInternalRole),
+in an overflow-y list. Non-org communities keep the single unsplit top row.
+
 Type-specific nested components: future work (TODO).
 
 ---

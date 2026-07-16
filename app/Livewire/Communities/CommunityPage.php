@@ -191,6 +191,25 @@ class CommunityPage extends Component
             : null;
     }
 
+    /**
+     * Active members of this circle whose 'organisation_member' internal role
+     * has been APPROVED (uses hasApprovedInternalRole — never internal_role
+     * alone). Only meaningful for organisation communities.
+     *
+     * @return Collection<int, CircleMembership>
+     */
+    #[Computed]
+    public function organisationMembers(): Collection
+    {
+        return $this->circle->memberships()
+            ->whereNull('left_at')
+            ->where('internal_role', 'organisation_member')
+            ->with('user')
+            ->get()
+            ->filter->hasApprovedInternalRole()
+            ->values();
+    }
+
     /** Type icon for the circle's community type (mirrors CommunityCard). */
     public function icon(): string
     {

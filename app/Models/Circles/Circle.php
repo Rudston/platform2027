@@ -331,7 +331,13 @@ class Circle extends Model
         // role is gated as 'pending'.
         $needsClaim = $internalRole === 'organisation_member' && ! $skipChecks;
 
-        $membership = DB::transaction(function () use ($user, $internalRole, $dropMembership, $needsClaim): CircleMembership {
+        // An assigned internal role carries an approval status: a trusted direct
+        // grant (skipChecks — e.g. the org creator/admin at approval time) is
+        // 'approved' immediately; a normal claim starts 'pending' until the org
+        // contact confirms it. No role → no status.
+        $roleStatus = $internalRole === null ? null : ($skipChecks ? 'approved' : 'pending');
+
+        $membership = DB::transaction(function () use ($user, $internalRole, $dropMembership, $roleStatus): CircleMembership {
             if ($dropMembership !== null && $dropMembership->left_at === null) {
                 $dropMembership->update(['left_at' => now()]);
             }
@@ -340,7 +346,7 @@ class Circle extends Model
                 'user_id' => $user->id,
                 'internal_role' => $internalRole,
                 'joined_at' => now(),
-                'metadata' => $needsClaim ? ['internal_role_approved' => 'pending'] : null,
+                'metadata' => $roleStatus !== null ? ['internal_role_approved' => $roleStatus] : null,
             ]);
         });
 

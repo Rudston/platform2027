@@ -80,9 +80,11 @@ class BackfillAdminMembershipsTest extends TestCase
         Artisan::call('circles:backfill-admin-memberships');
         $this->assertStringContainsString('2 admin memberships backfilled', Artisan::output());
 
-        // Organisation-community admin → organisation_member.
-        $this->assertSame('organisation_member', CircleMembership::where('circle_id', $orgCircle)
-            ->where('user_id', $orgAdmin->id)->whereNull('left_at')->value('internal_role'));
+        // Organisation-community admin → organisation_member, approved outright.
+        $orgMembership = CircleMembership::where('circle_id', $orgCircle)
+            ->where('user_id', $orgAdmin->id)->whereNull('left_at')->first();
+        $this->assertSame('organisation_member', $orgMembership->internal_role);
+        $this->assertTrue($orgMembership->hasApprovedInternalRole());
 
         // Non-organisation admin → null role.
         $this->assertNull(CircleMembership::where('circle_id', $campaignCircle)

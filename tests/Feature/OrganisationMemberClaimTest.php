@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\CommunityType;
 use App\Enums\RequestType;
+use App\Livewire\Communities\CommunityPage;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Communication\Request;
@@ -148,10 +149,12 @@ class OrganisationMemberClaimTest extends TestCase
         $circle = $this->makeOrgCircle();
         $creator = User::factory()->create();
 
-        // The trusted approval-hook grant (skipChecks) — must NOT open a claim.
+        // The trusted approval-hook grant (skipChecks) — role is approved
+        // outright, and it must NOT open a claim request.
         $membership = $circle->joinAsMember($creator, internalRole: 'organisation_member', skipChecks: true);
 
-        $this->assertNull($membership->fresh()->metadata);
+        $this->assertSame('approved', $membership->fresh()->metadata['internal_role_approved']);
+        $this->assertTrue($membership->fresh()->hasApprovedInternalRole());
         $this->assertSame(0, Request::where('type', RequestType::OrganisationMemberClaim->value)->count());
     }
 
@@ -182,6 +185,25 @@ class OrganisationMemberClaimTest extends TestCase
         $this->assertSame('rejected', $fresh->metadata['internal_role_approved']);
         $this->assertSame('organisation_member', $fresh->internal_role); // kept for audit
         $this->assertFalse($fresh->hasApprovedInternalRole());
+    }
+
+    public function test_community_page_lists_only_approved_org_members(): void
+    {
+        $circle = $this->makeOrgCircle();
+
+        $approved = User::factory()->create(['name' => 'Approved One']);
+        $pending = User::factory()->create(['name' => 'Pending One']);
+
+        $circle->joinAsMember($pending, internalRole: 'organisation_member'); // stays pending
+        $approvedMembership = $circle->joinAsMember($approved, internalRole: 'organisation_member');
+        $approvedMembership->update(['metadata' => ['internal_role_approved' => 'approved']]);
+
+        $page = new CommunityPage;
+        $page->circle = $circle;
+        $names = $page->organisationMembers()->map(fn ($m) => $m->user->name)->all();
+
+        $this->assertContains('Approved One', $names);
+        $this->assertNotContains('Pending One', $names);
     }
 
     public function test_has_approved_internal_role_gate(): void
