@@ -175,6 +175,22 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     no ForumGroup/forum_groups/visibility exists yet (only the skeleton
     ForumServiceContainer); deferred until a Forums groups system is built.
 
+18. **RequestType enum + organisation-member-claim flow** — requests.type is now
+    backed by App\Enums\RequestType (cast on Request): OrganisationApproval,
+    CircleJoin/LocationRequest/CircleAssociation (reserved — filter/badge only),
+    OrganisationMemberClaim. A non-creator claiming internal_role
+    'organisation_member' (joinAsMember, skipChecks=false) becomes a member
+    immediately but with metadata.internal_role_approved='pending', and an
+    OrganisationMemberClaim Request (requestable = the membership) is opened to
+    the org contact (email.organisation_member_claim_request). RequestController
+    dispatches approve/reject on type: approve → 'approved' + claim_approved
+    email to claimer; reject → 'rejected' (internal_role kept for audit) +
+    claim_rejected email. CircleMembership::hasApprovedInternalRole() is the ONLY
+    correct elevated-access check (never internal_role alone). Claim requests
+    show in the Governance Requests table but the Approve/Deny/Resend actions are
+    hidden for them (external/token-based only). Creator grants (skipChecks) do
+    NOT trigger the claim.
+
 ---
 
 ## Geographic Abstraction Layer (Multi-Country)
@@ -399,8 +415,9 @@ DB-backed, locale-aware transactional emails, editable in the admin panel.
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
 (updateOrCreate by key). English stubs, empty pt_BR (falls back). Keys:
 email.welcome, email.circle_invitation, email.password_reset,
-email.organisation_approval_request/confirmed/denied, and
-email.organisation_approval_admin_notice (7 total).
+email.organisation_approval_request/confirmed/denied,
+email.organisation_approval_admin_notice, and
+email.organisation_member_claim_request/approved/rejected (10 total).
 
 **Local mail:** MailHog via MAMP — SMTP localhost:1025, UI at
 http://localhost:8025/mailhog (note the /mailhog web path).
@@ -475,9 +492,10 @@ requests to expired; scheduled daily in routes/console.php.
 - ThemeCommunity circles (national + WC province + Eden DM)
 - 8 content blocks (via ContentBlockSeeder): 4 page-copy blocks + 4
   collapsible how-to blocks (community.how_to_add.{campaign,course,event,theme})
-- 7 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
+- 10 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
   password_reset + organisation_approval_request/confirmed/denied +
-  organisation_approval_admin_notice
+  organisation_approval_admin_notice +
+  organisation_member_claim_request/approved/rejected
 - Spatie roles: new_user, full_member, curator, trainer,
   admin, superadmin, circle_admin, circle_full_member, circle_visitor
 - 9 service stubs
@@ -644,7 +662,7 @@ app/
     CircleServiceContract (+ containerComponent()), ProvidesCircleIdentity
   Console/Commands/   ExpireRequests (requests:expire),
                       BackfillCircleServices (circles:backfill-services)
-  Enums/              CommunityType, LocatableType, LocationLevel, CircleStatus
+  Enums/              CommunityType, LocatableType, LocationLevel, CircleStatus, RequestType
   Filament/
     Pages/            Dashboard (admin-only nav; redirects circle_admins)
     Resources/

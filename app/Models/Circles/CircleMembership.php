@@ -48,4 +48,20 @@ class CircleMembership extends Model
     {
         return $this->left_at === null;
     }
+
+    /**
+     * Whether this membership's internal_role is TRUSTED — i.e. confirmed by the
+     * organisation's contact, not merely claimed.
+     *
+     * ALWAYS use this for elevated-access decisions (forum private-group
+     * visibility, etc.). NEVER check internal_role on its own: a role may be
+     * stored while its claim is still 'pending', or even 'rejected' (we keep the
+     * value for audit but must not trust it). metadata.internal_role_approved
+     * is the single source of truth for whether the role is honoured.
+     */
+    public function hasApprovedInternalRole(): bool
+    {
+        return $this->internal_role !== null
+            && ($this->metadata['internal_role_approved'] ?? null) === 'approved';
+    }
 }

@@ -6,7 +6,9 @@ use App\Contracts\Circles\HasDefaultServices;
 use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
+use App\Models\Communication\Request;
 use App\Models\User;
+use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -323,7 +325,13 @@ class Circle extends Model
             throw new \RuntimeException('User is not eligible to join this circle.');
         }
 
-        return DB::transaction(function () use ($user, $internalRole, $dropMembership): CircleMembership {
+        // A claimed 'organisation_member' role from a normal join (NOT the
+        // trusted approval-hook grant, which uses skipChecks) must be confirmed
+        // by the org contact. The user becomes a member immediately; only the
+        // role is gated as 'pending'.
+        $needsClaim = $internalRole === 'organisation_member' && ! $skipChecks;
+
+        $membership = DB::transaction(function () use ($user, $internalRole, $dropMembership, $needsClaim): CircleMembership {
             if ($dropMembership !== null && $dropMembership->left_at === null) {
                 $dropMembership->update(['left_at' => now()]);
             }
@@ -332,8 +340,50 @@ class Circle extends Model
                 'user_id' => $user->id,
                 'internal_role' => $internalRole,
                 'joined_at' => now(),
+                'metadata' => $needsClaim ? ['internal_role_approved' => 'pending'] : null,
             ]);
         });
+
+        if ($needsClaim) {
+            $this->requestInternalRoleClaim($user, $membership);
+        }
+
+        return $membership;
+    }
+
+    /**
+     * Open an external approval request for a claimed internal role and email
+     * the organisation's contact (mirrors the organisation-approval email). The
+     * membership already exists with internal_role_approved = 'pending'.
+     */
+    protected function requestInternalRoleClaim(User $user, CircleMembership $membership): void
+    {
+        $owner = $this->circleable;
+        $organisation = (is_object($owner) && method_exists($owner, 'organisation'))
+            ? $owner->organisation
+            : null;
+        $contactEmail = $organisation?->contact_email;
+
+        if (! $contactEmail) {
+            return; // no contact to confirm with — the claim stays pending
+        }
+
+        $request = Request::createForMemberClaim($user, $this, $membership, $contactEmail);
+
+        $variables = [
+            'contact_name' => (string) ($organisation->contact_person ?? ''),
+            'organisation_name' => (string) ($organisation->name ?? $this->name),
+            'claimer_name' => (string) $user->name,
+            'review_url' => route('requests.confirm', $request->token),
+            'expires_at' => $request->token_expires_at->format('d M Y'),
+        ];
+
+        try {
+            app(EmailServiceHandler::class)->sendTemplate('email.organisation_member_claim_request', $contactEmail, $variables);
+            $request->logEmail('email.organisation_member_claim_request', $contactEmail, 'sent');
+        } catch (\Throwable $e) {
+            $request->logEmail('email.organisation_member_claim_request', $contactEmail, 'failed', $e->getMessage());
+        }
     }
 
     /**

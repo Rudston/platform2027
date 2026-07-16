@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Requests;
 
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
+use App\Enums\RequestType;
 use App\Filament\Resources\Requests\Pages\ListRequests;
 use App\Filament\Resources\Requests\Pages\ViewRequest;
 use App\Models\Circles\Circle;
@@ -44,10 +45,11 @@ class RequestResource extends Resource
 
     /** @var array<string, string> */
     protected const TYPE_OPTIONS = [
-        'organisation_approval' => 'Organisation Approval',
-        'circle_join' => 'Circle Join',
-        'location_request' => 'Location Request',
-        'circle_association' => 'Circle Association',
+        RequestType::OrganisationApproval->value => 'Organisation Approval',
+        RequestType::CircleJoin->value => 'Circle Join',
+        RequestType::LocationRequest->value => 'Location Request',
+        RequestType::CircleAssociation->value => 'Circle Association',
+        RequestType::OrganisationMemberClaim->value => 'Organisation Member Claim',
     ];
 
     /** @var array<string, string> */
@@ -171,7 +173,11 @@ class RequestResource extends Resource
         return $schema
             ->components([
                 TextInput::make('type')
-                    ->formatStateUsing(fn (?string $state): string => $state ? Str::headline($state) : '')
+                    ->formatStateUsing(fn ($state): string => match (true) {
+                        $state instanceof RequestType => Str::headline($state->value),
+                        is_string($state) && $state !== '' => Str::headline($state),
+                        default => '',
+                    })
                     ->disabled(),
 
                 TextInput::make('status')
@@ -259,7 +265,7 @@ class RequestResource extends Resource
             ->label('Approve')
             ->icon('heroicon-o-check-circle')
             ->color('success')
-            ->visible(fn (Request $record): bool => $record->status === 'pending' && static::userMayActOn($record))
+            ->visible(fn (Request $record): bool => $record->status === 'pending' && $record->type !== RequestType::OrganisationMemberClaim && static::userMayActOn($record))
             ->requiresConfirmation()
             ->modalHeading('Approve request')
             ->modalDescription('Are you sure you want to manually approve this request? An email will be sent to the requester.')
@@ -311,7 +317,7 @@ class RequestResource extends Resource
             ->label('Deny')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
-            ->visible(fn (Request $record): bool => $record->status === 'pending' && static::userMayActOn($record))
+            ->visible(fn (Request $record): bool => $record->status === 'pending' && $record->type !== RequestType::OrganisationMemberClaim && static::userMayActOn($record))
             ->schema([
                 Textarea::make('response_note')
                     ->label('Reason (optional)')
@@ -352,7 +358,7 @@ class RequestResource extends Resource
             ->label('Resend')
             ->icon('heroicon-o-paper-airplane')
             ->color('gray')
-            ->visible(fn (Request $record): bool => in_array($record->status, ['pending', 'expired'], true) && static::userMayActOn($record))
+            ->visible(fn (Request $record): bool => in_array($record->status, ['pending', 'expired'], true) && $record->type !== RequestType::OrganisationMemberClaim && static::userMayActOn($record))
             ->requiresConfirmation()
             ->modalHeading('Resend approval email')
             ->modalDescription('This regenerates the approval link (valid for 7 days) and resends it to the respondent.')
@@ -422,12 +428,15 @@ class RequestResource extends Resource
             ->columns([
                 TextColumn::make('type')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => Str::headline($state))
-                    ->color(fn (string $state): string => match ($state) {
-                        'organisation_approval' => 'info',
-                        'circle_join' => 'success',
-                        'location_request' => 'warning',
-                        'circle_association' => 'primary',
+                    // $state may arrive as the RequestType enum (model cast) or
+                    // its string value — normalise to the value either way.
+                    ->formatStateUsing(fn ($state): string => Str::headline($state instanceof RequestType ? $state->value : (string) $state))
+                    ->color(fn ($state): string => match ($state instanceof RequestType ? $state->value : (string) $state) {
+                        RequestType::OrganisationApproval->value => 'info',
+                        RequestType::CircleJoin->value => 'success',
+                        RequestType::LocationRequest->value => 'warning',
+                        RequestType::CircleAssociation->value => 'primary',
+                        RequestType::OrganisationMemberClaim->value => 'info',
                         default => 'gray',
                     })
                     ->sortable(),

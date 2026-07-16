@@ -2,7 +2,9 @@
 
 namespace App\Models\Communication;
 
+use App\Enums\RequestType;
 use App\Models\Circles\Circle;
+use App\Models\Circles\CircleMembership;
 use App\Models\Organisation;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,6 +38,7 @@ class Request extends Model
     ];
 
     protected $casts = [
+        'type' => RequestType::class,
         'token_expires_at' => 'datetime',
         'responded_at' => 'datetime',
         'metadata' => 'array',
@@ -131,7 +134,7 @@ class Request extends Model
         array $metadata = [],
     ): self {
         return static::create([
-            'type' => 'organisation_approval',
+            'type' => RequestType::OrganisationApproval,
             'status' => 'pending',
             'direction' => 'external',
             'requester_id' => $requester->id,
@@ -142,6 +145,34 @@ class Request extends Model
             // Internal steward accountable for this request (notification only;
             // any admin/superadmin may still act). Null when none is found.
             'responsible_admin_id' => Circle::responsibleAdminFor($circle)?->id,
+            'token_expires_at' => now()->addDays(7),
+            'metadata' => array_merge($metadata, ['email_log' => []]),
+        ]);
+    }
+
+    /**
+     * Create an external organisation-member-claim request: a user has claimed
+     * the 'organisation_member' internal role on $membership, and the org's
+     * contact must confirm it. Token + expiry mirror createForOrganisation().
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    public static function createForMemberClaim(
+        User $requester,
+        Circle $circle,
+        CircleMembership $membership,
+        string $respondentEmail,
+        array $metadata = [],
+    ): self {
+        return static::create([
+            'type' => RequestType::OrganisationMemberClaim,
+            'status' => 'pending',
+            'direction' => 'external',
+            'requester_id' => $requester->id,
+            'circle_id' => $circle->id,
+            'requestable_type' => $membership->getMorphClass(),
+            'requestable_id' => $membership->getKey(),
+            'respondent_email' => $respondentEmail,
             'token_expires_at' => now()->addDays(7),
             'metadata' => array_merge($metadata, ['email_log' => []]),
         ]);

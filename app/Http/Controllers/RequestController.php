@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
+use App\Enums\RequestType;
 use App\Models\Circles\Circle;
+use App\Models\Circles\CircleMembership;
 use App\Models\Communication\Request as RequestModel;
 use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Http\Request;
@@ -38,17 +40,15 @@ class RequestController extends Controller
 
         return response()->view('requests.confirm', [
             'token' => $request->token,
-            'organisationName' => (string) ($request->requestable?->name ?? ''),
-            'requesterName' => (string) ($request->requester?->name ?? ''),
+            'requestType' => $request->type->value,
+            'organisationName' => $this->organisationNameFor($request),
+            'personName' => (string) ($request->requester?->name ?? ''),
             'platformName' => config('app.name'),
             'expiresAt' => $request->token_expires_at?->format('j M Y, H:i') ?? '',
         ]);
     }
 
-    /**
-     * Approve the request: activate the circle, grant the requester the
-     * circle_admin role, then notify both parties.
-     */
+    /** Approve the request — dispatched on its type. */
     public function approve(string $token): Response
     {
         $request = RequestModel::where('token', $token)->first();
@@ -59,6 +59,42 @@ class RequestController extends Controller
             ]);
         }
 
+        return match ($request->type) {
+            RequestType::OrganisationMemberClaim => $this->approveMemberClaim($request),
+            default => $this->approveOrganisation($request),
+        };
+    }
+
+    /** Deny/reject the request — dispatched on its type. */
+    public function deny(Request $httpRequest, string $token): Response
+    {
+        $request = RequestModel::where('token', $token)->first();
+
+        if (! $this->isActionable($request)) {
+            return response()->view('requests.expired', [
+                'platformName' => config('app.name'),
+            ]);
+        }
+
+        $validated = $httpRequest->validate([
+            'response_note' => ['nullable', 'string', 'max:500'],
+        ]);
+        $note = $validated['response_note'] ?? null;
+
+        return match ($request->type) {
+            RequestType::OrganisationMemberClaim => $this->rejectMemberClaim($request, $note),
+            default => $this->denyOrganisation($request, $note),
+        };
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Organisation-approval flow (activate circle + grant admin/membership)
+    |--------------------------------------------------------------------------
+    */
+
+    private function approveOrganisation(RequestModel $request): Response
+    {
         DB::transaction(function () use ($request): void {
             $request->update([
                 'status' => 'approved',
@@ -113,34 +149,20 @@ class RequestController extends Controller
         }
 
         return response()->view('requests.confirmed', [
+            'requestType' => $request->type->value,
             'organisationName' => $organisationName,
+            'personName' => (string) ($request->requester?->name ?? ''),
             'platformName' => config('app.name'),
         ]);
     }
 
-    /**
-     * Deny the request: record the denial (and optional note). The circle and
-     * organisation stay pending. The requester is notified.
-     */
-    public function deny(Request $httpRequest, string $token): Response
+    private function denyOrganisation(RequestModel $request, ?string $note): Response
     {
-        $request = RequestModel::where('token', $token)->first();
-
-        if (! $this->isActionable($request)) {
-            return response()->view('requests.expired', [
-                'platformName' => config('app.name'),
-            ]);
-        }
-
-        $validated = $httpRequest->validate([
-            'response_note' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        DB::transaction(function () use ($request, $validated): void {
+        DB::transaction(function () use ($request, $note): void {
             $request->update([
                 'status' => 'denied',
                 'responded_at' => now(),
-                'response_note' => $validated['response_note'] ?? null,
+                'response_note' => $note,
             ]);
             // Circle and Organisation are intentionally left pending.
         });
@@ -153,9 +175,95 @@ class RequestController extends Controller
         }
 
         return response()->view('requests.denied', [
+            'requestType' => $request->type->value,
             'organisationName' => (string) ($request->requestable?->name ?? ''),
+            'personName' => (string) ($request->requester?->name ?? ''),
             'platformName' => config('app.name'),
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Organisation-member-claim flow (confirm/reject a claimed internal role)
+    |--------------------------------------------------------------------------
+    */
+
+    private function approveMemberClaim(RequestModel $request): Response
+    {
+        DB::transaction(function () use ($request): void {
+            $request->update(['status' => 'approved', 'responded_at' => now()]);
+            $this->setClaimStatus($request, 'approved');
+        });
+
+        if ($claimer = $request->requester) {
+            $this->attemptEmail($request, 'email.organisation_member_claim_approved', $claimer->email, [
+                'claimer_name' => $claimer->name,
+                'organisation_name' => (string) ($request->circle?->name ?? ''),
+            ]);
+        }
+
+        return response()->view('requests.confirmed', [
+            'requestType' => $request->type->value,
+            'organisationName' => (string) ($request->circle?->name ?? ''),
+            'personName' => (string) ($request->requester?->name ?? ''),
+            'platformName' => config('app.name'),
+        ]);
+    }
+
+    private function rejectMemberClaim(RequestModel $request, ?string $note): Response
+    {
+        DB::transaction(function () use ($request, $note): void {
+            $request->update([
+                'status' => 'denied',
+                'responded_at' => now(),
+                'response_note' => $note,
+            ]);
+            // Reject the claim — but DO NOT clear internal_role itself; the
+            // claimed value stays for audit. Only the metadata status governs
+            // whether the role is trusted (see CircleMembership::hasApprovedInternalRole).
+            $this->setClaimStatus($request, 'rejected');
+        });
+
+        if ($claimer = $request->requester) {
+            $this->attemptEmail($request, 'email.organisation_member_claim_rejected', $claimer->email, [
+                'claimer_name' => $claimer->name,
+                'organisation_name' => (string) ($request->circle?->name ?? ''),
+            ]);
+        }
+
+        return response()->view('requests.denied', [
+            'requestType' => $request->type->value,
+            'organisationName' => (string) ($request->circle?->name ?? ''),
+            'personName' => (string) ($request->requester?->name ?? ''),
+            'platformName' => config('app.name'),
+        ]);
+    }
+
+    /** Write internal_role_approved onto the claim's CircleMembership. */
+    private function setClaimStatus(RequestModel $request, string $status): void
+    {
+        $membership = $request->requestable;
+
+        if ($membership instanceof CircleMembership) {
+            $metadata = $membership->metadata ?? [];
+            $metadata['internal_role_approved'] = $status;
+            $membership->update(['metadata' => $metadata]);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+
+    /** Display name for the confirm/outcome pages, per request type. */
+    private function organisationNameFor(RequestModel $request): string
+    {
+        return match ($request->type) {
+            RequestType::OrganisationMemberClaim => (string) ($request->circle?->name ?? ''),
+            default => (string) ($request->requestable?->name ?? ''),
+        };
     }
 
     /**

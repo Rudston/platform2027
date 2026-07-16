@@ -144,6 +144,13 @@ Circle lifecycle, string-backed: Active, Pending, Denied, Suspended, Archived.
 `scopeActive()`. New circles default to Active — approval-gated flows set
 Pending explicitly. See Organisation Approval & Requests below.
 
+### RequestType (`app/Enums/RequestType.php`)
+Backs `requests.type` (string cast on the Request model). Cases:
+`OrganisationApproval`, `CircleJoin`, `LocationRequest`, `CircleAssociation`
+(reserved — filter/badge only, never created), `OrganisationMemberClaim`.
+`RequestController::approve()/deny()` and the RequestResource type badge match
+on this. NEVER compare `->type` to a bare string — the column is enum-cast.
+
 ---
 
 ## Key Services
@@ -256,6 +263,28 @@ overrides `allowedInternalRoles()` → `['organisation_member']`.
   organisation-community admins get `internal_role = 'organisation_member'`.
   Idempotent, adds-only, manual (NOT scheduled). Consistent with the approval
   flow, which also labels new org creators `organisation_member`.
+
+### Internal-role claims (organisation_member must be confirmed)
+A claimed internal role is NOT trusted until the org contact confirms it.
+- When `joinAsMember()` gets `internal_role = 'organisation_member'` on a normal
+  join (`skipChecks = false` — i.e. NOT the trusted approval-hook creator grant),
+  it: creates the membership immediately with `metadata.internal_role_approved
+  = 'pending'`, opens a `RequestType::OrganisationMemberClaim` request
+  (`Request::createForMemberClaim`; requestable = the CircleMembership;
+  respondent = the org's contact email), and emails the contact
+  (`email.organisation_member_claim_request`) — the user IS a member right away;
+  only the ROLE is gated.
+- `RequestController` (same token routes) dispatches on type: approve →
+  `internal_role_approved = 'approved'` + `email.organisation_member_claim_approved`
+  to the claimer; reject → `'rejected'` (internal_role KEPT for audit, never
+  nulled) + `email.organisation_member_claim_rejected`.
+- **`CircleMembership::hasApprovedInternalRole(): bool`** — the ONLY correct way
+  to check elevated access (returns true only when `internal_role` is set AND
+  `metadata.internal_role_approved === 'approved'`). NEVER check `internal_role`
+  alone — it may be pending or rejected.
+- Filament: claim requests show in the Governance Requests table (type badge)
+  but the Approve/Deny/Resend row actions are hidden for them — the flow is
+  entirely external/token-based.
 
 ---
 
@@ -568,10 +597,12 @@ dev DB but is NOT in the seeder yet.
   `is_active` ToggleColumn, updated_at
 
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
-(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 7 keys:
+(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 10 keys:
 `email.welcome`, `email.circle_invitation`, `email.password_reset`,
 `email.organisation_approval_request`, `email.organisation_approval_confirmed`,
-`email.organisation_approval_denied`, `email.organisation_approval_admin_notice`.
+`email.organisation_approval_denied`, `email.organisation_approval_admin_notice`,
+`email.organisation_member_claim_request`, `email.organisation_member_claim_approved`,
+`email.organisation_member_claim_rejected`.
 
 Local mail: MailHog via MAMP — SMTP `localhost:1025`, UI at
 `http://localhost:8025/mailhog` (note the `/mailhog` web path).
@@ -691,8 +722,9 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - ThemeCommunitiesSeeder — national + WC + Eden DM
 - ContentBlockSeeder — 8 content blocks (4 page-copy + 4 collapsible how-to;
   idempotent, updateOrCreate by key)
-- EmailTemplateSeeder — 7 email templates (welcome/invitation/reset + 4
-  organisation-approval, incl. the responsible-admin notice; idempotent,
+- EmailTemplateSeeder — 10 email templates (welcome/invitation/reset + 4
+  organisation-approval incl. the responsible-admin notice + 3
+  organisation-member-claim [request/approved/rejected]; idempotent,
   updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 

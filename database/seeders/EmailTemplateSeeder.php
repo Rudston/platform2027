@@ -136,6 +136,58 @@ class EmailTemplateSeeder extends Seeder
                     'pt_BR' => '',
                 ],
             ],
+            [
+                'key' => 'email.organisation_member_claim_request',
+                'description' => 'Sent to the organisation contact when a user claims the organisation_member internal role',
+                'available_variables' => ['contact_name', 'organisation_name', 'claimer_name', 'review_url', 'expires_at'],
+                'subject' => [
+                    'en' => 'Action Required: Confirm a membership claim on Platform 2027',
+                    'pt_BR' => '',
+                ],
+                'body' => [
+                    'en' => '<p>Hi {{ contact_name }},</p>'
+                        .'<p><strong>{{ claimer_name }}</strong> says they are a member of staff or the board of '
+                        .'<strong>{{ organisation_name }}</strong> on Platform 2027. As the organisation&rsquo;s contact, '
+                        .'please confirm or reject this.</p>'
+                        .'<p>'
+                        .'<a href="{{ review_url }}" style="display:inline-block;padding:10px 20px;background-color:#4f46e5;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Review this claim</a>'
+                        .'</p>'
+                        .'<p style="font-size:14px;color:#6b7280;">This link expires in 7 days, on {{ expires_at }}. '
+                        .'If you weren&rsquo;t expecting this, you can safely ignore this email.</p>',
+                    'pt_BR' => '',
+                ],
+            ],
+            [
+                'key' => 'email.organisation_member_claim_approved',
+                'description' => 'Sent to the claiming user when the organisation contact confirms their membership claim',
+                'available_variables' => ['claimer_name', 'organisation_name'],
+                'subject' => [
+                    'en' => 'Your membership of {{ organisation_name }} is confirmed',
+                    'pt_BR' => '',
+                ],
+                'body' => [
+                    'en' => '<p>Hi {{ claimer_name }},</p>'
+                        .'<p>Good news — your membership of <strong>{{ organisation_name }}</strong> has been confirmed '
+                        .'by the organisation&rsquo;s contact.</p>',
+                    'pt_BR' => '',
+                ],
+            ],
+            [
+                'key' => 'email.organisation_member_claim_rejected',
+                'description' => 'Sent to the claiming user when the organisation contact rejects their membership claim',
+                'available_variables' => ['claimer_name', 'organisation_name'],
+                'subject' => [
+                    'en' => 'Update on your membership claim — Platform 2027',
+                    'pt_BR' => '',
+                ],
+                'body' => [
+                    'en' => '<p>Hi {{ claimer_name }},</p>'
+                        .'<p>Your claim to be a member of staff or the board of <strong>{{ organisation_name }}</strong> '
+                        .'was not confirmed. You remain a member of the community, but without that role. If you believe '
+                        .'this was a mistake, please get in touch with the organisation.</p>',
+                    'pt_BR' => '',
+                ],
+            ],
         ];
 
         foreach ($templates as $template) {
