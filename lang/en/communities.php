@@ -52,7 +52,7 @@ return [
         'email'     => 'Email',
         'website'   => 'Website',
         'leave'              => 'Leave Community',
-        'leave_confirm'      => 'Leave this community?',
+        'leave_confirm'      => 'Are you sure you want to leave this community?',
         'join_available_at'  => 'You can join from :date',
         'join_modal_title'   => 'Join this community',
         'org_member_question' => 'Are you a member of staff or the board?',
