@@ -74,13 +74,11 @@
             @if ($this->organisation)
                 <div>
                     <p class="text-sm font-medium text-main">{{ __('communities.page.organisation_members') }}:</p>
-                    <ul class="mt-2 max-h-40 space-y-1 overflow-y-auto pr-1 text-sm text-muted">
-                        @forelse ($this->organisationMembers as $member)
-                            <li>{{ $member->user?->name ?? '—' }}</li>
-                        @empty
-                            <li>{{ __('communities.page.no_organisation_members') }}</li>
-                        @endforelse
-                    </ul>
+                    <div class="mt-2 max-h-40 overflow-y-auto pr-1 text-sm text-muted">
+                        {{ $this->organisationMembers->isNotEmpty()
+                            ? $this->organisationMembers->map(fn ($m) => $m->user?->name)->filter()->implode(', ')
+                            : __('communities.page.no_organisation_members') }}
+                    </div>
                 </div>
             @endif
         </div>
