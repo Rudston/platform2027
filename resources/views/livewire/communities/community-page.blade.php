@@ -16,27 +16,54 @@
             <h1 class="text-2xl font-bold text-main">{{ $circle->name }}</h1>
         </div>
 
-        {{-- Geographic breadcrumb (temporary: single location line, as in the modal) --}}
-        <div class="mt-3 flex items-center gap-1.5 text-sm text-muted">
-            <span aria-hidden="true">📍</span>
-            <span>{{ $circle->locatable?->name ?? '—' }}</span>
-        </div>
+        {{-- Top meta: location / admins / members on the left; for organisation
+             communities, the organisation's contact details on the right. --}}
+        <div class="mt-3 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div class="space-y-2">
+                {{-- Geographic breadcrumb (temporary: single location line) --}}
+                <div class="flex items-center gap-1.5 text-sm text-muted">
+                    <span aria-hidden="true">📍</span>
+                    <span>{{ $circle->locatable?->name ?? '—' }}</span>
+                </div>
 
-        {{-- Circle administrators --}}
-        <div class="mt-2 flex items-center gap-1.5 text-sm text-muted">
-            <span aria-hidden="true">🛡️</span>
-            <span class="font-medium text-main">{{ __('communities.page.admins') }}:</span>
-            <span>
-                {{ $this->administrators->isNotEmpty()
-                    ? $this->administrators->pluck('name')->implode(', ')
-                    : __('communities.page.no_admins') }}
-            </span>
-        </div>
+                {{-- Circle administrators --}}
+                <div class="flex items-center gap-1.5 text-sm text-muted">
+                    <span aria-hidden="true">🛡️</span>
+                    <span class="font-medium text-main">{{ __('communities.page.admins') }}:</span>
+                    <span>
+                        {{ $this->administrators->isNotEmpty()
+                            ? $this->administrators->pluck('name')->implode(', ')
+                            : __('communities.page.no_admins') }}
+                    </span>
+                </div>
 
-        {{-- Member count (admins count as members) --}}
-        <div class="mt-2 flex items-center gap-1.5 text-sm text-muted">
-            <span aria-hidden="true">👥</span>
-            <span>{{ __('communities.page.members', ['count' => $this->memberCount]) }}</span>
+                {{-- Member count (admins count as members) --}}
+                <div class="flex items-center gap-1.5 text-sm text-muted">
+                    <span aria-hidden="true">👥</span>
+                    <span>{{ __('communities.page.members', ['count' => $this->memberCount]) }}</span>
+                </div>
+            </div>
+
+            {{-- Organisation contact details (organisation communities only) --}}
+            @if ($this->organisation)
+                @php($org = $this->organisation)
+                <div class="space-y-2 text-sm text-muted sm:text-right">
+                    <div>
+                        <span class="font-medium text-main">{{ __('communities.page.contact') }}:</span>
+                        {{ $org->contact_person ?? '—' }}
+                    </div>
+                    <div>
+                        <span class="font-medium text-main">{{ __('communities.page.email') }}:</span>
+                        <a href="mailto:{{ $org->contact_email }}" class="text-indigo-600 hover:underline">{{ $org->contact_email }}</a>
+                    </div>
+                    @if ($org->website)
+                        <div>
+                            <span class="font-medium text-main">{{ __('communities.page.website') }}:</span>
+                            <a href="{{ $org->website }}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">{{ $org->website }}</a>
+                        </div>
+                    @endif
+                </div>
+            @endif
         </div>
 
         {{-- Description --}}

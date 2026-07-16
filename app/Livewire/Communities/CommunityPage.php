@@ -6,6 +6,8 @@ use App\Contracts\Circles\HasDefaultServices;
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
 use App\Models\Circles\Service;
+use App\Models\Communities\OrganisationCommunity;
+use App\Models\Organisation;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Livewire\Attributes\Computed;
@@ -117,6 +119,20 @@ class CommunityPage extends Component
         if ($this->serviceTabs()->contains('key', $key)) {
             $this->activeServiceKey = $key;
         }
+    }
+
+    /**
+     * The linked Organisation entity when this circle is an organisation
+     * community, otherwise null (drives the contact panel on the page).
+     */
+    #[Computed]
+    public function organisation(): ?Organisation
+    {
+        $circleable = $this->circle->circleable;
+
+        return $circleable instanceof OrganisationCommunity
+            ? $circleable->organisation
+            : null;
     }
 
     /** Type icon for the circle's community type (mirrors CommunityCard). */

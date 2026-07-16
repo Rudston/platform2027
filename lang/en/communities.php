@@ -48,6 +48,9 @@ return [
         'join'      => 'Join Community',
         'admins'    => 'Admins',
         'no_admins' => 'None yet',
+        'contact'   => 'Contact',
+        'email'     => 'Email',
+        'website'   => 'Website',
     ],
 
     'add_modal' => [
