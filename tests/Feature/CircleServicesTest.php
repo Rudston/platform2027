@@ -9,6 +9,8 @@ use App\Livewire\Communities\Services\ForumServiceContainer;
 use App\Livewire\Communities\Services\NewsServiceContainer;
 use App\Models\Circles\Circle;
 use App\Models\Communities\LocationCommunity;
+use App\Models\Communities\OrganisationCommunity;
+use App\Models\Communities\ThemeCommunity;
 use App\Services\Circles\ForumService;
 use App\Services\Circles\ManageUsersService;
 use App\Services\Communication\EmailServiceHandler;
@@ -70,6 +72,16 @@ class CircleServicesTest extends TestCase
         Schema::create('organisation_communities', function ($table): void {
             $table->id();
             $table->unsignedBigInteger('organisation_id')->nullable();
+            $table->string('name')->nullable();
+            $table->text('description')->nullable();
+            $table->softDeletes();
+            $table->timestamps();
+        });
+
+        // A community type that does NOT implement HasDefaultServices, for the
+        // backfill's "leave non-implementers alone" case.
+        Schema::create('theme_communities', function ($table): void {
+            $table->id();
             $table->string('name')->nullable();
             $table->text('description')->nullable();
             $table->softDeletes();
@@ -147,12 +159,14 @@ class CircleServicesTest extends TestCase
         $circle->services()->detach([$mediaId, $votingId]);
         $this->assertCount(3, $circle->services()->get());
 
-        // A non-HasDefaultServices circle must be left untouched.
-        $org = \App\Models\Communities\OrganisationCommunity::create(['name' => 'Org']);
-        $orgCircle = Circle::create([
-            'circleable_type' => CommunityType::Organisation->value,
-            'circleable_id' => $org->id,
-            'name' => 'Org',
+        // A circleable that does NOT implement HasDefaultServices must be left
+        // untouched (ThemeCommunity — both Location and Organisation communities
+        // DO implement it, so they aren't valid "non-implementer" fixtures).
+        $theme = ThemeCommunity::create(['name' => 'Theme']);
+        $themeCircle = Circle::create([
+            'circleable_type' => CommunityType::ThemeCommunity->value,
+            'circleable_id' => $theme->id,
+            'name' => 'Theme',
         ]);
 
         Artisan::call('circles:backfill-services');
@@ -162,7 +176,24 @@ class CircleServicesTest extends TestCase
             ['news', 'events', 'forums', 'media', 'voting'],
             $circle->fresh()->services()->pluck('key')->all(),
         );
-        $this->assertCount(0, $orgCircle->services()->get());
+        $this->assertCount(0, $themeCircle->services()->get());
+    }
+
+    public function test_organisation_community_also_gets_default_services(): void
+    {
+        $this->assertInstanceOf(HasDefaultServices::class, new OrganisationCommunity);
+
+        $org = OrganisationCommunity::create(['name' => 'Org']);
+        $circle = Circle::create([
+            'circleable_type' => CommunityType::Organisation->value,
+            'circleable_id' => $org->id,
+            'name' => 'Org',
+        ]);
+
+        $this->assertEqualsCanonicalizing(
+            ['news', 'events', 'forums', 'media', 'voting'],
+            $circle->services()->pluck('key')->all(),
+        );
     }
 
     public function test_community_page_tab_ordering_and_switching(): void
