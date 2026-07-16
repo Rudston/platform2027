@@ -200,6 +200,62 @@ Nearest-neighbour lookup:
 
 ---
 
+## Circle Membership
+
+Join/leave with per-community-type limits and optional internal roles.
+
+### circle_memberships table + CircleMembership model (`app/Models/Circles/`)
+- `circle_id`, `user_id`, `internal_role` (nullable — e.g. `organisation_member`;
+  NOT a Spatie role), `joined_at`, `left_at` (null = active), `metadata`, timestamps.
+- Rows are **never deleted** — a membership is closed by setting `left_at`.
+- Indexes: `(circle_id, user_id)`, `left_at`, `user_id`. `scopeActive()` = `left_at IS NULL`.
+
+### Membership rules (per community type)
+`HasMembershipRules` (`app/Contracts/Communities/`): `maxConcurrentMemberships()`,
+`minMembershipMonthsBeforeSwitch()`, `allowedInternalRoles()`. Default trait
+`HasStandardMembershipRules` (`app/Models/Communities/Concerns/`) returns
+`2, 3, []`. Every CommunityType model implements it; **OrganisationCommunity**
+overrides `allowedInternalRoles()` → `['organisation_member']`.
+
+### Circle methods (domain logic lives on Circle, like administrators())
+- `memberships()` hasMany; `activeMembership(User): ?CircleMembership`.
+- `canUserJoin(User): array{allowed, reason, available_at, swappable}` —
+  global `admin`/`superadmin` bypass (NOT circle_admin); else count the user's
+  ACTIVE memberships of the SAME circleable type: under `max` → allowed; at cap
+  → memberships older than `minMonths` are `swappable` (allowed if any), else
+  not allowed with `available_at` = earliest eligible date.
+- `joinAsMember(User, ?internalRole, ?dropMembership, bool skipChecks=false)` —
+  validates the role against `allowedInternalRoles()`, re-checks `canUserJoin()`
+  server-side (unless `skipChecks`), closes `dropMembership` on a swap, creates
+  the row. Idempotent (returns the existing active membership).
+- `leave(User)` — closes the active membership. Leaving is never rate-limited.
+
+### Where it's wired
+- **Org-creator grant:** `RequestController::approve()` AND
+  `RequestResource::approveAction()` call `joinAsMember($requester,
+  internalRole: …, skipChecks: true)` right after granting `circle_admin`
+  (direct grant, not a rate-limited join). The role is `organisation_member`
+  for organisation communities, else null — matching the backfill.
+- **Community Page:** `membership`/`isVisitor` computeds; both passed into every
+  `*ServiceContainer` mount (`?CircleMembership $membership = null, bool
+  $isVisitor = false`). Join/Leave UI replaces the old placeholder — join is
+  immediate unless there's an internal-role question (org: staff/board) or a
+  swap to choose (modal); `wire:confirm` on Leave.
+- **Explore cards:** `CommunityCard` label is **Enter** (active member) vs
+  **Visit** (otherwise). Membership is batch-loaded ONCE per request in
+  `ExploreCommunities::memberCircleIds()` (a small set — active memberships are
+  capped) and read in-memory via `viewerIsMemberOf()`; never a per-card query.
+- **Filament:** `CircleMembershipResource` (Governance, admin/superadmin only) —
+  **read-only** list of all memberships, filterable by circle/user and
+  active/closed. No create/edit.
+- **Backfill:** `circles:backfill-admin-memberships` — gives every existing
+  `circle_admin` (granted before the membership system) an active membership;
+  organisation-community admins get `internal_role = 'organisation_member'`.
+  Idempotent, adds-only, manual (NOT scheduled). Consistent with the approval
+  flow, which also labels new org creators `organisation_member`.
+
+---
+
 ## Internationalisation
 
 ### Key decisions
@@ -657,7 +713,6 @@ On failure: silent.
 
 ## What Is NOT Yet Built
 
-- Full membership system (circle_user pivot + approval workflow)
 - Auth/permission guards on buttons (TODO comments in place)
 - Campaign model fields
 - Filament resources beyond ContentBlock + EmailTemplate + Request

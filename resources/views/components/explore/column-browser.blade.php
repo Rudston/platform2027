@@ -4,6 +4,9 @@
     'selectedCircleId' => null,
     'heading' => null,
     'from' => null,
+    /* Circle ids the viewer actively belongs to — batch-loaded by the parent,
+       used only for the card label ("Enter" vs "Visit"). Never queried here. */
+    'memberCircleIds' => [],
 ])
 
 @php
@@ -81,7 +84,7 @@
     {{-- Non-location types render as cards, each opening the detail modal. --}}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         @foreach ($communities as $circle)
-            <livewire:explore.community-card :circle="$circle" :from="$from" :key="'card-'.$circle->id" />
+            <livewire:explore.community-card :circle="$circle" :from="$from" :is-member="in_array($circle->id, $memberCircleIds)" :key="'card-'.$circle->id" />
         @endforeach
     </div>
 @endif

@@ -27,7 +27,7 @@
                     wire:navigate
                     class="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
                 >
-                    {{ __('ui.view') }}
+                    {{ $isMember ? __('ui.enter') : __('ui.visit') }}
                 </a>
             @endif
         </div>

@@ -153,6 +153,28 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     scheduled). The Community Page renders each attached service with a
     container as a TAB (badges removed) via <livewire:dynamic-component>.
 
+17. **Circle membership** — circle_memberships table + CircleMembership model
+    (circle_id, user_id, internal_role nullable, joined_at, left_at [null=active],
+    metadata; rows never deleted, only closed via left_at). Per-type rules via
+    HasMembershipRules interface + HasStandardMembershipRules trait (2 concurrent,
+    3-month hold, no roles); OrganisationCommunity overrides allowedInternalRoles
+    → ['organisation_member']. Domain methods on Circle: activeMembership(),
+    canUserJoin() (admin/superadmin bypass; counts same-type active memberships;
+    returns allowed/reason/available_at/swappable), joinAsMember() (validates
+    role, re-checks server-side unless skipChecks, closes a swapped membership),
+    leave(). Org-creator gets a direct membership (skipChecks) in BOTH
+    RequestController::approve() and RequestResource::approveAction(). Community
+    Page has $membership/$isVisitor (passed into every *ServiceContainer mount)
+    + a Join/Leave UI (modal only when there's a role question or a swap).
+    CommunityCard label: "Enter" (member) vs "Visit" (else), batch-loaded once
+    via ExploreCommunities::memberCircleIds() (no per-card query). Read-only
+    Filament CircleMembershipResource (Governance, admin/superadmin).
+    circles:backfill-admin-memberships (idempotent, manual): gives existing
+    circle_admins a membership; org-community admins get organisation_member.
+    NOTE: the "Forums Groups overview visibility" addendum was NOT actionable —
+    no ForumGroup/forum_groups/visibility exists yet (only the skeleton
+    ForumServiceContainer); deferred until a Forums groups system is built.
+
 ---
 
 ## Geographic Abstraction Layer (Multi-Country)
@@ -548,7 +570,6 @@ requests to expired; scheduled daily in routes/console.php.
 
 ## What Is NOT Yet Built
 
-- Full membership system (circle_user pivot + approval workflow)
 - Auth/permission guards on Add Community and Request Location buttons
   (TODO comments in place throughout)
 - Campaign model fields

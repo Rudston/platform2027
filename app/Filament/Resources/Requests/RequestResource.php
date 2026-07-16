@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Requests;
 
 use App\Enums\CircleStatus;
+use App\Enums\CommunityType;
 use App\Filament\Resources\Requests\Pages\ListRequests;
 use App\Filament\Resources\Requests\Pages\ViewRequest;
 use App\Models\Circles\Circle;
@@ -275,6 +276,14 @@ class RequestResource extends Resource
                     if ($record->requester && $record->circle_id) {
                         app(PermissionRegistrar::class)->setPermissionsTeamId($record->circle_id);
                         $record->requester->assignRole('circle_admin');
+
+                        // Also give the community's creator an active membership
+                        // (direct grant — not a rate-limited join). Organisation
+                        // creators are labelled organisation_member.
+                        $creatorRole = $record->circle?->circleable_type === CommunityType::Organisation->value
+                            ? 'organisation_member'
+                            : null;
+                        $record->circle?->joinAsMember($record->requester, internalRole: $creatorRole, skipChecks: true);
                     }
                 });
 

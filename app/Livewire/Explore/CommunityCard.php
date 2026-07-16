@@ -13,6 +13,10 @@ class CommunityCard extends Component
     /** Relative Explore URL to return to, passed through to the community page as ?from=. */
     public ?string $from = null;
 
+    /** Whether the current viewer is an active member of this circle (label only:
+        "Enter" vs "Visit"). Passed in from the list; never queried per-card. */
+    public bool $isMember = false;
+
     public function icon(): string
     {
         return match ($this->circle->circleable_type) {

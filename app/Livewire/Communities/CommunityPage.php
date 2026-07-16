@@ -3,8 +3,10 @@
 namespace App\Livewire\Communities;
 
 use App\Contracts\Circles\HasDefaultServices;
+use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
+use App\Models\Circles\CircleMembership;
 use App\Models\Circles\Service;
 use App\Models\Communities\OrganisationCommunity;
 use App\Models\Organisation;
@@ -24,6 +26,15 @@ class CommunityPage extends Component
 
     /** Key of the currently-selected service tab. TODO: #[Url] sync (stub). */
     public string $activeServiceKey = '';
+
+    /** Join-flow modal state. */
+    public bool $showJoinModal = false;
+
+    /** "Are you staff/board?" answer for organisation communities. */
+    public bool $joinAsOrgMember = false;
+
+    /** Which existing membership to drop when joining requires a swap. */
+    public ?int $dropMembershipId = null;
 
     public function mount(Circle $circle): void
     {
@@ -63,6 +74,53 @@ class CommunityPage extends Component
     public function administrators(): Collection
     {
         return $this->circle->administrators();
+    }
+
+    /** The viewer's active membership of this circle (null for guests/non-members). */
+    #[Computed]
+    public function membership(): ?CircleMembership
+    {
+        $user = auth()->user();
+
+        return $user ? $this->circle->activeMembership($user) : null;
+    }
+
+    /** True when the viewer is not an active member (guest or non-member). */
+    #[Computed]
+    public function isVisitor(): bool
+    {
+        return $this->membership === null;
+    }
+
+    /**
+     * Eligibility for joining (for a logged-in non-member). Guests get a
+     * not-allowed 'guest' result so the UI prompts a login instead.
+     *
+     * @return array{allowed: bool, reason: ?string, available_at: ?\Illuminate\Support\Carbon, swappable: \Illuminate\Support\Collection}
+     */
+    #[Computed]
+    public function joinState(): array
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return ['allowed' => false, 'reason' => 'guest', 'available_at' => null, 'swappable' => collect()];
+        }
+
+        return $this->circle->canUserJoin($user);
+    }
+
+    /**
+     * Internal roles this community type offers (empty = no role question).
+     *
+     * @return list<string>
+     */
+    #[Computed]
+    public function allowedInternalRoles(): array
+    {
+        $owner = $this->circle->circleable;
+
+        return $owner instanceof HasMembershipRules ? $owner->allowedInternalRoles() : [];
     }
 
     /**
@@ -149,10 +207,96 @@ class CommunityPage extends Component
         };
     }
 
-    public function joinCommunity(): void
+    /**
+     * Begin joining. Opens the modal only when there's something to ask (an
+     * internal-role question) or a swap to choose; otherwise joins immediately.
+     */
+    public function join(): void
     {
-        // Placeholder — the membership system is implemented separately.
-        $this->dispatch('join-community', circleId: $this->circle->id);
+        $user = auth()->user();
+
+        if (! $user) {
+            $this->redirect(route('login'));
+
+            return;
+        }
+
+        if ($this->membership) {
+            return; // already a member
+        }
+
+        $state = $this->joinState;
+
+        if (! $state['allowed']) {
+            return; // button is disabled in this state anyway; guard server-side
+        }
+
+        $needsRoleQuestion = $this->allowedInternalRoles !== [];
+        $needsSwap = $state['swappable']->isNotEmpty();
+
+        if (! $needsRoleQuestion && ! $needsSwap) {
+            $this->completeJoin(); // nothing to ask — join straight away
+
+            return;
+        }
+
+        // Preselect the only swap option, if there's exactly one.
+        $this->dropMembershipId = $needsSwap && $state['swappable']->count() === 1
+            ? $state['swappable']->first()->id
+            : null;
+        $this->joinAsOrgMember = false;
+        $this->showJoinModal = true;
+    }
+
+    /** Finalise the join (from the modal, or directly for a no-question join). */
+    public function completeJoin(): void
+    {
+        $user = auth()->user();
+
+        if (! $user || $this->membership) {
+            $this->showJoinModal = false;
+
+            return;
+        }
+
+        // Re-check eligibility server-side (never trust modal state).
+        $state = $this->joinState;
+
+        if (! $state['allowed']) {
+            $this->showJoinModal = false;
+
+            return;
+        }
+
+        $drop = null;
+
+        if ($state['swappable']->isNotEmpty()) {
+            $dropId = $this->dropMembershipId ?? $state['swappable']->first()->id;
+            $drop = $state['swappable']->firstWhere('id', $dropId);
+
+            if (! $drop) {
+                return; // invalid selection — keep the modal open
+            }
+        }
+
+        $role = ($this->joinAsOrgMember && in_array('organisation_member', $this->allowedInternalRoles, true))
+            ? 'organisation_member'
+            : null;
+
+        $this->circle->joinAsMember($user, internalRole: $role, dropMembership: $drop);
+
+        $this->showJoinModal = false;
+        $this->reset(['joinAsOrgMember', 'dropMembershipId']);
+        unset($this->membership, $this->isVisitor, $this->joinState);
+    }
+
+    /** Leave the community (voluntary — no time/count restriction). */
+    public function leave(): void
+    {
+        if ($user = auth()->user()) {
+            $this->circle->leave($user);
+            unset($this->membership, $this->isVisitor, $this->joinState);
+        }
     }
 
     public function render()

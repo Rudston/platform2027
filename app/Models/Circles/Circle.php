@@ -3,6 +3,7 @@
 namespace App\Models\Circles;
 
 use App\Contracts\Circles\HasDefaultServices;
+use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\User;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Spatie\Translatable\HasTranslations;
 
 class Circle extends Model
@@ -219,6 +221,128 @@ class Circle extends Model
     public function isVisibleTo(?User $user): bool
     {
         return in_array($this->status, static::visibleStatusesFor($user), true);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Membership (join / leave, per-type limits)
+    |--------------------------------------------------------------------------
+    */
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(CircleMembership::class);
+    }
+
+    /** The active (not-yet-left) membership for this circle + user, if any. */
+    public function activeMembership(User $user): ?CircleMembership
+    {
+        return $this->memberships()
+            ->where('user_id', $user->id)
+            ->whereNull('left_at')
+            ->first();
+    }
+
+    /**
+     * Whether $user may join this circle, and — if at the per-type cap — which
+     * of their existing memberships are old enough to swap out.
+     *
+     * @return array{allowed: bool, reason: ?string, available_at: ?\Illuminate\Support\Carbon, swappable: \Illuminate\Support\Collection}
+     */
+    public function canUserJoin(User $user): array
+    {
+        $ok = ['allowed' => true, 'reason' => null, 'available_at' => null, 'swappable' => collect()];
+
+        // Global admins/superadmins bypass all checks (NOT circle_admin).
+        if ($user->hasRole('admin') || $user->hasRole('superadmin')) {
+            return $ok;
+        }
+
+        $owner = $this->circleable;
+
+        if (! $owner instanceof HasMembershipRules) {
+            return $ok;
+        }
+
+        // Active memberships this user holds of the SAME community type.
+        $active = CircleMembership::query()
+            ->where('user_id', $user->id)
+            ->whereNull('left_at')
+            ->whereHas('circle', fn (Builder $q) => $q->where('circleable_type', $this->circleable_type))
+            ->get();
+
+        if ($active->count() < $owner->maxConcurrentMemberships()) {
+            return $ok;
+        }
+
+        // At cap: memberships held long enough to be swapped out.
+        $months = $owner->minMembershipMonthsBeforeSwitch();
+        $threshold = now()->subMonths($months);
+        $swappable = $active->filter(fn (CircleMembership $m) => $m->joined_at <= $threshold)->values();
+
+        if ($swappable->isNotEmpty()) {
+            return ['allowed' => true, 'reason' => null, 'available_at' => null, 'swappable' => $swappable];
+        }
+
+        // None swappable yet — the earliest becomes eligible this far out.
+        $availableAt = $active->min('joined_at')?->copy()->addMonths($months);
+
+        return [
+            'allowed' => false,
+            'reason' => 'membership_hold',
+            'available_at' => $availableAt,
+            'swappable' => collect(),
+        ];
+    }
+
+    /**
+     * Create an active membership for $user. Validates $internalRole against the
+     * circleable's allowedInternalRoles(), re-checks eligibility server-side
+     * (unless $skipChecks — used only for direct grants, e.g. an approved
+     * organisation's own creator), and closes $dropMembership if a swap is used.
+     */
+    public function joinAsMember(
+        User $user,
+        ?string $internalRole = null,
+        ?CircleMembership $dropMembership = null,
+        bool $skipChecks = false,
+    ): CircleMembership {
+        $owner = $this->circleable;
+        $allowedRoles = $owner instanceof HasMembershipRules ? $owner->allowedInternalRoles() : [];
+
+        if ($internalRole !== null && ! in_array($internalRole, $allowedRoles, true)) {
+            throw new \InvalidArgumentException("Internal role [{$internalRole}] is not allowed for this community.");
+        }
+
+        // Idempotent: already an active member.
+        if ($existing = $this->activeMembership($user)) {
+            return $existing;
+        }
+
+        if (! $skipChecks && ! $this->canUserJoin($user)['allowed']) {
+            throw new \RuntimeException('User is not eligible to join this circle.');
+        }
+
+        return DB::transaction(function () use ($user, $internalRole, $dropMembership): CircleMembership {
+            if ($dropMembership !== null && $dropMembership->left_at === null) {
+                $dropMembership->update(['left_at' => now()]);
+            }
+
+            return $this->memberships()->create([
+                'user_id' => $user->id,
+                'internal_role' => $internalRole,
+                'joined_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Voluntarily leave: close the user's active membership. No time/count
+     * limits gate leaving — those only gate joining a new membership.
+     */
+    public function leave(User $user): void
+    {
+        $this->activeMembership($user)?->update(['left_at' => now()]);
     }
 
     /*

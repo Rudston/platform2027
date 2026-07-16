@@ -98,6 +98,8 @@
                         <livewire:dynamic-component
                             :component="$this->activeContainer"
                             :circle="$circle"
+                            :membership="$this->membership"
+                            :is-visitor="$this->isVisitor"
                             :key="$activeServiceKey"
                         />
                     </div>
@@ -105,16 +107,81 @@
             </div>
         @endif
 
-        {{-- Join (placeholder) — right-aligned at the bottom --}}
-        <div class="mt-6 flex justify-end">
-            <button
-                type="button"
-                wire:click="joinCommunity"
-                class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
-            >
-                {{ __('communities.page.join') }}
-            </button>
+        {{-- Membership action — right-aligned at the bottom --}}
+        <div class="mt-6 flex flex-col items-end gap-1">
+            @guest
+                <a href="{{ route('login') }}"
+                   class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
+                    {{ __('communities.page.join') }}
+                </a>
+            @else
+                @if ($this->membership)
+                    <button type="button" wire:click="leave"
+                            wire:confirm="{{ __('communities.page.leave_confirm') }}"
+                            class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
+                        {{ __('communities.page.leave') }}
+                    </button>
+                @elseif ($this->joinState['allowed'])
+                    <button type="button" wire:click="join"
+                            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
+                        {{ __('communities.page.join') }}
+                    </button>
+                @else
+                    <button type="button" disabled
+                            class="cursor-not-allowed rounded-lg bg-indigo-600/50 px-4 py-2 text-sm font-medium text-white">
+                        {{ __('communities.page.join') }}
+                    </button>
+                    @if ($this->joinState['available_at'])
+                        <span class="text-xs text-muted">
+                            {{ __('communities.page.join_available_at', ['date' => $this->joinState['available_at']->format('d M Y')]) }}
+                        </span>
+                    @endif
+                @endif
+            @endguest
         </div>
+
+        {{-- Join modal: internal-role question and/or swap picker (only shown
+             when there's something to ask — see CommunityPage::join()). --}}
+        @if ($showJoinModal)
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" wire:key="join-modal">
+                <div class="w-full max-w-md rounded-lg border border-border-muted bg-surface p-6 shadow-lg">
+                    <h2 class="text-lg font-semibold text-main">{{ __('communities.page.join_modal_title') }}</h2>
+
+                    @if (in_array('organisation_member', $this->allowedInternalRoles, true))
+                        <label class="mt-4 flex items-start gap-2 text-sm text-muted">
+                            <input type="checkbox" wire:model="joinAsOrgMember" class="mt-0.5">
+                            <span>{{ __('communities.page.org_member_question') }}</span>
+                        </label>
+                    @endif
+
+                    @php($swappable = $this->joinState['swappable'])
+                    @if ($swappable->isNotEmpty())
+                        <div class="mt-4">
+                            <p class="text-sm text-muted">{{ __('communities.page.swap_prompt') }}</p>
+                            <div class="mt-2 space-y-1">
+                                @foreach ($swappable as $swap)
+                                    <label class="flex items-center gap-2 text-sm text-main">
+                                        <input type="radio" wire:model="dropMembershipId" value="{{ $swap->id }}">
+                                        <span>{{ $swap->circle->name }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button type="button" wire:click="$set('showJoinModal', false)"
+                                class="rounded-lg border border-border-muted px-4 py-2 text-sm transition hover:opacity-80">
+                            {{ __('ui.cancel') }}
+                        </button>
+                        <button type="button" wire:click="completeJoin"
+                                class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
+                            {{ __('communities.page.join') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        @endif
 
         {{-- Future: type-specific panels (Organisation / Campaign / Course /
              ThemeCommunity / Event / LocationCommunity) slot in below here. --}}

@@ -51,6 +51,12 @@ return [
         'contact'   => 'Contact',
         'email'     => 'Email',
         'website'   => 'Website',
+        'leave'              => 'Leave Community',
+        'leave_confirm'      => 'Leave this community?',
+        'join_available_at'  => 'You can join from :date',
+        'join_modal_title'   => 'Join this community',
+        'org_member_question' => 'Are you a member of staff or the board?',
+        'swap_prompt'        => "You're at the limit for this type — choose a community to leave:",
     ],
 
     'add_modal' => [

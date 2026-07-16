@@ -72,6 +72,15 @@ class RequestController extends Controller
             if ($request->requester && $request->circle_id) {
                 app(PermissionRegistrar::class)->setPermissionsTeamId($request->circle_id);
                 $request->requester->assignRole('circle_admin');
+
+                // Also give the community's creator an active membership. Direct
+                // grant (skipChecks), not a rate-limited join. Organisation
+                // creators are labelled organisation_member (matches the
+                // circles:backfill-admin-memberships convention).
+                $creatorRole = $request->circle?->circleable_type === CommunityType::Organisation->value
+                    ? 'organisation_member'
+                    : null;
+                $request->circle?->joinAsMember($request->requester, internalRole: $creatorRole, skipChecks: true);
             }
         });
 

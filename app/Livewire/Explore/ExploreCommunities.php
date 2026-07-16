@@ -5,6 +5,7 @@ namespace App\Livewire\Explore;
 use App\Enums\CommunityType;
 use App\Enums\LocatableType;
 use App\Models\Circles\Circle;
+use App\Models\Circles\CircleMembership;
 use App\Models\Demography\CoordinateData;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -85,6 +86,33 @@ class ExploreCommunities extends Component
     | Computed properties
     |--------------------------------------------------------------------------
     */
+
+    /**
+     * Circle ids the current viewer is an ACTIVE member of. ONE query, memoised
+     * for the whole request — a viewer's active memberships are capped per type,
+     * so the set is tiny. Card labels ("Enter" vs "Visit") read it in-memory via
+     * viewerIsMemberOf(); never a per-card query.
+     *
+     * @return list<int>
+     */
+    #[Computed]
+    public function memberCircleIds(): array
+    {
+        if (! auth()->check()) {
+            return [];
+        }
+
+        return CircleMembership::query()
+            ->where('user_id', auth()->id())
+            ->whereNull('left_at')
+            ->pluck('circle_id')
+            ->all();
+    }
+
+    public function viewerIsMemberOf(int $circleId): bool
+    {
+        return in_array($circleId, $this->memberCircleIds, true);
+    }
 
     #[Computed]
     public function selectedCircle(): ?Circle
