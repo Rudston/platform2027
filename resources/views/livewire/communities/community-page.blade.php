@@ -88,6 +88,29 @@
             <p class="mt-4 text-muted">{{ $circle->description }}</p>
         @endif
 
+        {{-- Tags: read-only badge row; managers get an "Edit tags" toggle that
+             reveals the attachment picker. --}}
+        <div class="mt-4" x-data="{ editingTags: false }">
+            @if ($this->tags->isNotEmpty() || $this->canManageTags)
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-tag-list :tags="$this->tags" />
+                    @if ($this->canManageTags)
+                        <button type="button" x-on:click="editingTags = !editingTags"
+                                class="text-xs text-indigo-600 hover:underline">{{ __('tags.edit') }}</button>
+                    @endif
+                </div>
+            @endif
+
+            @if ($this->canManageTags)
+                <div x-show="editingTags" x-cloak class="mt-2">
+                    <livewire:tags.tag-picker
+                        :taggable-type="\App\Models\Circles\Circle::class"
+                        :taggable-id="$circle->id"
+                        :key="'circle-tags-'.$circle->id" />
+                </div>
+            @endif
+        </div>
+
         {{-- Service tabs (replaces the old service badges). Each attached
              service with a container component renders as a tab; the active
              tab's Livewire container is rendered below. TODO: #[Url] sync for

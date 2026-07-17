@@ -5,6 +5,7 @@ namespace App\Models\Forums;
 use App\Enums\Forums\ForumGroupStatus;
 use App\Enums\Forums\ForumGroupVisibility;
 use App\Models\Circles\Circle;
+use App\Models\Concerns\HasTags;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ForumGroup extends Model
 {
-    use SoftDeletes;
+    use HasTags, SoftDeletes;
 
     protected $guarded = [];
 
@@ -37,5 +38,11 @@ class ForumGroup extends Model
     public function discussions(): HasMany
     {
         return $this->hasMany(ForumDiscussion::class);
+    }
+
+    /** Tagging mirrors the group's manage rights: managers of the owning circle. */
+    public function canBeTaggedBy(?User $user): bool
+    {
+        return $this->circle?->isManageableBy($user) ?? false;
     }
 }

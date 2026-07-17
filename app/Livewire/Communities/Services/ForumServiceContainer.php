@@ -68,6 +68,7 @@ class ForumServiceContainer extends Component
                 fn ($q) => $q->where('status', $this->statusFilter),
             )
             ->withCount('discussions')
+            ->with('tags')
             ->orderBy('name')
             ->get();
     }

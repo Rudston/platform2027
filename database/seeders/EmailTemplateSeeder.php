@@ -188,6 +188,37 @@ class EmailTemplateSeeder extends Seeder
                     'pt_BR' => '',
                 ],
             ],
+            [
+                'key' => 'email.theme_suggestion_approved',
+                'description' => 'Sent to the user who suggested a tag when an admin approves it',
+                'available_variables' => ['user_name', 'tag_name', 'review_note'],
+                'subject' => [
+                    'en' => 'Your suggested tag "{{ tag_name }}" was approved',
+                    'pt_BR' => '',
+                ],
+                'body' => [
+                    'en' => '<p>Hi {{ user_name }},</p>'
+                        .'<p>Good news — the tag <strong>{{ tag_name }}</strong> you suggested has been approved and is '
+                        .'now available on Platform 2027.</p>',
+                    'pt_BR' => '',
+                ],
+            ],
+            [
+                'key' => 'email.theme_suggestion_rejected',
+                'description' => 'Sent to the user who suggested a tag when an admin rejects it',
+                'available_variables' => ['user_name', 'tag_name', 'review_note'],
+                'subject' => [
+                    'en' => 'Update on your suggested tag "{{ tag_name }}"',
+                    'pt_BR' => '',
+                ],
+                'body' => [
+                    'en' => '<p>Hi {{ user_name }},</p>'
+                        .'<p>Thank you for suggesting the tag <strong>{{ tag_name }}</strong>. After review it was not '
+                        .'added at this time.</p>'
+                        .'<p>{{ review_note }}</p>',
+                    'pt_BR' => '',
+                ],
+            ],
         ];
 
         foreach ($templates as $template) {

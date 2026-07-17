@@ -76,6 +76,20 @@ class CommunityPage extends Component
         return $this->circle->administrators();
     }
 
+    /** Circle tags (alphabetical) for the read-only display row. */
+    #[Computed]
+    public function tags(): Collection
+    {
+        return $this->circle->tags()->orderBy('name')->get();
+    }
+
+    /** Whether the viewer may edit this circle's tags (mirrors manage rights). */
+    #[Computed]
+    public function canManageTags(): bool
+    {
+        return $this->circle->canBeTaggedBy(auth()->user());
+    }
+
     /** The viewer's active membership of this circle (null for guests/non-members). */
     #[Computed]
     public function membership(): ?CircleMembership

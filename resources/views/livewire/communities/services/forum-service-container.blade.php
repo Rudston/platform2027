@@ -78,6 +78,18 @@
 
                     <p class="line-clamp-2 text-sm text-muted">{{ $group->description }}</p>
 
+                    {{-- Tags: read-only row; managers get an Edit-tags link that
+                         opens the group's edit modal (where the picker lives). --}}
+                    @if ($group->tags->isNotEmpty() || $this->canManage)
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-tag-list :tags="$group->tags" />
+                            @if ($this->canManage)
+                                <button type="button" wire:click="openEditGroup({{ $group->id }})"
+                                        class="text-xs text-indigo-600 hover:underline">{{ __('tags.edit') }}</button>
+                            @endif
+                        </div>
+                    @endif
+
                     <div class="text-xs text-muted">
                         {{ __('forums.participants') }} 0 ·
                         {{ __('forums.discussions_count', ['count' => $group->discussions_count]) }} ·

@@ -193,6 +193,25 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     back-link) — placeholder body this pass. Deferred: discussion list/detail,
     join, moderation, pin/lock, membership-based visibility filtering.
 
+21. **Theme-based tagging + tag suggestions** — a lightweight descriptive tag
+    layer over `themes`, UNRELATED to ThemeCommunity. `taggables` polymorphic
+    pivot + HasTags trait (tags() morphToMany Theme) on Circle, ForumGroup,
+    ForumDiscussion ONLY (Organisation tagged via its OrganisationCommunity
+    Circle). Theme inverses circles()/forumGroups()/forumDiscussions(); added
+    the missing Theme::themeCommunities() HasMany (the FK/belongsTo half already
+    existed). Uniform canBeTaggedBy(?User): Circle→isManageableBy;
+    ForumGroup→owning circle; ForumDiscussion→author OR owning circle. Reusable
+    TagPicker Livewire (attach/detach gated; "suggest a tag" open to any authed
+    user → pending ThemeSuggestion with origin, attaches nothing) is the edit
+    surface. DISPLAY: <x-tag-list> (plain bordered pills, alphabetical) under the
+    description on the community page (Circle) + each ForumGroup card; managers
+    also get an "Edit tags" affordance opening the picker (inline on the circle
+    page, edit-modal on the forum card); non-managers see read-only.
+    ForumDiscussion has no display surface yet. ThemeSuggestion model
+    (ThemeSuggestionStatus enum) approve() [Theme firstOrCreate dedupe +
+    auto-attach to origin + email] / reject(note) [email]. Filament
+    ThemeSuggestionResource (Platform, admin/superadmin) with Approve/Reject.
+
 18. **RequestType enum + organisation-member-claim flow** — requests.type is now
     backed by App\Enums\RequestType (cast on Request): OrganisationApproval,
     CircleJoin/LocationRequest/CircleAssociation (reserved — filter/badge only),
@@ -434,8 +453,9 @@ DB-backed, locale-aware transactional emails, editable in the admin panel.
 (updateOrCreate by key). English stubs, empty pt_BR (falls back). Keys:
 email.welcome, email.circle_invitation, email.password_reset,
 email.organisation_approval_request/confirmed/denied,
-email.organisation_approval_admin_notice, and
-email.organisation_member_claim_request/approved/rejected (10 total).
+email.organisation_approval_admin_notice,
+email.organisation_member_claim_request/approved/rejected, and
+email.theme_suggestion_approved/rejected (12 total).
 
 **Local mail:** MailHog via MAMP — SMTP localhost:1025, UI at
 http://localhost:8025/mailhog (note the /mailhog web path).
@@ -510,10 +530,11 @@ requests to expired; scheduled daily in routes/console.php.
 - ThemeCommunity circles (national + WC province + Eden DM)
 - 8 content blocks (via ContentBlockSeeder): 4 page-copy blocks + 4
   collapsible how-to blocks (community.how_to_add.{campaign,course,event,theme})
-- 10 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
+- 12 email templates (via EmailTemplateSeeder): welcome, circle_invitation,
   password_reset + organisation_approval_request/confirmed/denied +
   organisation_approval_admin_notice +
-  organisation_member_claim_request/approved/rejected
+  organisation_member_claim_request/approved/rejected +
+  theme_suggestion_approved/rejected
 - Spatie roles: new_user, full_member, curator, trainer,
   admin, superadmin, circle_admin, circle_full_member, circle_visitor
 - 9 service stubs
@@ -680,7 +701,7 @@ app/
     CircleServiceContract (+ containerComponent()), ProvidesCircleIdentity
   Console/Commands/   ExpireRequests (requests:expire),
                       BackfillCircleServices (circles:backfill-services)
-  Enums/              CommunityType, LocatableType, LocationLevel, CircleStatus, RequestType
+  Enums/              CommunityType, LocatableType, LocationLevel, CircleStatus, RequestType, ThemeSuggestionStatus; Forums/ (4 enums)
   Filament/
     Pages/            Dashboard (admin-only nav; redirects circle_admins)
     Resources/

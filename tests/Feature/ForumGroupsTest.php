@@ -48,6 +48,16 @@ class ForumGroupsTest extends TestCase
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
 
+        // The overview eager-loads group tags, so the tagging tables must exist.
+        Schema::create('themes', function ($t): void {
+            $t->id();
+            $t->string('name');
+            $t->string('slug')->nullable();
+            $t->unsignedBigInteger('parent_id')->nullable();
+            $t->timestamps();
+        });
+        (include database_path('migrations/2026_07_17_000001_create_taggables_table.php'))->up();
+
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
     }
 

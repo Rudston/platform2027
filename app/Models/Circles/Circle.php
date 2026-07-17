@@ -19,11 +19,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use App\Models\Concerns\HasTags;
 use Spatie\Translatable\HasTranslations;
 
 class Circle extends Model
 {
-    use HasTranslations, SoftDeletes;
+    use HasTags, HasTranslations, SoftDeletes;
 
     /** Translatable JSON columns (resolved to the current locale transparently). */
     public array $translatable = ['description'];
@@ -542,6 +543,12 @@ class Circle extends Model
         }
 
         return static::administeredBy($user)->contains(fn (Circle $c) => $c->id === $this->id);
+    }
+
+    /** Tagging rights mirror manage rights (uniform hook used by the tag picker). */
+    public function canBeTaggedBy(?User $user): bool
+    {
+        return $this->isManageableBy($user);
     }
 
     /** Forum groups created under this circle's Forums tab. */

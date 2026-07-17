@@ -340,6 +340,48 @@ mechanism. (RequestResource keeps its own subtree-based inline composition.)
 
 ---
 
+## Tagging (Theme-based) & tag suggestions
+
+A lightweight descriptive tagging layer over the existing `themes` vocabulary —
+**unrelated to ThemeCommunity** (the Circle-instantiation use of Theme).
+
+- **taggables** polymorphic pivot (`theme_id` + `taggable_type`/`taggable_id`,
+  unique per triple). **HasTags trait** (`app/Models/Concerns/HasTags.php`):
+  `tags()` morphToMany(Theme, 'taggable', 'taggables') — applied to **Circle,
+  ForumGroup, ForumDiscussion ONLY** (Organisation is NOT taggable — tag its
+  OrganisationCommunity Circle). Inverses on `Theme`: `circles()`,
+  `forumGroups()`, `forumDiscussions()` (morphedByMany). ⚠️ These are DISTINCT
+  from `Theme::themeCommunities()` (the theme_id-FK Circle-instantiation
+  relation — added this pass; the belongsTo half already existed).
+- **Tagging authorization** — uniform `canBeTaggedBy(?User)` on each taggable
+  (reuses existing checks, no new mechanism):
+  - Circle → `isManageableBy()` (circle_admin of it / admin / superadmin).
+  - ForumGroup → owning circle's `isManageableBy()`.
+  - ForumDiscussion → the discussion's author (created_by) OR owning group's
+    circle `isManageableBy()`.
+- **theme_suggestions** + `ThemeSuggestion` model (status enum
+  `App\Enums\ThemeSuggestionStatus`): a user's proposed tag. `approve(reviewer,
+  ?note)` → `Theme::firstOrCreate` by slug (dedupe, not error), mark reviewed,
+  auto-attach to the origin entity if one was recorded, email
+  `theme_suggestion_approved`. `reject(reviewer, note)` (note required) → email
+  `theme_suggestion_rejected`. Emails are best-effort (never roll back review).
+- **TagPicker** (`app/Livewire/Tags/TagPicker.php`) — reusable edit surface:
+  attach/detach gated by `canBeTaggedBy`; "Suggest one" form open to ANY
+  authenticated user (creates a pending suggestion with origin set, attaches
+  nothing). It's the editing surface reached via "Edit tags" (managers only).
+- **Display** — `<x-tag-list :tags>` (`resources/views/components/tag-list.blade.php`):
+  plain understated bordered pills, alphabetical, no icons/colour; renders
+  nothing when empty. Shown under the description on the **community page**
+  (Circle tags) and each **ForumGroup card** (group tags). Managers additionally
+  see an **"Edit tags"** affordance → the community page reveals an inline
+  TagPicker (Alpine toggle); the forum card opens the group's edit modal (which
+  hosts the picker). Non-managers see the read-only row only. ForumDiscussion
+  has no display surface yet (no discussion page) — relation ready, unused.
+- **Filament** `ThemeSuggestionResource` (Platform group, admin/superadmin) —
+  list + Approve / Reject (Reject requires a note) row actions.
+
+---
+
 ## Internationalisation
 
 ### Key decisions
@@ -655,12 +697,13 @@ dev DB but is NOT in the seeder yet.
   `is_active` ToggleColumn, updated_at
 
 **EmailTemplateSeeder** — registered in DatabaseSeeder, idempotent
-(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 10 keys:
+(`updateOrCreate` by key). English stubs, empty pt_BR (falls back). 12 keys:
 `email.welcome`, `email.circle_invitation`, `email.password_reset`,
 `email.organisation_approval_request`, `email.organisation_approval_confirmed`,
 `email.organisation_approval_denied`, `email.organisation_approval_admin_notice`,
 `email.organisation_member_claim_request`, `email.organisation_member_claim_approved`,
-`email.organisation_member_claim_rejected`.
+`email.organisation_member_claim_rejected`, `email.theme_suggestion_approved`,
+`email.theme_suggestion_rejected`.
 
 Local mail: MailHog via MAMP — SMTP `localhost:1025`, UI at
 `http://localhost:8025/mailhog` (note the `/mailhog` web path).
@@ -780,10 +823,10 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - ThemeCommunitiesSeeder — national + WC + Eden DM
 - ContentBlockSeeder — 8 content blocks (4 page-copy + 4 collapsible how-to;
   idempotent, updateOrCreate by key)
-- EmailTemplateSeeder — 10 email templates (welcome/invitation/reset + 4
+- EmailTemplateSeeder — 12 email templates (welcome/invitation/reset + 4
   organisation-approval incl. the responsible-admin notice + 3
-  organisation-member-claim [request/approved/rejected]; idempotent,
-  updateOrCreate by key)
+  organisation-member-claim [request/approved/rejected] + 2 theme-suggestion
+  [approved/rejected]; idempotent, updateOrCreate by key)
 - Full SA demography (provinces, DMs, LMs, cities, main places)
 
 MainPlaceCommunitiesSeeder is idempotent — checks before creating.
