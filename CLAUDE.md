@@ -379,9 +379,10 @@ A lightweight descriptive tagging layer over the existing `themes` vocabulary �
   has no display surface yet (no discussion page) — relation ready, unused.
 - **Filament** `ThemeSuggestionResource` (Platform group, admin/superadmin) —
   list + Approve / Reject (Reject requires a note) row actions.
-- **Backfill:** `circles:backfill-theme-tags` — tags each ThemeCommunity's
-  circle with the Theme it was built from (its `theme_id`). Idempotent,
-  adds-only, manual (NOT scheduled).
+- **Auto-tag on creation:** `Circle::booted()`'s created hook auto-tags a new
+  ThemeCommunity circle with its own theme (when `theme_id` is set) — so new
+  theme communities are tagged automatically. `circles:backfill-theme-tags`
+  covers legacy circles (idempotent, adds-only, manual, NOT scheduled).
 
 ---
 

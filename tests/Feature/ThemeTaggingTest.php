@@ -57,6 +57,14 @@ class ThemeTaggingTest extends TestCase
             $t->timestamps();
         });
 
+        Schema::create('theme_communities', function ($t): void {
+            $t->id();
+            $t->string('name')->nullable();
+            $t->unsignedBigInteger('theme_id')->nullable();
+            $t->softDeletes();
+            $t->timestamps();
+        });
+
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_17_000001_create_taggables_table.php'))->up();
@@ -87,6 +95,21 @@ class ThemeTaggingTest extends TestCase
             ?? DB::table('roles')->insertGetId(['name' => 'circle_admin', 'guard_name' => 'web', 'circle_id' => null]);
         DB::table('model_has_roles')->insert(['role_id' => $roleId, 'model_type' => User::class, 'model_id' => $user->id, 'circle_id' => $circleId]);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    public function test_theme_community_circle_is_auto_tagged_on_creation(): void
+    {
+        $theme = Theme::create(['name' => 'Water']);
+        $tc = \App\Models\Communities\ThemeCommunity::create(['name' => 'Water', 'theme_id' => $theme->id]);
+
+        // Created via Eloquent so the Circle::booted() created hook fires.
+        $circle = Circle::create([
+            'circleable_type' => CommunityType::ThemeCommunity->value,
+            'circleable_id' => $tc->id,
+            'name' => 'Water',
+        ]);
+
+        $this->assertSame(['Water'], $circle->tags()->pluck('name')->all());
     }
 
     public function test_tags_relation_and_theme_inverses(): void

@@ -211,6 +211,9 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     (ThemeSuggestionStatus enum) approve() [Theme firstOrCreate dedupe +
     auto-attach to origin + email] / reject(note) [email]. Filament
     ThemeSuggestionResource (Platform, admin/superadmin) with Approve/Reject.
+    ThemeCommunity circles are auto-tagged with their own theme on creation
+    (Circle::booted created hook, guarded on theme_id); circles:backfill-theme-tags
+    covers legacy circles (idempotent, manual).
 
 18. **RequestType enum + organisation-member-claim flow** — requests.type is now
     backed by App\Enums\RequestType (cast on Request): OrganisationApproval,

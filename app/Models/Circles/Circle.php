@@ -7,6 +7,7 @@ use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\Communication\Request;
+use App\Models\Communities\ThemeCommunity;
 use App\Models\Forums\ForumGroup;
 use App\Models\User;
 use App\Services\Communication\EmailServiceHandler;
@@ -447,6 +448,13 @@ class Circle extends Model
                         $circle->services()->attach($service->id, ['is_active' => true]);
                     }
                 }
+            }
+
+            // A ThemeCommunity's circle is auto-tagged with the Theme it was
+            // built from (mirrors circles:backfill-theme-tags for new circles).
+            // Guarded on theme_id so no taggables query fires when absent.
+            if ($owner instanceof ThemeCommunity && $owner->theme_id !== null) {
+                $circle->tags()->syncWithoutDetaching([$owner->theme_id]);
             }
         });
     }
