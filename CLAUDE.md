@@ -248,6 +248,17 @@ overrides `allowedInternalRoles()` → `['organisation_member']`.
   $isVisitor = false`). Join/Leave UI replaces the old placeholder — join is
   immediate unless there's an internal-role question (org: staff/board) or a
   swap to choose (modal); `wire:confirm` on Leave.
+- **Self-service circle admin:** a global admin/superadmin who has JOINED a
+  circle (any type) and isn't already its circle_admin sees an "Add me as Circle
+  Admin" button (left of Leave) → `Circle::addAdministrator()` (team-scoped
+  assignRole, idempotent, additive to existing admins). Gated by
+  `CommunityPage::canAddSelfAsCircleAdmin()`; `Circle::isAdministeredBy()` is the
+  precise "is circle_admin HERE" check (narrower than isManageableBy).
+  Conversely, any circle_admin sees "Remove me as Circle Admin"
+  (`removeSelfAsCircleAdmin` → `Circle::removeAdministrator()`) — but if they're
+  the **sole** admin the button instead alerts "Please appoint a new Circle
+  Admin first" (guarded server-side too: never removes the last admin).
+  (Appointing another member as circle_admin is future work.)
 - **Explore cards:** `CommunityCard` label is **Enter** (active member) vs
   **Visit** (otherwise). Membership is batch-loaded ONCE per request in
   `ExploreCommunities::memberCircleIds()` (a small set — active memberships are

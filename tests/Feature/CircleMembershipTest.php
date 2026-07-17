@@ -206,6 +206,94 @@ class CircleMembershipTest extends TestCase
         $this->assertSame('organisation_member', $membership->internal_role);
     }
 
+    public function test_admin_member_can_add_self_as_circle_admin(): void
+    {
+        $circle = $this->makeCampaignCircle();
+        // circle_admin must exist for the grant (seeded in the real app).
+        DB::table('roles')->insert(['name' => 'circle_admin', 'guard_name' => 'web', 'circle_id' => null]);
+        $admin = User::factory()->create();
+        $roleId = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web', 'circle_id' => null]);
+        DB::table('model_has_roles')->insert(['role_id' => $roleId, 'model_type' => User::class, 'model_id' => $admin->id, 'circle_id' => null]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $this->actingAs($admin->fresh());
+
+        // Not joined yet → button not offered.
+        $page = new CommunityPage;
+        $page->circle = $circle;
+        $this->assertFalse($page->canAddSelfAsCircleAdmin());
+
+        // After joining → offered, and the action grants circle_admin here.
+        $circle->joinAsMember($admin->fresh());
+        $page = new CommunityPage;
+        $page->circle = $circle;
+        $this->assertTrue($page->canAddSelfAsCircleAdmin());
+
+        $page->addSelfAsCircleAdmin();
+        $this->assertTrue($circle->isAdministeredBy($admin->fresh()));
+
+        // Already an admin here → no longer offered; re-running is a no-op.
+        $page = new CommunityPage;
+        $page->circle = $circle;
+        $this->assertFalse($page->canAddSelfAsCircleAdmin());
+        $page->addSelfAsCircleAdmin();
+        $this->assertCount(1, $circle->administrators());
+    }
+
+    public function test_remove_self_as_circle_admin_blocked_when_sole_admin(): void
+    {
+        DB::table('roles')->insert(['name' => 'circle_admin', 'guard_name' => 'web', 'circle_id' => null]);
+        $circle = $this->makeCampaignCircle();
+        $admin = User::factory()->create();
+        $circle->addAdministrator($admin);
+        $this->assertTrue($circle->isAdministeredBy($admin->fresh()));
+
+        $this->actingAs($admin->fresh());
+        $page = new CommunityPage;
+        $page->circle = $circle;
+
+        // Sole admin → self-removal is a no-op (guard); still the admin.
+        $page->removeSelfAsCircleAdmin();
+        $this->assertTrue($circle->isAdministeredBy($admin->fresh()));
+        $this->assertCount(1, $circle->administrators());
+    }
+
+    public function test_remove_self_as_circle_admin_when_another_exists(): void
+    {
+        DB::table('roles')->insert(['name' => 'circle_admin', 'guard_name' => 'web', 'circle_id' => null]);
+        $circle = $this->makeCampaignCircle();
+        $a = User::factory()->create();
+        $b = User::factory()->create();
+        $circle->addAdministrator($a);
+        $circle->addAdministrator($b);
+        $this->assertCount(2, $circle->administrators());
+
+        $this->actingAs($a->fresh());
+        $page = new CommunityPage;
+        $page->circle = $circle;
+
+        $page->removeSelfAsCircleAdmin();
+
+        $this->assertFalse($circle->isAdministeredBy($a->fresh())); // dropped
+        $this->assertTrue($circle->isAdministeredBy($b->fresh()));  // other remains
+        $this->assertCount(1, $circle->administrators());
+    }
+
+    public function test_non_admin_member_cannot_add_self_as_circle_admin(): void
+    {
+        $circle = $this->makeCampaignCircle();
+        $user = User::factory()->create(); // regular member, no global role
+        $circle->joinAsMember($user);
+
+        $this->actingAs($user->fresh());
+        $page = new CommunityPage;
+        $page->circle = $circle;
+
+        $this->assertFalse($page->canAddSelfAsCircleAdmin());
+        $page->addSelfAsCircleAdmin();
+        $this->assertFalse($circle->isAdministeredBy($user->fresh()));
+    }
+
     public function test_member_count_reflects_active_memberships(): void
     {
         $circle = $this->makeCampaignCircle();

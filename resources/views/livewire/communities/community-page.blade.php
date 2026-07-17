@@ -156,11 +156,35 @@
                 </a>
             @else
                 @if ($this->membership)
-                    <button type="button" wire:click="leave"
-                            wire:confirm="{{ __('communities.page.leave_confirm') }}"
-                            class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
-                        {{ __('communities.page.leave') }}
-                    </button>
+                    <div class="flex items-center gap-2">
+                        @if ($this->canAddSelfAsCircleAdmin)
+                            <button type="button" wire:click="addSelfAsCircleAdmin"
+                                    wire:confirm="{{ __('communities.page.add_self_admin_confirm') }}"
+                                    class="rounded-lg border border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50">
+                                {{ __('communities.page.add_self_admin') }}
+                            </button>
+                        @elseif ($this->isCircleAdminHere)
+                            @if ($this->administrators->count() > 1)
+                                <button type="button" wire:click="removeSelfAsCircleAdmin"
+                                        wire:confirm="{{ __('communities.page.remove_self_admin_confirm') }}"
+                                        class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
+                                    {{ __('communities.page.remove_self_admin') }}
+                                </button>
+                            @else
+                                {{-- Sole admin: can't drop the role until another is appointed. --}}
+                                <button type="button"
+                                        x-on:click="alert(@js(__('communities.page.remove_self_admin_sole')))"
+                                        class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
+                                    {{ __('communities.page.remove_self_admin') }}
+                                </button>
+                            @endif
+                        @endif
+                        <button type="button" wire:click="leave"
+                                wire:confirm="{{ __('communities.page.leave_confirm') }}"
+                                class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
+                            {{ __('communities.page.leave') }}
+                        </button>
+                    </div>
                 @elseif ($this->joinState['allowed'])
                     <button type="button" wire:click="join"
                             class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">

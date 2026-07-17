@@ -331,6 +331,71 @@ class CommunityPage extends Component
         }
     }
 
+    /**
+     * A global admin/superadmin who has JOINED this circle may add themselves
+     * as a circle_admin (unless they already are one). Members-only so it never
+     * appears for a not-joined admin browsing a community.
+     */
+    #[Computed]
+    public function canAddSelfAsCircleAdmin(): bool
+    {
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+
+        // Self-contained (uses activeMembership, not the membership computed) so
+        // the gate is easy to exercise directly.
+        return $user !== null
+            && $this->circle->activeMembership($user) !== null
+            && $user->hasAnyRole(['admin', 'superadmin'])
+            && ! $this->circle->isAdministeredBy($user);
+    }
+
+    public function addSelfAsCircleAdmin(): void
+    {
+        // Re-check server-side (never trust the rendered button state).
+        if (! $this->canAddSelfAsCircleAdmin()) {
+            return;
+        }
+
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        $this->circle->addAdministrator($user);
+
+        unset($this->administrators, $this->canAddSelfAsCircleAdmin, $this->isCircleAdminHere);
+    }
+
+    /** Whether the viewer currently holds circle_admin on THIS circle. */
+    #[Computed]
+    public function isCircleAdminHere(): bool
+    {
+        return $this->circle->isAdministeredBy(auth()->user());
+    }
+
+    /**
+     * Drop the viewer's own circle_admin role — but only if another admin
+     * remains (a circle must never be left adminless via self-removal). The
+     * "appoint a new admin first" case is surfaced in the UI; this also guards
+     * server-side.
+     */
+    public function removeSelfAsCircleAdmin(): void
+    {
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+
+        if ($user === null || ! $this->circle->isAdministeredBy($user)) {
+            return;
+        }
+
+        // Never remove the last admin.
+        if ($this->circle->administrators()->count() <= 1) {
+            return;
+        }
+
+        $this->circle->removeAdministrator($user);
+
+        unset($this->administrators, $this->canAddSelfAsCircleAdmin, $this->isCircleAdminHere);
+    }
+
     public function render()
     {
         return view('livewire.communities.community-page')

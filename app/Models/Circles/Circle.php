@@ -559,6 +559,43 @@ class Circle extends Model
         return $this->isManageableBy($user);
     }
 
+    /**
+     * Whether $user holds the circle_admin role scoped to THIS circle
+     * (distinct from isManageableBy, which is also true for global admins who
+     * are NOT circle_admins here).
+     */
+    public function isAdministeredBy(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return static::administeredBy($user)->contains(fn (Circle $c) => $c->id === $this->id);
+    }
+
+    /**
+     * Grant $user the circle_admin role scoped to THIS circle (in addition to
+     * any existing admins). Idempotent — Spatie won't duplicate the assignment.
+     */
+    public function addAdministrator(User $user): void
+    {
+        setPermissionsTeamId($this->id);
+        $user->assignRole('circle_admin');
+        setPermissionsTeamId(null);
+    }
+
+    /**
+     * Revoke $user's circle_admin role scoped to THIS circle. Callers must
+     * ensure another admin remains (see CommunityPage) — a circle should never
+     * be left without one via self-removal.
+     */
+    public function removeAdministrator(User $user): void
+    {
+        setPermissionsTeamId($this->id);
+        $user->removeRole('circle_admin');
+        setPermissionsTeamId(null);
+    }
+
     /** Forum groups created under this circle's Forums tab. */
     public function forumGroups(): HasMany
     {
