@@ -8,6 +8,7 @@ use App\Enums\Forums\ForumGroupVisibility;
 use App\Livewire\Communities\Services\ForumGroupModal;
 use App\Livewire\Communities\Services\ForumServiceContainer;
 use App\Models\Circles\Circle;
+use App\Models\Circles\CircleMembership;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\User;
@@ -177,6 +178,58 @@ class ForumGroupsTest extends TestCase
         $this->assertSame(2, $c->groups()->first()->discussions_count);
     }
 
+    public function test_participation_floor(): void
+    {
+        $this->assertSame(ForumGroupVisibility::Private, ForumGroupVisibility::Public->participationFloor());
+        $this->assertSame(ForumGroupVisibility::Private, ForumGroupVisibility::Private->participationFloor());
+        $this->assertSame(ForumGroupVisibility::Internal, ForumGroupVisibility::Internal->participationFloor());
+    }
+
+    public function test_can_view_by_visibility(): void
+    {
+        $circle = $this->makeCircle();
+        $service = app(ForumService::class);
+        $public = $service->createGroup($circle, User::factory()->create(), ['name' => 'P', 'visibility' => 'public']);
+        $private = $service->createGroup($circle, User::factory()->create(), ['name' => 'Pr', 'visibility' => 'private']);
+        $internal = $service->createGroup($circle, User::factory()->create(), ['name' => 'In', 'visibility' => 'internal']);
+
+        // Visitor (no membership): only Public.
+        $this->assertTrue($public->canView(null, true));
+        $this->assertFalse($private->canView(null, true));
+        $this->assertFalse($internal->canView(null, true));
+
+        // Member without an approved internal role: Public + Private, not Internal.
+        $member = new CircleMembership(['internal_role' => null]);
+        $this->assertTrue($public->canView($member, false));
+        $this->assertTrue($private->canView($member, false));
+        $this->assertFalse($internal->canView($member, false));
+
+        // Member with an approved internal role: all three.
+        $internalMember = new CircleMembership(['internal_role' => 'organisation_member', 'metadata' => ['internal_role_approved' => 'approved']]);
+        $this->assertTrue($internal->canView($internalMember, false));
+    }
+
+    public function test_can_participate_by_floor(): void
+    {
+        $circle = $this->makeCircle();
+        $service = app(ForumService::class);
+        $public = $service->createGroup($circle, User::factory()->create(), ['name' => 'P', 'visibility' => 'public']);
+        $internal = $service->createGroup($circle, User::factory()->create(), ['name' => 'In', 'visibility' => 'internal']);
+
+        $member = new CircleMembership(['internal_role' => null]);
+        $internalMember = new CircleMembership(['internal_role' => 'organisation_member', 'metadata' => ['internal_role_approved' => 'approved']]);
+
+        // Visitor never participates, even in a public group.
+        $this->assertFalse($public->canParticipate(null, true));
+
+        // Public group's floor is Private → any member participates.
+        $this->assertTrue($public->canParticipate($member, false));
+
+        // Internal group → only an approved-internal-role member participates.
+        $this->assertFalse($internal->canParticipate($member, false));
+        $this->assertTrue($internal->canParticipate($internalMember, false));
+    }
+
     public function test_modal_creates_group_and_rejects_duplicate_name(): void
     {
         $circle = $this->makeCircle();
@@ -192,13 +245,27 @@ class ForumGroupsTest extends TestCase
 
         $this->assertDatabaseHas('forum_groups', ['circle_id' => $circle->id, 'slug' => 'announcements']);
 
-        // Same name again → friendly validation error, no second row.
+        // Same name again → derived slug collides → friendly error on slug, no row.
         Livewire::test(ForumGroupModal::class, ['circleId' => $circle->id])
             ->set('name', 'Announcements')
             ->call('save')
-            ->assertHasErrors('name');
+            ->assertHasErrors('slug');
 
         $this->assertSame(1, ForumGroup::where('circle_id', $circle->id)->count());
+    }
+
+    public function test_create_group_button_wires_up_the_open_modal_dispatch(): void
+    {
+        $circle = $this->makeCircle();
+        $admin = User::factory()->create();
+        $this->grantGlobalRole($admin, 'admin');
+        $this->actingAs($admin->fresh());
+
+        // The Create Group button opens the wire-elements modal via a Blade
+        // $dispatch('openModal', …) — verify that wiring is present in the render.
+        Livewire::test(ForumServiceContainer::class, ['circle' => $circle])
+            ->assertSee('openModal', false)
+            ->assertSee('communities.services.forum-group-modal', false);
     }
 
     public function test_modal_forbidden_for_non_managers(): void
@@ -206,9 +273,8 @@ class ForumGroupsTest extends TestCase
         $circle = $this->makeCircle();
         $this->actingAs(User::factory()->create()); // regular user
 
+        // A non-manager can't even open the modal (mount aborts 403).
         Livewire::test(ForumGroupModal::class, ['circleId' => $circle->id])
-            ->set('name', 'Sneaky')
-            ->call('save')
             ->assertStatus(403);
 
         $this->assertSame(0, ForumGroup::count());

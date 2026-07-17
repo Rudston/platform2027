@@ -182,16 +182,25 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     ForumService/ForumServiceContainer. forum_groups + forum_discussions tables
     (created_by nullable+nullOnDelete; forum_groups unique per (circle_id,slug);
     forum_discussions FULLTEXT is MySQL-only/guarded). Models in app/Models/Forums;
-    4 plain enums in app/Enums/Forums (ForumGroupVisibility/Status,
-    ForumDiscussionStatus/ModerationStatus). ForumService does the writes
-    (create/update/deactivate + slug). ForumServiceContainer tab: stats (Total
-    Groups, Participants=0 stub, real Total Discussions), search + status filter
-    (default active), gated Create/Manage via Circle::isManageableBy() (composes
-    the existing administeredBy() primitive). Create/edit via a wire-elements
-    ForumGroupModal (friendly slug-collision error). Discussions page at
-    /communities/{circle}/forums/{forumGroup:slug} (scopeBindings, ?from=
-    back-link) — placeholder body this pass. Deferred: discussion list/detail,
-    join, moderation, pin/lock, membership-based visibility filtering.
+    4 plain enums in app/Enums/Forums (ForumGroupVisibility [public/private/
+    internal] + Status, ForumDiscussionStatus/ModerationStatus). Visibility:
+    Internal = members with ANY approved internal_role (via
+    CircleMembership::hasApprovedInternalRole — never hardcode organisation_member).
+    ForumGroupVisibility::participationFloor() is the single view→participate rule
+    (Public→Private); ForumGroup::canView()/canParticipate() use it. The overview
+    list + stats filter by canView (managers bypass). ForumService does the writes
+    (create/update/deactivate + slug, explicit or derived). ForumServiceContainer
+    tab: stats (Groups, Participants=0 stub, Discussions — all scoped to viewable),
+    search + status filter (default active), gated Create/Manage via
+    Circle::isManageableBy(). Create/edit via a wire-elements ForumGroupModal
+    (sectioned: Basic Info incl. editable slug / Visibility & Access radio + live
+    read-only Group Access note / Group Images placeholder / Tags picker; "Save
+    Group"). Modal opened via a BLADE $dispatch('openModal') (a PHP $this->dispatch
+    from the nested container does NOT reach the modal host under Livewire 4 +
+    wire-elements 3.0.4). New-entity buttons use the "+ " prefix convention.
+    Discussions page at /communities/{circle}/forums/{forumGroup:slug}
+    (scopeBindings, ?from= back-link) — placeholder body. Deferred: discussion
+    list/detail, join, moderation, pin/lock (canParticipate is ready to gate them).
 
 21. **Theme-based tagging + tag suggestions** — a lightweight descriptive tag
     layer over `themes`, UNRELATED to ThemeCommunity. `taggables` polymorphic

@@ -4,7 +4,6 @@ namespace App\Livewire\Communities\Services;
 
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
-use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Collection;
@@ -53,62 +52,64 @@ class ForumServiceContainer extends Component
     }
 
     /**
-     * Groups for this circle, filtered by search + status, each with a real
-     * discussion count.
+     * This circle's groups the viewer may VIEW — the single source for the list
+     * and the stats. Visibility is decided by ForumGroup::canView(); managers
+     * see everything (they must, to manage it). Fetched once (all statuses).
+     *
+     * @return Collection<int, ForumGroup>
+     */
+    #[Computed]
+    public function viewableGroups(): Collection
+    {
+        return $this->circle->forumGroups()
+            ->withCount('discussions')
+            ->with('tags')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (ForumGroup $g) => $this->canManage || $g->canView($this->membership, $this->isVisitor))
+            ->values();
+    }
+
+    /**
+     * The viewable groups with the list's search + status filters applied.
      *
      * @return Collection<int, ForumGroup>
      */
     #[Computed]
     public function groups(): Collection
     {
-        return $this->circle->forumGroups()
-            ->when($this->search !== '', fn ($q) => $q->where('name', 'like', '%'.$this->search.'%'))
+        return $this->viewableGroups()
+            ->when(
+                $this->search !== '',
+                fn (Collection $c) => $c->filter(
+                    fn (ForumGroup $g) => str_contains(mb_strtolower($g->name), mb_strtolower($this->search)),
+                ),
+            )
             ->when(
                 in_array($this->statusFilter, ['active', 'deactivated', 'archived'], true),
-                fn ($q) => $q->where('status', $this->statusFilter),
+                fn (Collection $c) => $c->filter(fn (ForumGroup $g) => $g->status->value === $this->statusFilter),
             )
-            ->withCount('discussions')
-            ->with('tags')
-            ->orderBy('name')
-            ->get();
+            ->values();
     }
 
-    /** Total groups in this circle (all statuses). */
+    /** Total groups the viewer can see in this circle (all statuses). */
     #[Computed]
     public function totalGroups(): int
     {
-        return $this->circle->forumGroups()->count();
+        return $this->viewableGroups()->count();
     }
 
-    /** Real total discussions across all of this circle's groups. */
+    /** Total discussions across the groups the viewer can see. */
     #[Computed]
     public function totalDiscussions(): int
     {
-        return ForumDiscussion::whereHas('group', fn ($q) => $q->where('circle_id', $this->circle->id))->count();
+        return (int) $this->viewableGroups()->sum('discussions_count');
     }
 
-    public function openCreateGroup(): void
-    {
-        if (! $this->canManage) {
-            return;
-        }
-
-        $this->dispatch('openModal', component: 'communities.services.forum-group-modal', arguments: [
-            'circleId' => $this->circle->id,
-        ]);
-    }
-
-    public function openEditGroup(int $groupId): void
-    {
-        if (! $this->canManage) {
-            return;
-        }
-
-        $this->dispatch('openModal', component: 'communities.services.forum-group-modal', arguments: [
-            'circleId' => $this->circle->id,
-            'groupId' => $groupId,
-        ]);
-    }
+    // Create/Edit modals are opened via a Blade $dispatch('openModal', …) in the
+    // view (the app-wide wire-elements pattern), not a PHP dispatch — the modal
+    // host lives on the parent page and Blade dispatch reaches it reliably.
+    // ForumGroupModal re-checks manage authorization in save().
 
     public function deactivate(int $groupId): void
     {
@@ -120,7 +121,7 @@ class ForumServiceContainer extends Component
 
         if ($group) {
             $this->service()->deactivateGroup($group);
-            unset($this->groups, $this->totalGroups);
+            unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions);
         }
     }
 
@@ -128,7 +129,7 @@ class ForumServiceContainer extends Component
     #[On('forum-groups-changed')]
     public function onGroupsChanged(): void
     {
-        unset($this->groups, $this->totalGroups, $this->totalDiscussions);
+        unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions);
     }
 
     /**

@@ -20,7 +20,8 @@
         </div>
 
         @if ($this->canManage)
-            <button type="button" wire:click="openCreateGroup"
+            <button type="button"
+                    wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }} } })"
                     class="ml-auto rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
                 {{ __('forums.create_group') }}
             </button>
@@ -64,7 +65,7 @@
                                         class="rounded px-2 py-0.5 text-muted hover:text-main" aria-label="Actions">⋯</button>
                                 <div x-show="open" x-on:click.outside="open = false" x-cloak
                                      class="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border-muted bg-surface py-1 text-sm shadow-lg">
-                                    <button type="button" wire:click="openEditGroup({{ $group->id }})" x-on:click="open = false"
+                                    <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })" x-on:click="open = false"
                                             class="block w-full px-3 py-1.5 text-left text-main hover:bg-border-muted">{{ __('forums.actions.edit') }}</button>
                                     <a href="{{ $this->discussionsUrl($group) }}" wire:navigate
                                        class="block px-3 py-1.5 text-main hover:bg-border-muted">{{ __('forums.actions.discussions') }}</a>
@@ -84,7 +85,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <x-tag-list :tags="$group->tags" />
                             @if ($this->canManage)
-                                <button type="button" wire:click="openEditGroup({{ $group->id }})"
+                                <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
                                         class="text-xs text-indigo-600 hover:underline">{{ __('tags.edit') }}</button>
                             @endif
                         </div>
@@ -106,7 +107,7 @@
                         ])>{{ __('forums.status.'.$status->value) }}</span>
 
                         @if ($this->canManage)
-                            <button type="button" wire:click="openEditGroup({{ $group->id }})"
+                            <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
                                     class="rounded-lg border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50">
                                 {{ __('forums.actions.manage') }}
                             </button>

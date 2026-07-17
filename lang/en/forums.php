@@ -4,7 +4,7 @@ return [
     'total_groups'       => 'Groups',
     'participants'       => 'Participants',
     'total_discussions'  => 'Discussions',
-    'create_group'       => 'Create Group',
+    'create_group'       => '+ Create Group',
     'search_placeholder' => 'Search groups…',
     'banner_placeholder' => 'Banner',
     'no_groups'          => 'No forum groups yet.',
@@ -34,22 +34,42 @@ return [
     ],
 
     'visibility' => [
-        'public'      => 'Public',
-        'private'     => 'Private',
-        'invite-only' => 'Invite only',
+        'public'   => 'Public',
+        'private'  => 'Private',
+        'internal' => 'Internal',
+    ],
+
+    'visibility_help' => [
+        'public'   => 'Anyone can view and discover this group. Readonly for visitors.',
+        'private'  => 'Only community members can view and discover this group (no visitors).',
+        'internal' => 'Only community members having an internal role can view and discover this group.',
+    ],
+
+    'access' => [
+        'members'  => 'Only community members can participate.',
+        'internal' => 'Only community members having an internal role can participate.',
     ],
 
     'modal' => [
-        'create_title' => 'Create a forum group',
-        'edit_title'   => 'Edit forum group',
-        'name'         => 'Name',
-        'description'  => 'Description',
-        'visibility'   => 'Visibility',
-        'save'         => 'Save',
+        'create_title'          => 'Create a Forum Group',
+        'edit_title'            => 'Edit Forum Group',
+        'section_basic'         => 'Basic Information',
+        'section_visibility'    => 'Visibility & Access',
+        'section_images'        => 'Group Images',
+        'name'                  => 'Name',
+        'name_placeholder'      => 'Enter group name',
+        'slug'                  => 'URL Slug',
+        'slug_placeholder'      => 'group-slug',
+        'slug_note'             => 'This is used to provide a url for the forum',
+        'description'           => 'Description',
+        'description_placeholder' => 'Describe what this group is about',
+        'group_access'          => 'Group Access',
+        'save'                  => 'Save Group',
     ],
 
     'validation' => [
-        'name_taken' => 'A group with a similar name already exists in this community.',
+        'slug_required' => 'Please provide a name or URL slug.',
+        'slug_taken'    => 'A group with a similar URL slug already exists in this community.',
     ],
 
     'back_to_forums'          => '← Back',

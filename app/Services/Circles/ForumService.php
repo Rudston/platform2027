@@ -40,14 +40,15 @@ class ForumService implements CircleServiceContract
     */
 
     /**
-     * @param  array{name: string, description?: ?string, visibility?: string}  $data
+     * @param  array{name: string, slug?: ?string, description?: ?string, visibility?: string}  $data
      */
     public function createGroup(Circle $circle, User $creator, array $data): ForumGroup
     {
         return $circle->forumGroups()->create([
             'created_by' => $creator->getKey(),
             'name' => $data['name'],
-            'slug' => $this->slugFor($data['name']),
+            // Explicit slug when given, else derived from the name.
+            'slug' => $this->slugFor($data['slug'] ?? $data['name']),
             'description' => $data['description'] ?? null,
             'visibility' => $data['visibility'] ?? ForumGroupVisibility::Public->value,
             'status' => ForumGroupStatus::Active->value,
@@ -55,13 +56,13 @@ class ForumService implements CircleServiceContract
     }
 
     /**
-     * @param  array{name: string, description?: ?string, visibility?: string}  $data
+     * @param  array{name: string, slug?: ?string, description?: ?string, visibility?: string}  $data
      */
     public function updateGroup(ForumGroup $group, array $data): ForumGroup
     {
-        // Slug is kept stable on edit to preserve the group's Discussions URL.
         $group->update([
             'name' => $data['name'],
+            'slug' => isset($data['slug']) ? $this->slugFor($data['slug']) : $group->slug,
             'description' => $data['description'] ?? null,
             'visibility' => $data['visibility'] ?? $group->visibility->value,
         ]);
@@ -83,8 +84,14 @@ class ForumService implements CircleServiceContract
     /** Whether a name's slug already exists in this circle (optionally ignoring one group). */
     public function slugTaken(Circle $circle, string $name, ?int $ignoreId = null): bool
     {
+        return $this->slugExists($circle, $this->slugFor($name), $ignoreId);
+    }
+
+    /** Whether an exact slug already exists in this circle (optionally ignoring one group). */
+    public function slugExists(Circle $circle, string $slug, ?int $ignoreId = null): bool
+    {
         return $circle->forumGroups()
-            ->where('slug', $this->slugFor($name))
+            ->where('slug', $slug)
             ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
             ->exists();
     }

@@ -7,11 +7,13 @@ use App\Models\Circles\Circle;
 use App\Models\Forums\ForumGroup;
 use App\Services\Circles\ForumService;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Computed;
 use LivewireUI\Modal\ModalComponent;
 
 /**
  * Create / edit a forum group (transient form). Opened from
- * ForumServiceContainer via the wire-elements modal. Manage-gated in save().
+ * ForumServiceContainer via the wire-elements modal. Manage-gated in mount()
+ * and save().
  */
 class ForumGroupModal extends ModalComponent
 {
@@ -20,6 +22,8 @@ class ForumGroupModal extends ModalComponent
     public ?int $groupId = null;
 
     public string $name = '';
+
+    public string $slug = '';
 
     public string $description = '';
 
@@ -30,14 +34,33 @@ class ForumGroupModal extends ModalComponent
         $this->circleId = $circleId;
         $this->groupId = $groupId;
 
+        // Manage-gated at open too (the Blade dispatch has no pre-check; save()
+        // re-checks as well).
+        abort_unless(Circle::findOrFail($circleId)->isManageableBy(auth()->user()), 403);
+
         if ($groupId !== null) {
             $group = ForumGroup::findOrFail($groupId);
             abort_unless($group->circle_id === $circleId, 404);
 
             $this->name = $group->name;
+            $this->slug = (string) $group->slug;
             $this->description = (string) $group->description;
             $this->visibility = $group->visibility->value;
         }
+    }
+
+    /**
+     * Fixed "Group Access" copy derived live from the selected visibility's
+     * participation floor (purely display — never submitted).
+     */
+    #[Computed]
+    public function participationNote(): string
+    {
+        $floor = ForumGroupVisibility::from($this->visibility)->participationFloor();
+
+        return $floor === ForumGroupVisibility::Internal
+            ? __('forums.access.internal')
+            : __('forums.access.members');
     }
 
     /** @return array<string, mixed> */
@@ -45,6 +68,7 @@ class ForumGroupModal extends ModalComponent
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'visibility' => ['required', Rule::in(array_map(fn ($c) => $c->value, ForumGroupVisibility::cases()))],
         ];
@@ -62,15 +86,25 @@ class ForumGroupModal extends ModalComponent
 
         $service = app(ForumService::class);
 
-        // Friendly collision message instead of a raw unique-constraint error.
-        if ($service->slugTaken($circle, $this->name, $this->groupId)) {
-            $this->addError('name', __('forums.validation.name_taken'));
+        // Resolve the intended slug (explicit input, else derived from the name)
+        // and surface a friendly collision message rather than a raw DB error.
+        $slug = $service->slugFor($this->slug !== '' ? $this->slug : $this->name);
+
+        if ($slug === '') {
+            $this->addError('slug', __('forums.validation.slug_required'));
+
+            return;
+        }
+
+        if ($service->slugExists($circle, $slug, $this->groupId)) {
+            $this->addError('slug', __('forums.validation.slug_taken'));
 
             return;
         }
 
         $data = [
             'name' => $this->name,
+            'slug' => $slug,
             'description' => $this->description !== '' ? $this->description : null,
             'visibility' => $this->visibility,
         ];

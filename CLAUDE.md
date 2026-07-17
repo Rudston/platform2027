@@ -326,21 +326,45 @@ Discussion list/detail UI, join, moderation, pin/lock are deferred.
   FULLTEXT(title, content) **MySQL-only** (guarded — sqlite tests skip it). No UI
   reads/writes it yet; it exists so the discussion-count stats are real now.
 - **Enums** (`app/Enums/Forums/`, plain backed like CircleStatus):
-  `ForumGroupVisibility` (public/private/invite-only), `ForumGroupStatus`
+  `ForumGroupVisibility` (public/private/internal), `ForumGroupStatus`
   (active/deactivated/archived), `ForumDiscussionStatus` (active/deactivated),
   `ForumDiscussionModerationStatus` (pending/approved/rejected). Cast on the models.
 
+### Visibility & participation (the real Internal semantics)
+- `ForumGroupVisibility`: **Public** (anyone views; readonly for visitors),
+  **Private** (members only, no visitors), **Internal** (members with ANY
+  approved internal_role — never hardcode 'organisation_member'; check via
+  `CircleMembership::hasApprovedInternalRole()`).
+- `ForumGroupVisibility::participationFloor()` — the SINGLE definition of the
+  view→participate relationship: Public→Private, Private→Private,
+  Internal→Internal (anyone views a public group; only members participate).
+- `ForumGroup::canView(?membership, isVisitor)` and
+  `canParticipate(?membership, isVisitor)` resolve against visibility (and
+  participationFloor for participate). A visitor only ever satisfies Public
+  viewing, never participation.
+- The overview list + stats are filtered by `canView` (managers bypass — they
+  see all to manage). Participation gating (canParticipate) is wired for the
+  future Discussions UI. (The old interim "invite-only = members-only" rule is
+  gone — this is the permanent rule.)
+
 ### Service & UI
-- **ForumService** (the `CircleServiceContract` handler) now holds the writes:
-  `createGroup`, `updateGroup` (slug kept stable on edit), `deactivateGroup`,
-  `slugFor`/`slugTaken`.
+- **ForumService** (the `CircleServiceContract` handler) holds the writes:
+  `createGroup`/`updateGroup` (accept an optional explicit `slug`, else derived
+  from name), `deactivateGroup`, `slugFor`, `slugExists`/`slugTaken`.
 - **ForumServiceContainer** (the Forums tab): stats (Total Groups, Participants
-  [hardcoded 0 — later], real Total Discussions), search (name LIKE) + status
-  filter (default = active only), group grid. Create/Manage/⋯-menu gated by
-  `$this->canManage`. Reads via computeds; writes via ForumService.
-- **ForumGroupModal** (wire-elements `ModalComponent`, opened via `openModal`):
-  create/edit form (name, description, visibility); friendly slug-collision
-  error (not a raw DB error); manage-gated in `save()`. The community page hosts
+  [hardcoded 0 — later], real Total Discussions — all scoped to `viewableGroups`),
+  search + status filter (default = active only), group grid. Create/Manage/
+  ⋯-menu gated by `$this->canManage`. Reads via computeds; writes via ForumService.
+- **ForumGroupModal** (wire-elements `ModalComponent`): sectioned create/edit
+  form (p-10) — Basic Information (name, editable URL slug, description),
+  Visibility & Access (radio group + a live read-only "Group Access" note
+  derived from `participationNote`/participationFloor, never submitted), Group
+  Images (placeholder), and the Tags picker (edit only). Friendly slug-collision
+  error; submit button "Save Group". Manage-gated in BOTH `mount()` (403) and
+  `save()`. Opened via a **Blade** `wire:click="$dispatch('openModal', {…})"`
+  (the app-wide wire-elements pattern
+  — a PHP `$this->dispatch` from the nested container does NOT reach the modal
+  host under this Livewire 4 + wire-elements 3.0.4 setup). The community page hosts
   `<livewire:wire-elements-modal />`.
 - **Discussions page**: `GET /communities/{circle}/forums/{forumGroup:slug}`
   (route `communities.forums.show`, **`->scopeBindings()`** so the slug resolves
@@ -906,6 +930,8 @@ On failure: silent.
 
 ## Common Mistakes to Avoid
 
+- Convention: "create new entity" buttons are prefixed "+ " (e.g. "+ Create
+  Group"); the in-modal submit is a plain "Save …"
 - Using Livewire 3 syntax (wire:model.defer, etc.) — this is Livewire 4
 - Blade component props: declare them with `/** @var … */` hints (in a
   comment-free `@php` block) so the IDE doesn't flag them as undefined
