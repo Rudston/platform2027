@@ -58,6 +58,7 @@ return [
         'remove_self_admin'         => 'Remove me as Circle Admin',
         'remove_self_admin_confirm' => 'Remove yourself as an administrator of this community?',
         'remove_self_admin_sole'    => 'Please appoint a new Circle Admin first.',
+        'leave_blocked_admin'       => 'Remove your Circle Admin role before leaving.',
         'join_available_at'  => 'You can join from :date',
         'join_modal_title'   => 'Join this community',
         'org_member_question' => 'Are you a member of staff or the board?',

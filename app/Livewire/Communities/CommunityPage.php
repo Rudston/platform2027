@@ -325,10 +325,20 @@ class CommunityPage extends Component
     /** Leave the community (voluntary — no time/count restriction). */
     public function leave(): void
     {
-        if ($user = auth()->user()) {
-            $this->circle->leave($user);
-            unset($this->membership, $this->isVisitor, $this->joinState);
+        $user = auth()->user();
+
+        if ($user === null) {
+            return;
         }
+
+        // A circle_admin must drop the admin role before leaving — otherwise the
+        // membership goes but the role lingers. Guarded here too (not just the UI).
+        if ($this->circle->isAdministeredBy($user)) {
+            return;
+        }
+
+        $this->circle->leave($user);
+        unset($this->membership, $this->isVisitor, $this->joinState);
     }
 
     /**

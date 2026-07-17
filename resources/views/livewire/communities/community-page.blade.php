@@ -179,11 +179,22 @@
                                 </button>
                             @endif
                         @endif
-                        <button type="button" wire:click="leave"
-                                wire:confirm="{{ __('communities.page.leave_confirm') }}"
-                                class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
-                            {{ __('communities.page.leave') }}
-                        </button>
+
+                        {{-- Leave is always shown. A circle admin is blocked with a
+                             popup (must drop the role first); guarded server-side too. --}}
+                        @if ($this->isCircleAdminHere)
+                            <button type="button"
+                                    x-on:click="alert(@js(__('communities.page.leave_blocked_admin')))"
+                                    class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
+                                {{ __('communities.page.leave') }}
+                            </button>
+                        @else
+                            <button type="button" wire:click="leave"
+                                    wire:confirm="{{ __('communities.page.leave_confirm') }}"
+                                    class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
+                                {{ __('communities.page.leave') }}
+                            </button>
+                        @endif
                     </div>
                 @elseif ($this->joinState['allowed'])
                     <button type="button" wire:click="join"

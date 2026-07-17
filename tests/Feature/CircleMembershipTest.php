@@ -279,6 +279,31 @@ class CircleMembershipTest extends TestCase
         $this->assertCount(1, $circle->administrators());
     }
 
+    public function test_circle_admin_cannot_leave_until_dropping_the_role(): void
+    {
+        DB::table('roles')->insert(['name' => 'circle_admin', 'guard_name' => 'web', 'circle_id' => null]);
+        $circle = $this->makeCampaignCircle();
+        $user = User::factory()->create();
+        $circle->joinAsMember($user);
+        $circle->addAdministrator($user);
+
+        $this->actingAs($user->fresh());
+        $page = new CommunityPage;
+        $page->circle = $circle;
+
+        // Still a circle admin → leave() is a no-op, membership stays.
+        $page->leave();
+        $this->assertNotNull($circle->activeMembership($user->fresh()));
+
+        // Drop the role isn't possible as sole admin — appoint a second, drop, then leave.
+        $circle->addAdministrator(User::factory()->create());
+        $page->removeSelfAsCircleAdmin();
+        $this->assertFalse($circle->isAdministeredBy($user->fresh()));
+
+        $page->leave();
+        $this->assertNull($circle->activeMembership($user->fresh()));
+    }
+
     public function test_non_admin_member_cannot_add_self_as_circle_admin(): void
     {
         $circle = $this->makeCampaignCircle();

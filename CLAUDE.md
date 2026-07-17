@@ -259,6 +259,10 @@ overrides `allowedInternalRoles()` → `['organisation_member']`.
   the **sole** admin the button instead alerts "Please appoint a new Circle
   Admin first" (guarded server-side too: never removes the last admin).
   (Appointing another member as circle_admin is future work.)
+- **Leave is blocked while circle_admin:** the "Leave Community" button is still
+  shown, but for a circle_admin it pops an alert ("Remove your Circle Admin role
+  before leaving") instead of leaving; `leave()` also no-ops server-side while
+  the user holds the role here. They must drop it (needs a second admin) first.
 - **Explore cards:** `CommunityCard` label is **Enter** (active member) vs
   **Visit** (otherwise). Membership is batch-loaded ONCE per request in
   `ExploreCommunities::memberCircleIds()` (a small set — active memberships are
