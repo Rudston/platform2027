@@ -200,18 +200,22 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     wire-elements 3.0.4). New-entity buttons use the "+ " prefix convention.
     Discussions page at /communities/{circle}/forums/{forumGroup:slug}
     (scopeBindings, ?from= back-link) — placeholder body. Deferred: discussion
-    list/detail, join, moderation, pin/lock (canParticipate is ready to gate them).
+    list/detail, join (Phase 1 now BUILT — see below); moderation, pin/lock,
+    replies deferred.
 
-    NEXT TASK — Forum Discussions UI (groundwork already in place; see the
-    "Forum Discussions — NEXT WORK" subsection in CLAUDE.md). Exists: the
-    forum_discussions table + ForumDiscussion model (title, content, slug,
-    is_pinned, is_locked, status, moderation_status[default approved],
-    moderation_reason; FULLTEXT title/content MySQL-only; HasTags applied);
-    ForumGroupPage placeholder + route; ForumGroup::canParticipate() as the
-    read-only-vs-post gate; ForumDiscussion::canBeTaggedBy (author OR circle
-    manager). To build: discussion list + detail, create/reply (gated by
-    canParticipate), pin/lock + moderation UI, search (FULLTEXT on MySQL, LIKE
-    fallback). Confirm any new auth/moderation rules before implementing.
+    Forum Discussions Phase 1 (BUILT — see CLAUDE.md "Forum Discussions —
+    Phase 1"): forum_discussion_participants table + ForumDiscussionParticipant
+    (CircleMembership-style never-delete/close-via-left_at); on ForumDiscussion
+    join()/leave()/isJoinedBy()/participantCount()/activeParticipants().
+    ForumGroup::canCreateDiscussion() (creator OR circle manager) gates the
+    "+ Create Discussion" button + ForumDiscussionModal; writes via
+    ForumService::createDiscussion(). ForumGroupPage lists discussions (pinned
+    first then recency; read-only pinned/locked badges); ForumDiscussionPage
+    (route communities.forums.discussions.show, scopeBindings via
+    ForumGroup::forumDiscussions()) shows the first post read-only + Join/Leave
+    (gated by canParticipate) + participant count. Both forum pages 404 unless
+    the viewer canView the group (managers bypass). Deferred: replies/comments,
+    moderation UI, pin/lock toggles, contribution tracking, search.
 
 21. **Theme-based tagging + tag suggestions** — a lightweight descriptive tag
     layer over `themes`, UNRELATED to ThemeCommunity. `taggables` polymorphic

@@ -7,6 +7,9 @@ use App\Enums\Forums\ForumGroupStatus;
 use App\Enums\Forums\ForumGroupVisibility;
 use App\Livewire\Communities\Services\ForumServiceContainer;
 use App\Models\Circles\Circle;
+use App\Enums\Forums\ForumDiscussionModerationStatus;
+use App\Enums\Forums\ForumDiscussionStatus;
+use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -73,6 +76,37 @@ class ForumService implements CircleServiceContract
     public function deactivateGroup(ForumGroup $group): void
     {
         $group->update(['status' => ForumGroupStatus::Deactivated->value]);
+    }
+
+    /**
+     * Create a discussion in a group. status/moderation_status take their DB
+     * defaults (active / approved). Slug is explicit or derived from the title.
+     *
+     * @param  array{title: string, slug?: ?string, content?: ?string}  $data
+     */
+    public function createDiscussion(ForumGroup $group, User $creator, array $data): ForumDiscussion
+    {
+        // Set the enum/boolean defaults explicitly so the returned model is
+        // fully populated (DB defaults aren't reflected in-memory on create).
+        return $group->discussions()->create([
+            'created_by' => $creator->getKey(),
+            'title' => $data['title'],
+            'slug' => $this->slugFor($data['slug'] ?? $data['title']),
+            'content' => $data['content'] ?? '',
+            'status' => ForumDiscussionStatus::Active->value,
+            'moderation_status' => ForumDiscussionModerationStatus::Approved->value,
+            'is_pinned' => false,
+            'is_locked' => false,
+        ]);
+    }
+
+    /** Whether a discussion slug already exists in a group (optionally ignoring one). */
+    public function discussionSlugExists(ForumGroup $group, string $slug, ?int $ignoreId = null): bool
+    {
+        return $group->discussions()
+            ->where('slug', $slug)
+            ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
+            ->exists();
     }
 
     /** Slug derived from a group name. */

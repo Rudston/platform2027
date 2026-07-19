@@ -310,8 +310,9 @@ A claimed internal role is NOT trusted until the org contact confirms it.
 ## Forums (groups)
 
 The real implementation behind the `ForumService` / `ForumServiceContainer`
-skeleton. **This pass = groups only** (overview + create/edit/deactivate).
-Discussion list/detail UI, join, moderation, pin/lock are deferred.
+skeleton. Groups: overview + create/edit/deactivate. Discussions **Phase 1**
+(list/detail/create/join) is built — see the Forum Discussions section below.
+Replies/comments, moderation UI, and pin/lock toggles remain deferred.
 
 ### Tables & models
 - **forum_groups** (`app/Models/Forums/ForumGroup.php`): `circle_id` (FK cascade),
@@ -377,30 +378,37 @@ circle — composes the existing `Circle::administeredBy()` primitive (the same
 one RequestResource uses). Both consumers rest on `administeredBy`; no parallel
 mechanism. (RequestResource keeps its own subtree-based inline composition.)
 
-### Forum Discussions — NEXT WORK (groundwork in place, UI not built)
-The discussions layer is the next task. What ALREADY exists to build on:
+### Forum Discussions — Phase 1 (list / detail / create / join) — BUILT
 - **`forum_discussions` table + `ForumDiscussion` model** (soft deletes):
   `forum_group_id` (FK cascade), `created_by` (nullable, nullOnDelete), `title`,
   `content` (text), `slug` (nullable), `is_pinned`/`is_locked` (bool), `status`
   (`ForumDiscussionStatus`: active/deactivated), `moderation_status`
   (`ForumDiscussionModerationStatus`: pending/approved/rejected, default
   approved), `moderation_reason`. **FULLTEXT(title, content)** — MySQL-only
-  (guarded; sqlite tests skip it, so search must degrade gracefully off-MySQL).
-  Relations `group()`, `creator()`. `HasTags` already applied (tagging relation
-  ready — no discussion display surface yet).
-- **Gating is ready:** `ForumGroup::canParticipate(?membership, isVisitor)`
-  (built on `participationFloor`) is the intended read-only-vs-post gate — a
-  visitor/non-participant should see discussions read-only where they can view
-  the group, and only participants create/reply. `ForumDiscussion::canBeTaggedBy`
-  already encodes the author-OR-circle-manager rule for discussion-level rights.
-- **The page + route exist as a placeholder:** `ForumGroupPage`
-  (`GET /communities/{circle}/forums/{forumGroup:slug}`, route
-  `communities.forums.show`, scopeBindings, `?from=` back-link that reselects the
-  Forums tab). Its body is "Discussions — coming soon".
-- **Still to build (this is the upcoming task):** discussion list + detail UI,
-  create/reply flow (gated by `canParticipate`), pin/lock + moderation UI
-  (fields exist, unused), and search (FULLTEXT on MySQL, LIKE fallback). Confirm
-  any new authorization/moderation rules before implementing, per prior passes.
+  (guarded). Relations `group()`, `creator()`; `HasTags` applied.
+- **Participation:** `forum_discussion_participants` (mirrors CircleMembership —
+  never deleted, closed via `left_at`; no unique constraint; short index name
+  `fdp_discussion_user_left_idx` to stay under MySQL's 64-char limit) +
+  `ForumDiscussionParticipant` model. On `ForumDiscussion`: `participants()`,
+  `activeParticipants()`, `participantCount()`, `isJoinedBy()`, `join()`
+  (idempotent), `leave()`.
+- **Create gating:** `ForumGroup::canCreateDiscussion(?User)` = group creator OR
+  circle manager (`isManageableBy`). Gates the "+ Create Discussion" button AND
+  `ForumDiscussionModal` (`mount()` + `save()`, 403). Writes via
+  `ForumService::createDiscussion()` / `discussionSlugExists()` (slug explicit
+  or title-derived, unique per group, friendly collision error).
+- **Pages:** `ForumGroupPage` now lists discussions (pinned first, then
+  recency; author + date; read-only pinned/locked badges) with a gated create
+  button (Blade `$dispatch('openModal', …)` + a modal host). `ForumDiscussionPage`
+  (`GET /communities/{circle}/forums/{forumGroup:slug}/{forumDiscussion:slug}`,
+  route `communities.forums.discussions.show`, **scopeBindings** — needs
+  `ForumGroup::forumDiscussions()`; `discussions()` kept for withCount) — shows
+  the "first post" (content, author, timestamp; read-only, NO reply composer) +
+  a Join/Leave control gated by `ForumGroup::canParticipate()`, with a
+  participant count. Both pages **abort 404 unless the viewer canView the group**
+  (managers bypass) — closes the direct-URL visibility hole.
+- **Deferred (later phases):** pin/lock toggle UI, moderation UI, replies/
+  comments, contribution tracking on the participant pivot, search.
 
 ---
 

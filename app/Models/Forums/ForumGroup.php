@@ -41,6 +41,34 @@ class ForumGroup extends Model
         return $this->hasMany(ForumDiscussion::class);
     }
 
+    /**
+     * Same target as discussions(); named for the {forumDiscussion} scoped
+     * route binding (Laravel resolves the child via the pluralised parameter
+     * name). discussions() is kept for withCount('discussions').
+     */
+    public function forumDiscussions(): HasMany
+    {
+        return $this->hasMany(ForumDiscussion::class);
+    }
+
+    /**
+     * Who may start a discussion here: the group's creator, or a manager of the
+     * owning circle (circle_admin / admin / superadmin). Gates the "+ Create
+     * Discussion" button and the modal's save.
+     */
+    public function canCreateDiscussion(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if ($this->created_by !== null && $this->created_by === $user->getKey()) {
+            return true;
+        }
+
+        return $this->circle?->isManageableBy($user) ?? false;
+    }
+
     /** Tagging mirrors the group's manage rights: managers of the owning circle. */
     public function canBeTaggedBy(?User $user): bool
     {

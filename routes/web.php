@@ -8,6 +8,7 @@ use App\Livewire\Auth\Login;
 use App\Livewire\Auth\Register;
 use App\Livewire\Auth\ResetPassword;
 use App\Livewire\Communities\CommunityPage;
+use App\Livewire\Communities\ForumDiscussionPage;
 use App\Livewire\Communities\ForumGroupPage;
 use App\Livewire\Explore\ExploreCommunities;
 use Illuminate\Support\Facades\Route;
@@ -31,6 +32,12 @@ Route::get('/communities/{circle}', CommunityPage::class)->name('communities.sho
 Route::get('/communities/{circle}/forums/{forumGroup:slug}', ForumGroupPage::class)
     ->scopeBindings()
     ->name('communities.forums.show');
+
+// A single discussion. scopeBindings() resolves {forumDiscussion:slug} within
+// {forumGroup} within {circle}.
+Route::get('/communities/{circle}/forums/{forumGroup:slug}/{forumDiscussion:slug}', ForumDiscussionPage::class)
+    ->scopeBindings()
+    ->name('communities.forums.discussions.show');
 
 /*
 |--------------------------------------------------------------------------

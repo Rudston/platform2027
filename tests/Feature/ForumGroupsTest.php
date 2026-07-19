@@ -304,7 +304,7 @@ class ForumGroupsTest extends TestCase
             ->assertSee($from, false); // back link href preserves ?service=forums
     }
 
-    public function test_discussions_route_resolves_scoped_and_shows_placeholder(): void
+    public function test_group_page_resolves_scoped_and_lists_discussions(): void
     {
         $circle = $this->makeCircle();
         $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
@@ -312,7 +312,7 @@ class ForumGroupsTest extends TestCase
         $this->get(route('communities.forums.show', ['circle' => $circle, 'forumGroup' => $group->slug]))
             ->assertOk()
             ->assertSee('Lounge')
-            ->assertSee('coming soon');
+            ->assertSee('No discussions yet.'); // empty list state
 
         // A slug from another circle must NOT resolve under this circle (scoped).
         $other = $this->makeCircle();
