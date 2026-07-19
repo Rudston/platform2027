@@ -576,11 +576,14 @@ in an `overflow-y` list. Non-org communities keep the single (unsplit) top row.
 **Service tabs** (replaced the old service icon-badges — badges are gone):
 every attached service with a non-null `container_component` renders as a tab,
 ordered per `defaultServices()` when the circleable implements
-`HasDefaultServices`, else attachment order. First tab active; switch via
-`selectService($key)`. The active tab's container renders through Livewire 4's
-`<livewire:dynamic-component :component="$this->activeContainer" :circle=…
-:key=…/>`. No `#[Url]` sync yet (TODO). The community-TYPE icon next to the name
-is unrelated and unchanged.
+`HasDefaultServices`, else attachment order. First tab active by default; switch
+via `selectService($key)`. The active tab syncs to the URL via
+`#[Url(as: 'service')]` on `activeServiceKey`, so `?service=<key>` deep-links /
+back-links preselect a tab (e.g. a forum group's Discussions back-link points at
+`/communities/{id}?service=forums`). The active tab's container renders through
+Livewire 4's `<livewire:dynamic-component :component="$this->activeContainer"
+:circle=… :key=…/>`. The community-TYPE icon next to the name is unrelated and
+unchanged.
 
 ### Circle administrators (shown on this page)
 - `Circle::administrators(): Collection<User>` — users holding the

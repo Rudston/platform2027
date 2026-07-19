@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts.main')]
@@ -24,7 +25,12 @@ class CommunityPage extends Component
     /** Where the "back" link returns to — the Explore view we came from. */
     public string $backUrl;
 
-    /** Key of the currently-selected service tab. TODO: #[Url] sync (stub). */
+    /**
+     * Key of the currently-selected service tab, synced to ?service= so deep
+     * links / back-links can preselect a tab (e.g. returning from a forum
+     * group's Discussions page selects the Forums tab).
+     */
+    #[Url(as: 'service')]
     public string $activeServiceKey = '';
 
     /** Join-flow modal state. */
@@ -51,8 +57,12 @@ class CommunityPage extends Component
         // bare /explore. Only accept an internal /explore path (no open redirects).
         $this->backUrl = $this->resolveBackUrl(request()->query('from'));
 
-        // First service tab is active by default. TODO: #[Url] sync (stub).
-        $this->activeServiceKey = $this->serviceTabs()->first()['key'] ?? '';
+        // Honour a valid ?service= from the URL (deep link / back-link);
+        // otherwise fall back to the first tab.
+        $tabs = $this->serviceTabs();
+        if ($this->activeServiceKey === '' || ! $tabs->contains('key', $this->activeServiceKey)) {
+            $this->activeServiceKey = $tabs->first()['key'] ?? '';
+        }
     }
 
     private function resolveBackUrl(mixed $from): string

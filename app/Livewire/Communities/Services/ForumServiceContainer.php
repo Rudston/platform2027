@@ -134,15 +134,18 @@ class ForumServiceContainer extends Component
 
     /**
      * Discussions page URL for a group, with a stateless ?from= back-link (same
-     * convention as CommunityCard's "View →"). TODO: include the active tab once
-     * the Community Page has #[Url] tab sync.
+     * convention as CommunityCard's "View →"); the back-link carries
+     * ?service=forums so the Forums tab is preselected on return.
      */
     public function discussionsUrl(ForumGroup $group): string
     {
         return route('communities.forums.show', [
             'circle' => $this->circle,
             'forumGroup' => $group->slug,
-            'from' => route('communities.show', $this->circle),
+            // Back-link returns to the community page with the Forums tab
+            // preselected (?service=forums → CommunityPage's #[Url] activeServiceKey).
+            // RELATIVE path — ForumGroupPage::resolveBackUrl only honours /communities/…
+            'from' => route('communities.show', ['circle' => $this->circle, 'service' => $this->service()->getKey()], false),
         ]);
     }
 

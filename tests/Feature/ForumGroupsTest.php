@@ -280,6 +280,30 @@ class ForumGroupsTest extends TestCase
         $this->assertSame(0, ForumGroup::count());
     }
 
+    public function test_discussions_back_link_carries_the_forums_tab(): void
+    {
+        $circle = $this->makeCircle();
+        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
+
+        $c = new ForumServiceContainer;
+        $c->circle = $circle;
+
+        // The ?from= back-link is a relative /communities/…?service=forums path
+        // (so ForumGroupPage honours it and the Forums tab reselects on return).
+        $this->assertStringContainsString('service%3Dforums', $c->discussionsUrl($group));
+    }
+
+    public function test_discussions_page_back_link_preselects_the_service_tab(): void
+    {
+        $circle = $this->makeCircle();
+        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
+        $from = '/communities/'.$circle->id.'?service=forums';
+
+        $this->get(route('communities.forums.show', ['circle' => $circle, 'forumGroup' => $group->slug, 'from' => $from]))
+            ->assertOk()
+            ->assertSee($from, false); // back link href preserves ?service=forums
+    }
+
     public function test_discussions_route_resolves_scoped_and_shows_placeholder(): void
     {
         $circle = $this->makeCircle();
