@@ -377,6 +377,31 @@ circle — composes the existing `Circle::administeredBy()` primitive (the same
 one RequestResource uses). Both consumers rest on `administeredBy`; no parallel
 mechanism. (RequestResource keeps its own subtree-based inline composition.)
 
+### Forum Discussions — NEXT WORK (groundwork in place, UI not built)
+The discussions layer is the next task. What ALREADY exists to build on:
+- **`forum_discussions` table + `ForumDiscussion` model** (soft deletes):
+  `forum_group_id` (FK cascade), `created_by` (nullable, nullOnDelete), `title`,
+  `content` (text), `slug` (nullable), `is_pinned`/`is_locked` (bool), `status`
+  (`ForumDiscussionStatus`: active/deactivated), `moderation_status`
+  (`ForumDiscussionModerationStatus`: pending/approved/rejected, default
+  approved), `moderation_reason`. **FULLTEXT(title, content)** — MySQL-only
+  (guarded; sqlite tests skip it, so search must degrade gracefully off-MySQL).
+  Relations `group()`, `creator()`. `HasTags` already applied (tagging relation
+  ready — no discussion display surface yet).
+- **Gating is ready:** `ForumGroup::canParticipate(?membership, isVisitor)`
+  (built on `participationFloor`) is the intended read-only-vs-post gate — a
+  visitor/non-participant should see discussions read-only where they can view
+  the group, and only participants create/reply. `ForumDiscussion::canBeTaggedBy`
+  already encodes the author-OR-circle-manager rule for discussion-level rights.
+- **The page + route exist as a placeholder:** `ForumGroupPage`
+  (`GET /communities/{circle}/forums/{forumGroup:slug}`, route
+  `communities.forums.show`, scopeBindings, `?from=` back-link that reselects the
+  Forums tab). Its body is "Discussions — coming soon".
+- **Still to build (this is the upcoming task):** discussion list + detail UI,
+  create/reply flow (gated by `canParticipate`), pin/lock + moderation UI
+  (fields exist, unused), and search (FULLTEXT on MySQL, LIKE fallback). Confirm
+  any new authorization/moderation rules before implementing, per prior passes.
+
 ---
 
 ## Tagging (Theme-based) & tag suggestions

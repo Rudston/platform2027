@@ -202,6 +202,17 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     (scopeBindings, ?from= back-link) — placeholder body. Deferred: discussion
     list/detail, join, moderation, pin/lock (canParticipate is ready to gate them).
 
+    NEXT TASK — Forum Discussions UI (groundwork already in place; see the
+    "Forum Discussions — NEXT WORK" subsection in CLAUDE.md). Exists: the
+    forum_discussions table + ForumDiscussion model (title, content, slug,
+    is_pinned, is_locked, status, moderation_status[default approved],
+    moderation_reason; FULLTEXT title/content MySQL-only; HasTags applied);
+    ForumGroupPage placeholder + route; ForumGroup::canParticipate() as the
+    read-only-vs-post gate; ForumDiscussion::canBeTaggedBy (author OR circle
+    manager). To build: discussion list + detail, create/reply (gated by
+    canParticipate), pin/lock + moderation UI, search (FULLTEXT on MySQL, LIKE
+    fallback). Confirm any new auth/moderation rules before implementing.
+
 21. **Theme-based tagging + tag suggestions** — a lightweight descriptive tag
     layer over `themes`, UNRELATED to ThemeCommunity. `taggables` polymorphic
     pivot + HasTags trait (tags() morphToMany Theme) on Circle, ForumGroup,
