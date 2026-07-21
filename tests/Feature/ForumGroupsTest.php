@@ -322,11 +322,13 @@ class ForumGroupsTest extends TestCase
     public function test_group_page_resolves_scoped_and_lists_discussions(): void
     {
         $circle = $this->makeCircle();
-        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
+        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']); // public
 
         $this->get(route('communities.forums.show', ['circle' => $circle, 'forumGroup' => $group->slug]))
             ->assertOk()
             ->assertSee('Lounge')
+            ->assertSee('Active')             // status shown by the title
+            ->assertSee('Public')             // visibility shown by the title
             ->assertSee('No discussions yet.'); // empty list state
 
         // A slug from another circle must NOT resolve under this circle (scoped).

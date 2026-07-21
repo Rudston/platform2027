@@ -2,6 +2,7 @@
     /** @var \App\Models\Circles\Circle $circle */
     /** @var \App\Models\Forums\ForumGroup $group */
     /** @var string $backUrl */
+    use App\Enums\Forums\ForumGroupStatus;
 @endphp
 <div class="mx-auto min-h-screen w-4/5 py-10">
     <a href="{{ $backUrl }}" wire:navigate class="text-sm text-indigo-600 hover:underline">
@@ -9,9 +10,26 @@
     </a>
 
     <div class="mt-4 rounded-lg border border-border-muted bg-surface p-8 shadow-sm">
-        <div class="flex items-center gap-3">
-            <span class="text-3xl" aria-hidden="true">💬</span>
-            <h1 class="text-2xl font-bold text-main">{{ $group->name }}</h1>
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl" aria-hidden="true">💬</span>
+                <h1 class="text-2xl font-bold text-main">{{ $group->name }}</h1>
+            </div>
+
+            {{-- Status + visibility (mirrors the group card) --}}
+            <div class="flex shrink-0 items-center gap-1.5">
+                <span @class([
+                    'rounded-full px-2 py-0.5 text-xs font-medium',
+                    'bg-green-100 text-green-800' => $group->status === ForumGroupStatus::Active,
+                    'bg-border-muted text-muted' => $group->status === ForumGroupStatus::Deactivated,
+                    'bg-amber-100 text-amber-800' => $group->status === ForumGroupStatus::Archived,
+                ])>{{ __('forums.status.'.$group->status->value) }}</span>
+
+                <span class="inline-flex items-center gap-1 rounded-full border border-border-muted px-2 py-0.5 text-xs text-muted">
+                    <x-icons.visibility :visibility="$group->visibility" class="h-3.5 w-3.5" />
+                    {{ __('forums.visibility.'.$group->visibility->value) }}
+                </span>
+            </div>
         </div>
 
         @if ($group->description)
