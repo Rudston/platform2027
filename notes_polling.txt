@@ -26,3 +26,65 @@ Posts/comments/replies actually existing
 Maybe a first pass at wire:poll if "live-ish" matters before real broadcasting is worth the infra investment
 
 None of the schema decisions we just made block this later — ShouldBroadcast gets bolted onto whatever PostCreated event you introduce in step (e), it doesn't require redesigning forum_discussion_participants or anything already built. So no need to over-engineer now; just worth knowing the channel-auth step will want to reuse canParticipate()/canView() when the time comes, so keep those methods the single source of truth (which you already are doing).
+
+===== prompt for tier 0 polling with livewire =====
+Add wire:poll to the ForumDiscussion detail page, for near-live comment
+updates (Tier 0 polling — no broadcasting/websockets, just periodic
+re-fetch). Read the existing ForumDiscussionPage component and its
+Blade view before touching either.
+
+## Scope
+Discussion detail page ONLY this step — not the discussion list on
+forum-group-page.blade.php (that page changes far less often per
+viewing session; leave it for a later step if we decide we want it
+there too).
+
+## Interval
+Poll every 10 seconds: `wire:poll.10s`. No existing polling convention
+elsewhere in the app to match, so this is the number to use unless you
+spot a reason to differ — flag it rather than silently picking
+something else.
+
+## Critical: scope the poll to avoid wiping in-progress state
+
+Do NOT put wire:poll on the root element of the component / the whole
+component's render. That re-renders everything on every tick, including
+whatever the viewer is mid-typing into an open reply composer's
+textarea — Livewire's diffing does not reliably preserve unsaved input
+in a plain textarea across a full component re-render, so this would
+intermittently wipe someone's half-written reply while they're typing
+it. That is the standard wire:poll footgun and this task exists
+specifically to avoid it.
+
+Instead:
+- Poll a specific action, e.g. `wire:poll.10s="refreshComments"`, that
+  ONLY re-fetches the comment list data (whatever backing property
+  holds the rendered comments), not the composer's bound property.
+- If wire:poll on the root component is unavoidable given how this
+  component is currently structured, the fallback is: before the
+  poll-triggered refresh runs, skip it (or debounce it away) while
+  the reply composer is open and has non-empty content. A simple
+  guard in the polled method — `if ($this->replyComposerOpen &&
+  filled($this->replyContent)) { return; }` — is enough; we don't need
+  anything more sophisticated than "don't clobber while someone's
+  actively typing."
+- Whichever approach you take, the end state to verify: open the reply
+  composer, type something, wait 15+ seconds without submitting,
+  confirm the typed text is still there.
+
+## What should visibly update on poll
+- New comments/replies appearing without a manual page refresh
+- Updated like counts
+- Newly tombstoned ("[deleted]") comments reflecting their tombstone
+  state
+- Participant count, if displayed on this page
+
+## What should NOT be disrupted by a poll tick
+- An open reply composer with unsaved typed content (see above)
+- Scroll position — a poll firing while someone's mid-thread reading
+  should not jump them back to the top of the page. If Livewire's
+  default re-render behavior causes scroll jumping in testing, flag it
+  — that's worth discussing rather than silently working around.
+
+Stop for review once this is working and the "typing survives a poll"
+check above has actually been verified, not just assumed.
