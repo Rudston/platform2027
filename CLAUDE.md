@@ -974,6 +974,8 @@ On failure: silent.
 
 - Convention: "create new entity" buttons are prefixed "+ " (e.g. "+ Create
   Group"); the in-modal submit is a plain "Save …"
+- Convention: any "Edit" affordance shows the shared pencil icon
+  `<x-icons.edit class="h-3.5 w-3.5" />` (or h-4 w-4) before the label
 - Using Livewire 3 syntax (wire:model.defer, etc.) — this is Livewire 4
 - Blade component props: declare them with `/** @var … */` hints (in a
   comment-free `@php` block) so the IDE doesn't flag them as undefined

@@ -38,7 +38,9 @@
                 </p>
                 @if ($this->canEditContent && ! $editingContent)
                     <button type="button" wire:click="startEditingContent"
-                            class="shrink-0 text-xs text-indigo-600 hover:underline">{{ __('forums.edit_post') }}</button>
+                            class="inline-flex shrink-0 items-center gap-1 text-xs text-indigo-600 hover:underline">
+                        <x-icons.edit class="h-3.5 w-3.5" />{{ __('forums.edit_post') }}
+                    </button>
                 @endif
             </div>
 

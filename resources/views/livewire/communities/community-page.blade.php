@@ -96,7 +96,7 @@
                     <x-tag-list :tags="$this->tags" />
                     @if ($this->canManageTags)
                         <button type="button" x-on:click="editingTags = !editingTags"
-                                class="text-xs text-indigo-600 hover:underline">{{ __('tags.edit') }}</button>
+                                class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"><x-icons.edit class="h-3.5 w-3.5" />{{ __('tags.edit') }}</button>
                     @endif
                 </div>
             @endif
