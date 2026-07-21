@@ -62,6 +62,15 @@
             @endif
         </div>
 
+        {{-- Responses — the posts/comments engine renders here (next step).
+             Sized to grow into most of the page height, scrolling when needed. --}}
+        <div class="mt-8">
+            <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('forums.responses_heading') }}</h2>
+            <div class="mt-2 min-h-[40vh] max-h-[65vh] overflow-y-auto rounded-lg border border-border-muted p-5">
+                <p class="text-sm text-muted">{{ __('forums.responses_placeholder') }}</p>
+            </div>
+        </div>
+
         {{-- Join / leave (participant count is shown top-right, in the header) --}}
         <div class="mt-6 flex justify-end">
             @auth

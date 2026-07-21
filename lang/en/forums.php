@@ -99,6 +99,8 @@ return [
     'edited'                   => '(Edited)',
     'edit_post'                => 'Edit',
     'save_post'                => 'Save',
+    'responses_heading'        => 'Responses',
+    'responses_placeholder'    => 'Responses go here',
 
     'badge' => [
         'pinned' => 'Pinned',
