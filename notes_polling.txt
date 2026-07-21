@@ -1,0 +1,28 @@
+Yes, it's pretty standard for anything forum/discussion-shaped once you're past MVP — but "standard" covers a wide range from cheap to fairly involved. Worth separating into tiers:
+Tier 0: Polling (what most small-to-mid platforms actually ship with first)
+Livewire has wire:poll built in — the discussion list or detail page just re-fetches every N seconds. Zero infra, zero new dependencies, works today with nothing added to your stack. Downside: not truly "live," and at any real scale it's wasteful (every open tab hits the DB every few seconds regardless of whether anything changed).
+For a civic platform where discussions aren't likely to be high-frequency chat, this might genuinely be good enough for a long time.
+Tier 1: Real broadcasting (actual push)
+This is what people mean by "broadcast" properly. The pieces:
+
+A WebSocket server. Options: Laravel Reverb (first-party, self-hosted, free — the natural default for a Laravel 12 app), Pusher (hosted, paid past free tier), or soketi (self-hosted Pusher-protocol clone). Given you're already all-in on the Laravel ecosystem and self-hosting via MAMP locally, Reverb is the path of least resistance.
+Broadcastable events. e.g. DiscussionPostCreated implements ShouldBroadcast — fired when a post/comment is created, broadcasts on a channel like forum-discussion.{id}.
+Channel authorization. routes/channels.php — for a Private or Internal visibility group, the channel auth callback needs to re-check ForumGroup::canParticipate() (or at minimum canView()), so someone who loses access can't still listen. This is the part that actually touches your existing domain logic — not free.
+Queue worker. Broadcasting events should be queued (ShouldBroadcast + a queue driver), so posting doesn't block on the broadcast round-trip. You'd need a real queue driver running (database/Redis) rather than sync.
+Frontend listener. Laravel Echo + either the Reverb JS client or Pusher JS client, subscribed from the discussion detail page. With Livewire 4 there's also the option of using Livewire's own event broadcasting integration so a component can re-render on a broadcast without hand-rolling Echo/Alpine wiring — worth checking Livewire 4's docs on this since it's changed across versions.
+Presence, if you want "who's viewing this now" — a presence channel instead of private, more moving parts (join/leave events, an online-users Alpine store).
+
+What it's for, concretely, in your context
+
+New post/comment appears in the thread without a refresh
+"X new replies" banner that appears while someone's reading
+Maybe eventually a notification badge count updating live (ties into your deferred notification system)
+
+My honest take for where you are
+You don't have posts/comments yet (that's the very next thing after this phase), no queue infra decided, and no Reverb/Echo anything in the stack per CLAUDE.md. I'd treat broadcasting as a Phase 3 concern, after:
+
+This discussion list/detail/join phase (current)
+Posts/comments/replies actually existing
+Maybe a first pass at wire:poll if "live-ish" matters before real broadcasting is worth the infra investment
+
+None of the schema decisions we just made block this later — ShouldBroadcast gets bolted onto whatever PostCreated event you introduce in step (e), it doesn't require redesigning forum_discussion_participants or anything already built. So no need to over-engineer now; just worth knowing the channel-auth step will want to reuse canParticipate()/canView() when the time comes, so keep those methods the single source of truth (which you already are doing).

@@ -90,11 +90,6 @@ genuinely mutually exclusive.
 
 ## Sequencing
 
-Do NOT hand this to Claude Code while the ForumGroups pass is still
-running — risk of overlapping edits to files Claude Code has open.
-Wait for that to complete, then this becomes the next task.
-====
-Good pair of questions — both are about *how* to hand this off well, not more design work, so let me answer directly.
 
 ## 1. Yes — give Claude Code the old files as raw material, but isolate them clearly
 
