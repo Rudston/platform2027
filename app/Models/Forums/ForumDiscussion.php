@@ -4,12 +4,15 @@ namespace App\Models\Forums;
 
 use App\Enums\Forums\ForumDiscussionModerationStatus;
 use App\Enums\Forums\ForumDiscussionStatus;
+use App\Models\Comment;
 use App\Models\Concerns\HasTags;
+use App\Models\Like;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ForumDiscussion extends Model
@@ -48,6 +51,33 @@ class ForumDiscussion extends Model
         return $user !== null
             && $this->created_by !== null
             && $this->created_by === $user->getKey();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Comments (the reply engine) & likes
+    |--------------------------------------------------------------------------
+    */
+
+    /** All comments attached to this discussion (root comments + replies). */
+    public function comments(): MorphMany
+    {
+        return $this->morphMany(Comment::class, 'commentable');
+    }
+
+    /**
+     * Cosmetic alias for comments() — "posts" reads more naturally in forum
+     * context. IDENTICAL relation/rows, zero duplicate logic.
+     */
+    public function posts(): MorphMany
+    {
+        return $this->comments();
+    }
+
+    /** Likes on the discussion itself (generic likeable — no UI yet). */
+    public function likes(): MorphMany
+    {
+        return $this->morphMany(Like::class, 'likeable');
     }
 
     /*
