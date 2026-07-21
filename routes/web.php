@@ -8,8 +8,8 @@ use App\Livewire\Auth\Login;
 use App\Livewire\Auth\Register;
 use App\Livewire\Auth\ResetPassword;
 use App\Livewire\Communities\CommunityPage;
-use App\Livewire\Communities\ForumDiscussionPage;
-use App\Livewire\Communities\ForumGroupPage;
+use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
+use App\Livewire\Communities\Services\Forums\ForumGroupPage;
 use App\Livewire\Explore\ExploreCommunities;
 use Illuminate\Support\Facades\Route;
 

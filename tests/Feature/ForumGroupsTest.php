@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Enums\CommunityType;
 use App\Enums\Forums\ForumGroupStatus;
 use App\Enums\Forums\ForumGroupVisibility;
-use App\Livewire\Communities\Services\ForumGroupModal;
-use App\Livewire\Communities\Services\ForumServiceContainer;
+use App\Livewire\Communities\Services\Forums\ForumGroupModal;
+use App\Livewire\Communities\Services\Forums\ForumServiceContainer;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Forums\ForumDiscussion;
@@ -265,7 +265,7 @@ class ForumGroupsTest extends TestCase
         // $dispatch('openModal', …) — verify that wiring is present in the render.
         Livewire::test(ForumServiceContainer::class, ['circle' => $circle])
             ->assertSee('openModal', false)
-            ->assertSee('communities.services.forum-group-modal', false);
+            ->assertSee('communities.services.forums.forum-group-modal', false);
     }
 
     public function test_modal_forbidden_for_non_managers(): void

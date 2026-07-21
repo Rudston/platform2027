@@ -21,7 +21,7 @@
 
         @if ($this->canManage)
             <button type="button"
-                    wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }} } })"
+                    wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }} } })"
                     class="ml-auto rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
                 {{ __('forums.create_group') }}
             </button>
@@ -65,7 +65,7 @@
                                         class="rounded px-2 py-0.5 text-muted hover:text-main" aria-label="Actions">⋯</button>
                                 <div x-show="open" x-on:click.outside="open = false" x-cloak
                                      class="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border-muted bg-surface py-1 text-sm shadow-lg">
-                                    <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })" x-on:click="open = false"
+                                    <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })" x-on:click="open = false"
                                             class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-main hover:bg-border-muted"><x-icons.edit class="h-4 w-4" />{{ __('forums.actions.edit') }}</button>
                                     <a href="{{ $this->discussionsUrl($group) }}" wire:navigate
                                        class="block px-3 py-1.5 text-main hover:bg-border-muted">{{ __('forums.actions.discussions') }}</a>
@@ -85,7 +85,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <x-tag-list :tags="$group->tags" />
                             @if ($this->canManage)
-                                <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
+                                <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
                                         class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"><x-icons.edit class="h-3.5 w-3.5" />{{ __('tags.edit') }}</button>
                             @endif
                         </div>
@@ -107,7 +107,7 @@
                         ])>{{ __('forums.status.'.$status->value) }}</span>
 
                         @if ($this->canManage)
-                            <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
+                            <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
                                     class="rounded-lg border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50">
                                 {{ __('forums.actions.manage') }}
                             </button>

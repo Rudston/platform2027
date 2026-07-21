@@ -349,6 +349,11 @@ Replies/comments, moderation UI, and pin/lock toggles remain deferred.
   gone — this is the permanent rule.)
 
 ### Service & UI
+All forum Livewire components live under
+`App\Livewire\Communities\Services\Forums\` (aliases `communities.services.
+forums.*`) with views under `resources/views/livewire/communities/services/
+forums/` — the per-service grouping convention (each service keeps its files
+together). `ForumService` (the handler) stays under `App\Services\Circles\`.
 - **ForumService** (the `CircleServiceContract` handler) holds the writes:
   `createGroup`/`updateGroup` (accept an optional explicit `slug`, else derived
   from name), `deactivateGroup`, `slugFor`, `slugExists`/`slugTaken`.

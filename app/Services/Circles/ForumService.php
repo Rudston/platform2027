@@ -5,7 +5,7 @@ namespace App\Services\Circles;
 use App\Contracts\CircleServiceContract;
 use App\Enums\Forums\ForumGroupStatus;
 use App\Enums\Forums\ForumGroupVisibility;
-use App\Livewire\Communities\Services\ForumServiceContainer;
+use App\Livewire\Communities\Services\Forums\ForumServiceContainer;
 use App\Models\Circles\Circle;
 use App\Enums\Forums\ForumDiscussionModerationStatus;
 use App\Enums\Forums\ForumDiscussionStatus;

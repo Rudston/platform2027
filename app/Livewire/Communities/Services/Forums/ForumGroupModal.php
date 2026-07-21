@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Livewire\Communities\Services;
+namespace App\Livewire\Communities\Services\Forums;
 
 use App\Enums\Forums\ForumGroupVisibility;
 use App\Models\Circles\Circle;
@@ -123,6 +123,6 @@ class ForumGroupModal extends ModalComponent
 
     public function render()
     {
-        return view('livewire.communities.services.forum-group-modal');
+        return view('livewire.communities.services.forums.forum-group-modal');
     }
 }

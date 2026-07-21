@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Livewire\Communities;
+namespace App\Livewire\Communities\Services\Forums;
 
 use App\Models\Forums\ForumGroup;
 use App\Services\Circles\ForumService;
@@ -79,6 +79,6 @@ class ForumDiscussionModal extends ModalComponent
 
     public function render()
     {
-        return view('livewire.communities.forum-discussion-modal');
+        return view('livewire.communities.services.forums.forum-discussion-modal');
     }
 }

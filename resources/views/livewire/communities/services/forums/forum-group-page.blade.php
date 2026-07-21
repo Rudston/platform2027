@@ -24,7 +24,7 @@
                 <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('forums.discussions_heading') }}</h2>
                 @if ($this->canCreate)
                     <button type="button"
-                            wire:click="$dispatch('openModal', { component: 'communities.forum-discussion-modal', arguments: { forumGroupId: {{ $group->id }} } })"
+                            wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-discussion-modal', arguments: { forumGroupId: {{ $group->id }} } })"
                             class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
                         {{ __('forums.create_discussion') }}
                     </button>

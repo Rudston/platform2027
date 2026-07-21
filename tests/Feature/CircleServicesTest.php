@@ -6,7 +6,7 @@ use App\Contracts\Circles\HasDefaultServices;
 use App\Enums\CommunityType;
 use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Communities\Services\EventsServiceContainer;
-use App\Livewire\Communities\Services\ForumServiceContainer;
+use App\Livewire\Communities\Services\Forums\ForumServiceContainer;
 use App\Livewire\Communities\Services\NewsServiceContainer;
 use App\Models\Circles\Circle;
 use App\Models\Communities\LocationCommunity;

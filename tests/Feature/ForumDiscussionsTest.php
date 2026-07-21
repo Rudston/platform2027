@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Communities\ForumDiscussionModal;
-use App\Livewire\Communities\ForumDiscussionPage;
-use App\Livewire\Communities\ForumGroupPage;
+use App\Livewire\Communities\Services\Forums\ForumDiscussionModal;
+use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
+use App\Livewire\Communities\Services\Forums\ForumGroupPage;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Forums\ForumDiscussion;

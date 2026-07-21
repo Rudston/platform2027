@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Livewire\Communities\Services;
+namespace App\Livewire\Communities\Services\Forums;
 
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
@@ -151,6 +151,6 @@ class ForumServiceContainer extends Component
 
     public function render()
     {
-        return view('livewire.communities.services.forum-service-container');
+        return view('livewire.communities.services.forums.forum-service-container');
     }
 }

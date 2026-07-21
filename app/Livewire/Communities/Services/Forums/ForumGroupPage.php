@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Livewire\Communities;
+namespace App\Livewire\Communities\Services\Forums;
 
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
@@ -108,6 +108,6 @@ class ForumGroupPage extends Component
 
     public function render()
     {
-        return view('livewire.communities.forum-group-page')->title($this->group->name);
+        return view('livewire.communities.services.forums.forum-group-page')->title($this->group->name);
     }
 }

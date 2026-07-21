@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Livewire\Communities;
+namespace App\Livewire\Communities\Services\Forums;
 
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
@@ -156,6 +156,6 @@ class ForumDiscussionPage extends Component
 
     public function render()
     {
-        return view('livewire.communities.forum-discussion-page')->title($this->discussion->title);
+        return view('livewire.communities.services.forums.forum-discussion-page')->title($this->discussion->title);
     }
 }
