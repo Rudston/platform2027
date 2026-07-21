@@ -310,9 +310,10 @@ A claimed internal role is NOT trusted until the org contact confirms it.
 ## Forums (groups)
 
 The real implementation behind the `ForumService` / `ForumServiceContainer`
-skeleton. Groups: overview + create/edit/deactivate. Discussions **Phase 1**
-(list/detail/create/join) is built — see the Forum Discussions section below.
-Replies/comments, moderation UI, and pin/lock toggles remain deferred.
+skeleton. Groups: overview + create/edit/deactivate. Discussions
+(list/detail/create + a responses/comments thread with likes) are built — see
+the Forum Discussions section below. Moderation UI and pin/lock toggles remain
+deferred.
 
 ### Tables & models
 - **forum_groups** (`app/Models/Forums/ForumGroup.php`): `circle_id` (FK cascade),
@@ -383,7 +384,7 @@ circle — composes the existing `Circle::administeredBy()` primitive (the same
 one RequestResource uses). Both consumers rest on `administeredBy`; no parallel
 mechanism. (RequestResource keeps its own subtree-based inline composition.)
 
-### Forum Discussions — Phase 1 (list / detail / create / join) — BUILT
+### Forum Discussions (list / detail / create / responses) — BUILT
 - **`forum_discussions` table + `ForumDiscussion` model** (soft deletes):
   `forum_group_id` (FK cascade), `created_by` (nullable, nullOnDelete), `title`,
   `content` (text), `slug` (nullable), `is_pinned`/`is_locked` (bool), `status`
@@ -391,12 +392,22 @@ mechanism. (RequestResource keeps its own subtree-based inline composition.)
   (`ForumDiscussionModerationStatus`: pending/approved/rejected, default
   approved), `moderation_reason`. **FULLTEXT(title, content)** — MySQL-only
   (guarded). Relations `group()`, `creator()`; `HasTags` applied.
-- **Participation:** `forum_discussion_participants` (mirrors CircleMembership —
-  never deleted, closed via `left_at`; no unique constraint; short index name
-  `fdp_discussion_user_left_idx` to stay under MySQL's 64-char limit) +
-  `ForumDiscussionParticipant` model. On `ForumDiscussion`: `participants()`,
-  `activeParticipants()`, `participantCount()`, `isJoinedBy()`, `join()`
-  (idempotent), `leave()`.
+- **Participants (contribution-derived):** a discussion's participant count is
+  the count of UNIQUE users who contributed — its `created_by` creator ∪
+  everyone who posted a comment, each counted once (`ForumDiscussion::
+  participantCount()`). `participantCountsFor(iterable $discussions)` is the
+  shared engine: per-discussion counts resolved in ONE comments query (no N+1),
+  used by the group + container aggregates. `ForumGroup::participantCount()` =
+  the SUM of its discussions' counts (a user active in two of a group's
+  discussions counts in each). The Forums tab shows a per-group count and a
+  summed `totalParticipants` across viewable groups.
+  - **The old explicit Join/Leave subscription was RETIRED** (migration
+    `2026_07_21_000004` drops `forum_discussion_participants`; the
+    `ForumDiscussionParticipant` model and `join()`/`leave()`/`isJoinedBy()`/
+    `participants()`/`activeParticipants()` are gone). Participation is now
+    purely contribution-derived — there is no follow/subscribe. (The original
+    create migration `2026_07_19_000001` is kept for fresh-migrate history; the
+    000004 drop follows it.)
 - **Create gating:** `ForumGroup::canCreateDiscussion(?User)` = group creator OR
   circle manager (`isManageableBy`). Gates the "+ Create Discussion" button AND
   `ForumDiscussionModal` (`mount()` + `save()`, 403). Writes via
@@ -408,18 +419,29 @@ mechanism. (RequestResource keeps its own subtree-based inline composition.)
   (`GET /communities/{circle}/forums/{forumGroup:slug}/{forumDiscussion:slug}`,
   route `communities.forums.discussions.show`, **scopeBindings** — needs
   `ForumGroup::forumDiscussions()`; `discussions()` kept for withCount) — shows
-  the "first post" (content, author, timestamp; read-only, NO reply composer) +
-  a Join/Leave control gated by `ForumGroup::canParticipate()`, with a
-  participant count. Both pages **abort 404 unless the viewer canView the group**
-  (managers bypass) — closes the direct-URL visibility hole.
+  the "first post" (content, author, timestamp) + the response thread (see
+  Responses UI below), with a contribution-derived participant count top-right.
+  Both pages **abort 404 unless the viewer canView the group** (managers bypass)
+  — closes the direct-URL visibility hole.
 - **First-post editing:** the discussion's AUTHOR (only — not managers) may edit
   the content in place on the detail page (`canEditContentBy()`; inline
   textarea via `startEditingContent`/`saveContent` → `ForumService::
   updateDiscussionContent()`). Editing stamps `forum_discussions.content_edited_at`
   (dedicated column, NOT touched by future pin/lock/moderation) → `isEdited()`
   renders an italic "(Edited)" next to the author's name.
-- **Deferred (later phases):** pin/lock toggle UI, moderation UI, replies/
-  comments, contribution tracking on the participant pivot, search.
+- **Responses UI (comments) — BUILT:** the detail page renders the comment
+  thread via `$discussion->posts` (the forum-facing alias for the generic
+  `comments` relation). Roots pinned-first (by `pinned_position`) then by
+  `created_at`; replies nested recursively (recursive Blade partial
+  `partials/comment.blade.php`), indentation capped at level 3 with a "replying
+  to {author}" label once flattened; `hidden` comments filtered. Inline reply
+  composer (one open at a time) + a bottom root composer; per-comment like
+  toggle with count. Compose/reply/like are gated on `ForumGroup::
+  canParticipate()` (re-checked server-side) — view-only visitors see the
+  thread but no composer. Posting a comment refreshes the participant count.
+- **Deferred (later phases):** pin/lock toggle UI, moderation UI (the `hidden`/
+  `flagged_as_offensive`/`moderated` columns exist, unused), edit/delete
+  comments, real-time push, search.
 
 ---
 

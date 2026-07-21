@@ -46,7 +46,6 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000001_add_content_edited_at_to_forum_discussions_table.php'))->up();
-        (include database_path('migrations/2026_07_19_000001_create_forum_discussion_participants_table.php'))->up();
         (include database_path('migrations/2026_07_21_000002_create_comments_table.php'))->up();
         (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
 
@@ -191,11 +190,12 @@ class ForumDiscussionsTest extends TestCase
         ]))->assertNotFound();
     }
 
-    public function test_join_and_leave_on_detail_page(): void
+    public function test_participant_count_on_detail_page_reflects_contributions(): void
     {
         $circle = $this->makeCircle();
         $group = $this->makeGroup($circle);            // public → any member participates
-        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'Topic']);
+        $creator = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $creator, ['title' => 'Topic']);
         $member = $this->member($circle);
 
         $this->actingAs($member->fresh());
@@ -204,19 +204,13 @@ class ForumDiscussionsTest extends TestCase
         $page->group = $group;
         $page->discussion = $d;
 
-        $this->assertTrue($page->canParticipate());
-        $this->assertFalse($page->isJoined());
-
-        $page->join();
-        $this->assertTrue($page->isJoined());
-
-        $page->leave();
-        $this->assertFalse($page->isJoined());
-
-        // Participant count is the contribution metric (creator ∪ commenters),
-        // NOT the join/leave subscription — so it stays at the creator-only
-        // baseline of 1 here regardless of the member joining or leaving.
+        // Just the creator so far.
         $this->assertSame(1, $page->participantCount());
+
+        // The member posts a response → becomes a contributor → 2 participants.
+        $page->newRootContent = 'Hello';
+        $page->postRoot();
+        $this->assertSame(2, $page->participantCount());
     }
 
     public function test_author_can_edit_first_post_and_it_marks_edited(): void
@@ -446,9 +440,11 @@ class ForumDiscussionsTest extends TestCase
         $page->discussion = $d;
 
         $this->assertFalse($page->canParticipate());
-        $page->join(); // guarded no-op
-        $this->assertFalse($page->isJoined());
-        // The failed join adds nobody; the count is just the creator (1).
+
+        // A blocked post adds nobody; the count stays at the creator (1).
+        $page->newRootContent = 'Nope';
+        $page->postRoot(); // guarded no-op
+        $this->assertSame(0, $d->comments()->count());
         $this->assertSame(1, $page->participantCount());
     }
 }

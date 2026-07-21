@@ -8,7 +8,6 @@ use App\Models\Comment;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\Like;
-use App\Models\User;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -17,8 +16,9 @@ use Livewire\Component;
 
 /**
  * A forum discussion's detail page: the first post (the discussion's content —
- * editable in place by its author) plus a Join/Leave control gated by the
- * group's participation rules. No reply composer this phase.
+ * editable in place by its author) and the response thread (comments + inline
+ * reply composer + like toggle), gated by the group's participation rules. The
+ * participant count is derived from contributions (creator ∪ commenters).
  */
 #[Layout('layouts.main')]
 class ForumDiscussionPage extends Component
@@ -81,37 +81,11 @@ class ForumDiscussionPage extends Component
         return $this->group->canParticipate($this->membership(), $this->isVisitor());
     }
 
-    #[Computed]
-    public function isJoined(): bool
-    {
-        return $this->discussion->isJoinedBy(auth()->user());
-    }
-
+    /** Participants = unique contributors (creator ∪ commenters). */
     #[Computed]
     public function participantCount(): int
     {
         return $this->discussion->participantCount();
-    }
-
-    public function join(): void
-    {
-        /** @var User|null $user */
-        $user = auth()->user();
-
-        if ($user === null || ! $this->canParticipate()) {
-            return;
-        }
-
-        $this->discussion->join($user);
-        unset($this->isJoined, $this->participantCount);
-    }
-
-    public function leave(): void
-    {
-        if ($user = auth()->user()) {
-            $this->discussion->leave($user);
-            unset($this->isJoined, $this->participantCount);
-        }
     }
 
     /** Whether the viewer may edit the first post's content (author only). */
@@ -221,7 +195,8 @@ class ForumDiscussionPage extends Component
         ]);
 
         $this->newRootContent = '';
-        unset($this->responses);
+        // A new comment may add a contributor → refresh the participant count.
+        unset($this->responses, $this->participantCount);
     }
 
     /** Toggle the inline reply composer under a comment (one open at a time). */
@@ -261,7 +236,7 @@ class ForumDiscussionPage extends Component
         ]);
 
         $this->cancelReply();
-        unset($this->responses);
+        unset($this->responses, $this->participantCount);
     }
 
     /** Like/unlike a comment for the current user. Gated by canParticipate. */

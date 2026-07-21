@@ -97,23 +97,5 @@
                 @endif
             </div>
         </div>
-
-        {{-- Join / leave (participant count is shown top-right, in the header) --}}
-        <div class="mt-6 flex justify-end">
-            @auth
-                @if ($this->isJoined)
-                    <button type="button" wire:click="leave"
-                            wire:confirm="{{ __('forums.leave_discussion_confirm') }}"
-                            class="rounded-lg border border-border-muted px-4 py-2 text-sm font-medium transition hover:opacity-80">
-                        {{ __('forums.leave_discussion') }}
-                    </button>
-                @elseif ($this->canParticipate)
-                    <button type="button" wire:click="join"
-                            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
-                        {{ __('forums.join_discussion') }}
-                    </button>
-                @endif
-            @endauth
-        </div>
     </div>
 </div>

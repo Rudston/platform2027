@@ -8,12 +8,11 @@ use App\Models\Comment;
 use App\Models\Concerns\HasTags;
 use App\Models\Like;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class ForumDiscussion extends Model
 {
@@ -82,28 +81,14 @@ class ForumDiscussion extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Participation (join / leave — never deleted, closed via left_at)
+    | Participants (derived from contributions — creator ∪ commenters)
     |--------------------------------------------------------------------------
     */
-
-    public function participants(): HasMany
-    {
-        return $this->hasMany(ForumDiscussionParticipant::class);
-    }
-
-    /** @return Collection<int, ForumDiscussionParticipant> */
-    public function activeParticipants(): Collection
-    {
-        return $this->participants()->whereNull('left_at')->get();
-    }
 
     /**
      * The number of participants: the unique users who have contributed to the
      * discussion — its creator plus everyone who has posted a comment, counted
      * ONCE each (the creator commenting doesn't count her twice).
-     *
-     * NOTE: this is a derived contribution metric, distinct from the explicit
-     * join/leave subscription in participants() / activeParticipants().
      */
     public function participantCount(): int
     {
@@ -116,7 +101,7 @@ class ForumDiscussion extends Model
      * SINGLE comments query — so callers summing across a group / circle avoid
      * an N+1. Each discussion must carry at least `id` and `created_by`.
      *
-     * @param  \Illuminate\Support\Collection<int, self>|array<int, self>  $discussions
+     * @param  Collection<int, self>|array<int, self>  $discussions
      * @return array<int, int> [discussion_id => participant count]
      */
     public static function participantCountsFor(iterable $discussions): array
@@ -150,45 +135,6 @@ class ForumDiscussion extends Model
         }
 
         return $counts;
-    }
-
-    public function isJoinedBy(?User $user): bool
-    {
-        if ($user === null) {
-            return false;
-        }
-
-        return $this->participants()
-            ->where('user_id', $user->getKey())
-            ->whereNull('left_at')
-            ->exists();
-    }
-
-    /** Join (idempotent — returns the existing active participation if any). */
-    public function join(User $user): ForumDiscussionParticipant
-    {
-        $existing = $this->participants()
-            ->where('user_id', $user->getKey())
-            ->whereNull('left_at')
-            ->first();
-
-        if ($existing !== null) {
-            return $existing;
-        }
-
-        return $this->participants()->create([
-            'user_id' => $user->getKey(),
-            'joined_at' => now(),
-        ]);
-    }
-
-    /** Leave: close the user's active participation (no-op if not joined). */
-    public function leave(User $user): void
-    {
-        $this->participants()
-            ->where('user_id', $user->getKey())
-            ->whereNull('left_at')
-            ->update(['left_at' => now()]);
     }
 
     /**
