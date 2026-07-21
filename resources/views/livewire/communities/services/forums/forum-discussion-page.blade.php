@@ -23,6 +23,7 @@
                 @if ($discussion->is_locked)
                     <span class="rounded-full border border-border-muted px-2 py-0.5 text-xs text-muted">{{ __('forums.badge.locked') }}</span>
                 @endif
+                <span class="text-sm text-muted">👥 {{ __('forums.participant_count', ['count' => $this->participantCount]) }}</span>
             </div>
         </div>
 
@@ -61,12 +62,8 @@
             @endif
         </div>
 
-        {{-- Participation --}}
-        <div class="mt-6 flex items-center justify-between">
-            <span class="text-sm text-muted">
-                {{ __('forums.participant_count', ['count' => $this->participantCount]) }}
-            </span>
-
+        {{-- Join / leave (participant count is shown top-right, in the header) --}}
+        <div class="mt-6 flex justify-end">
             @auth
                 @if ($this->isJoined)
                     <button type="button" wire:click="leave"
