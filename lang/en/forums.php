@@ -115,7 +115,7 @@ return [
         'flag'           => 'Flag',
         'flag_tooltip'   => 'Flag as offensive',
         'flagged'        => 'Flagged',
-        'flag_confirmed' => 'Thanks, this has been reported.',
+        'flag_confirmed' => 'Thanks, this has been reported',
     ],
 
     'badge' => [

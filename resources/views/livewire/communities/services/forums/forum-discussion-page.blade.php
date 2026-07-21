@@ -6,13 +6,17 @@
 @endphp
 <div class="mx-auto min-h-screen w-4/5 py-10">
     {{-- Transient flag confirmation — shown only to the flagger; the persisted
-         flag itself has no visible effect for anyone. (No x-cloak CSS in this
-         project, so start hidden inline and let Alpine's x-show take over.) --}}
-    <div x-data="{ show: false }"
-         x-on:response-flagged.window="show = true; setTimeout(() => show = false, 3000)"
-         x-show="show" x-transition style="display: none"
-         class="fixed bottom-6 right-6 z-50 rounded-lg border border-border-muted bg-surface px-4 py-2 text-sm text-main shadow-lg">
-        {{ __('forums.response.flag_confirmed') }}
+         flag itself has no visible effect for anyone. Uses x-if (not x-show)
+         so nothing renders until fired — no FOUC, and no x-cloak CSS needed
+         (this project ships none). --}}
+    <div x-data="{ show: false, timer: null }"
+         x-on:response-flagged.window="show = true; clearTimeout(timer); timer = setTimeout(() => show = false, 3000)">
+        <template x-if="show">
+            <div x-transition.opacity
+                 class="fixed bottom-6 right-6 z-50 rounded-lg border border-border-muted bg-surface px-4 py-2 text-sm text-main shadow-lg">
+                {{ __('forums.response.flag_confirmed') }}
+            </div>
+        </template>
     </div>
 
     <a href="{{ $backUrl }}" wire:navigate class="text-sm text-indigo-600 hover:underline">
