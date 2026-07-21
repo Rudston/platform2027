@@ -26,3 +26,6 @@ Note: urban_places might be irrelevant - they are all contained in the main_plac
 Coordinate Data:
 This only covers about 5600 main places.
 Might need to find a better source later.
+
+===== maps ====
+https://mapit.code4sa.org/#api-by_area_id
