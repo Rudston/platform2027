@@ -114,9 +114,13 @@ class ForumDiscussion extends Model
         }
 
         // [discussion_id => [distinct commenter user_ids]] in one query.
+        // Tombstoned (is_deleted) comments don't count — so deleting an author's
+        // only standing comment drops them from the participant count (hard
+        // deletes drop out naturally, their row being gone).
         $commenters = Comment::query()
             ->where('commentable_type', (new self)->getMorphClass())
             ->whereIn('commentable_id', $ids)
+            ->where('is_deleted', false)
             ->whereNotNull('user_id')
             ->get(['commentable_id', 'user_id'])
             ->groupBy('commentable_id')

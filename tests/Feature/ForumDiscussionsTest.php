@@ -7,6 +7,7 @@ use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
 use App\Livewire\Communities\Services\Forums\ForumGroupPage;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
+use App\Models\Comment;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\User;
@@ -47,6 +48,7 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000001_add_content_edited_at_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000002_create_comments_table.php'))->up();
+        (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
@@ -77,6 +79,31 @@ class ForumDiscussionsTest extends TestCase
         CircleMembership::create(['circle_id' => $circle->id, 'user_id' => $user->id, 'joined_at' => now()]);
 
         return $user;
+    }
+
+    /** A member who is also a circle_admin of $circle (so isManageableBy is true). */
+    private function makeManager(Circle $circle): User
+    {
+        $user = $this->member($circle);
+        $roleId = DB::table('roles')->insertGetId(['name' => 'circle_admin', 'guard_name' => 'web', 'circle_id' => null]);
+        DB::table('model_has_roles')->insert([
+            'role_id' => $roleId,
+            'model_type' => (new User)->getMorphClass(),
+            'model_id' => $user->id,
+            'circle_id' => $circle->id,
+        ]);
+
+        return $user;
+    }
+
+    private function pageFor(Circle $circle, ForumGroup $group, ForumDiscussion $d): ForumDiscussionPage
+    {
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        return $page;
     }
 
     public function test_can_create_discussion_gating(): void
@@ -424,6 +451,128 @@ class ForumDiscussionsTest extends TestCase
 
         // An empty group has no participants.
         $this->assertSame(0, $this->makeGroup($circle)->participantCount());
+    }
+
+    public function test_author_can_delete_own_comment_via_page(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $member = $this->member($circle);
+        $this->actingAs($member->fresh());
+
+        $page = $this->pageFor($circle, $group, $d);
+        $page->newRootContent = 'mine';
+        $page->postRoot();
+        $comment = $d->comments()->first();
+
+        $page->deleteComment($comment->id);
+        $this->assertNull(Comment::find($comment->id)); // no replies → hard delete
+    }
+
+    public function test_manager_can_delete_others_comment(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $comment = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'hi']);
+
+        $manager = $this->makeManager($circle);
+        $this->actingAs($manager->fresh());
+
+        $page = $this->pageFor($circle, $group, $d);
+        $this->assertTrue($page->canManageThread());
+        $page->deleteComment($comment->id);
+        $this->assertNull(Comment::find($comment->id));
+    }
+
+    public function test_non_author_non_manager_cannot_delete(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $comment = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'hi']);
+
+        $this->actingAs($this->member($circle)->fresh()); // participant, not author/manager
+        $page = $this->pageFor($circle, $group, $d);
+        $page->deleteComment($comment->id);
+
+        $this->assertNotNull(Comment::find($comment->id)); // untouched
+    }
+
+    public function test_edit_is_author_only_via_page(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $author = $this->member($circle);
+        $comment = $d->comments()->create(['user_id' => $author->id, 'content' => 'first']);
+
+        // Author edits → content changes, edited_at stamped.
+        $this->actingAs($author->fresh());
+        $page = $this->pageFor($circle, $group, $d);
+        $page->startEditingComment($comment->id);
+        $this->assertSame($comment->id, $page->editingCommentId);
+        $page->editContent = 'second';
+        $page->saveComment();
+        $this->assertSame('second', $comment->fresh()->content);
+        $this->assertTrue($comment->fresh()->isEdited());
+        $this->assertNull($page->editingCommentId);
+
+        // A manager may delete but NOT edit someone else's words.
+        $manager = $this->makeManager($circle);
+        $this->actingAs($manager->fresh());
+        $page2 = $this->pageFor($circle, $group, $d);
+        $page2->startEditingComment($comment->id);
+        $this->assertNull($page2->editingCommentId); // refused
+    }
+
+    public function test_flag_sets_bool_idempotently_and_not_on_own(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $comment = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'hi']);
+
+        $flagger = $this->member($circle);
+        $this->actingAs($flagger->fresh());
+        $page = $this->pageFor($circle, $group, $d);
+
+        $page->flag($comment->id);
+        $this->assertTrue($comment->fresh()->flagged_as_offensive);
+        $this->assertContains($comment->id, $page->flaggedByMe);
+
+        $page->flag($comment->id); // idempotent, no error
+        $this->assertTrue($comment->fresh()->flagged_as_offensive);
+
+        // Flagging your own comment is a no-op.
+        $own = $d->comments()->create(['user_id' => $flagger->id, 'content' => 'mine']);
+        $page->flag($own->id);
+        $this->assertFalse($own->fresh()->flagged_as_offensive);
+    }
+
+    public function test_participant_count_excludes_deleted_authors(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $a = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $a, ['title' => 'T']); // creator A
+        $b = User::factory()->create();
+        $c = User::factory()->create();
+
+        $rb = $d->comments()->create(['user_id' => $b->id, 'content' => 'B']);
+        $rc = $d->comments()->create(['user_id' => $c->id, 'content' => 'C']);
+        $this->assertSame(3, $d->participantCount()); // A, B, C
+
+        // Hard-delete B's only comment → B drops out.
+        $rb->deleteBy($b);
+        $this->assertSame(2, $d->participantCount()); // A, C
+
+        // C's comment gains a reply from B, then is tombstoned → C drops, B stays.
+        $d->comments()->create(['user_id' => $b->id, 'parent_id' => $rc->id, 'content' => 'reply']);
+        $this->assertSame(3, $d->participantCount()); // A, C, B
+        $rc->deleteBy($c);
+        $this->assertSame(2, $d->participantCount()); // A, B (C's only comment tombstoned)
     }
 
     public function test_visitor_cannot_participate(): void

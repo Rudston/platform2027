@@ -8,6 +8,7 @@ use App\Models\Comment;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\Like;
+use App\Models\User;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -45,6 +46,20 @@ class ForumDiscussionPage extends Component
 
     public string $replyContent = '';
 
+    /** The comment being edited inline (null = none). */
+    public ?int $editingCommentId = null;
+
+    public string $editContent = '';
+
+    /**
+     * Comment ids the viewer flagged THIS session — transient feedback only
+     * (the persisted flag is invisible to everyone, so flagger feedback must
+     * not derive from it). Reset on navigation/reload by design.
+     *
+     * @var array<int, int>
+     */
+    public array $flaggedByMe = [];
+
     public function mount(Circle $circle, ForumGroup $forumGroup, ForumDiscussion $forumDiscussion): void
     {
         $this->circle = $circle;
@@ -79,6 +94,18 @@ class ForumDiscussionPage extends Component
     public function canParticipate(): bool
     {
         return $this->group->canParticipate($this->membership(), $this->isVisitor());
+    }
+
+    /**
+     * Whether the viewer manages this circle — the admin-override half of a
+     * comment's delete gate. Resolved ONCE per render so the recursive comment
+     * partial doesn't re-query per comment (the authoritative check is still
+     * Comment::canDelete(), re-run server-side in deleteComment()).
+     */
+    #[Computed]
+    public function canManageThread(): bool
+    {
+        return $this->circle->isManageableBy(auth()->user());
     }
 
     /** Participants = unique contributors (creator ∪ commenters). */
@@ -262,6 +289,107 @@ class ForumDiscussionPage extends Component
         }
 
         unset($this->responses);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Responses — edit / delete / flag
+    |--------------------------------------------------------------------------
+    */
+
+    /** Open the inline editor for a comment (author only). */
+    public function startEditingComment(int $commentId): void
+    {
+        $comment = $this->discussion->comments()->whereKey($commentId)->first();
+
+        if ($comment === null || ! $comment->canEditBy(auth()->user())) {
+            return;
+        }
+
+        $this->editingCommentId = $comment->id;
+        $this->editContent = $comment->content;
+        // Don't leave a reply composer open alongside the editor.
+        $this->replyingToId = null;
+    }
+
+    public function cancelEditingComment(): void
+    {
+        $this->editingCommentId = null;
+        $this->editContent = '';
+    }
+
+    /** Save an inline comment edit (author only; stamps edited_at if changed). */
+    public function saveComment(): void
+    {
+        if ($this->editingCommentId === null) {
+            return;
+        }
+
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        $comment = $this->discussion->comments()->whereKey($this->editingCommentId)->first();
+
+        if ($actor === null || $comment === null || ! $comment->canEditBy($actor)) {
+            $this->cancelEditingComment();
+
+            return;
+        }
+
+        $data = $this->validate(['editContent' => ['required', 'string', 'max:20000']]);
+
+        $comment->editBy($actor, $data['editContent']);
+
+        $this->cancelEditingComment();
+        unset($this->responses);
+    }
+
+    /** Delete a comment (author or circle manager). Hard/soft decided in the model. */
+    public function deleteComment(int $commentId): void
+    {
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        $comment = $this->discussion->comments()->whereKey($commentId)->first();
+
+        if ($actor === null || $comment === null || ! $comment->canDelete($actor)) {
+            return;
+        }
+
+        $comment->deleteBy($actor);
+
+        if ($this->editingCommentId === $commentId) {
+            $this->cancelEditingComment();
+        }
+
+        // Deleting the author's last standing comment drops them from the count.
+        unset($this->responses, $this->participantCount);
+    }
+
+    /**
+     * Flag a comment as offensive (any participant, on others' comments).
+     * Sets the persisted bool once (idempotent) — invisible to everyone else;
+     * the flagger gets a transient toast + a session-scoped "Flagged" state.
+     */
+    public function flag(int $commentId): void
+    {
+        if (! $this->canParticipate()) {
+            return;
+        }
+
+        $comment = $this->discussion->comments()->whereKey($commentId)->first();
+
+        if ($comment === null || $comment->is_deleted || $comment->user_id === auth()->id()) {
+            return;
+        }
+
+        if (! $comment->flagged_as_offensive) {
+            $comment->update(['flagged_as_offensive' => true]);
+        }
+
+        if (! in_array($commentId, $this->flaggedByMe, true)) {
+            $this->flaggedByMe[] = $commentId;
+        }
+
+        $this->dispatch('response-flagged');
     }
 
     private function resolveBackUrl(mixed $from): string

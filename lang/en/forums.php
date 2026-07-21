@@ -104,6 +104,20 @@ return [
     'reply_placeholder'        => 'Write a reply…',
     'replying_to'              => 'replying to :author',
 
+    // Per-comment (response) actions: edit / delete / flag + tombstone copy.
+    'response' => [
+        'edit'           => 'Edit',
+        'save'           => 'Save',
+        'delete'         => 'Delete',
+        'delete_confirm' => 'Delete this comment?',
+        'deleted'        => '[deleted]',
+        'deleted_author' => 'Deleted user',
+        'flag'           => 'Flag',
+        'flag_tooltip'   => 'Flag as offensive',
+        'flagged'        => 'Flagged',
+        'flag_confirmed' => 'Thanks, this has been reported.',
+    ],
+
     'badge' => [
         'pinned' => 'Pinned',
         'locked' => 'Locked',
