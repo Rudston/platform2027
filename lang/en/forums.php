@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'groups_heading'     => 'Forum Groups',
     'total_groups'       => 'Groups',
     'participants'       => 'Participants',
     'total_discussions'  => 'Discussions',

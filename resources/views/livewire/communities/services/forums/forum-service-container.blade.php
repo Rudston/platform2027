@@ -3,8 +3,10 @@
     use App\Enums\Forums\ForumGroupStatus;
 @endphp
 <div>
+    <h2 class="text-lg font-semibold text-main">{{ __('forums.groups_heading') }}</h2>
+
     {{-- Stats row --}}
-    <div class="flex flex-wrap items-center gap-4 rounded-lg border border-border-muted bg-surface p-4 text-sm shadow-sm">
+    <div class="mt-4 flex flex-wrap items-center gap-4 rounded-lg border border-border-muted bg-surface p-4 text-sm shadow-sm">
         <div>
             <span class="font-semibold text-main">{{ $this->totalGroups }}</span>
             <span class="text-muted">{{ __('forums.total_groups') }}</span>
@@ -67,8 +69,6 @@
                                      class="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border-muted bg-surface py-1 text-sm shadow-lg">
                                     <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })" x-on:click="open = false"
                                             class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-main hover:bg-border-muted"><x-icons.edit class="h-4 w-4" />{{ __('forums.actions.edit') }}</button>
-                                    <a href="{{ $this->discussionsUrl($group) }}" wire:navigate
-                                       class="block px-3 py-1.5 text-main hover:bg-border-muted">{{ __('forums.actions.discussions') }}</a>
                                     <button type="button" wire:click="deactivate({{ $group->id }})"
                                             wire:confirm="{{ __('forums.deactivate_confirm') }}" x-on:click="open = false"
                                             class="block w-full px-3 py-1.5 text-left text-red-600 hover:bg-border-muted">{{ __('forums.actions.deactivate') }}</button>
@@ -97,21 +97,36 @@
                         {{ __('forums.created', ['date' => $group->created_at->format('d M Y')]) }}
                     </div>
 
-                    <div class="mt-1 flex items-center justify-between">
-                        @php($status = $group->status)
-                        <span @class([
-                            'rounded-full px-2 py-0.5 text-xs font-medium',
-                            'bg-green-100 text-green-800' => $status === ForumGroupStatus::Active,
-                            'bg-border-muted text-muted' => $status === ForumGroupStatus::Deactivated,
-                            'bg-amber-100 text-amber-800' => $status === ForumGroupStatus::Archived,
-                        ])>{{ __('forums.status.'.$status->value) }}</span>
+                    <div class="mt-1 flex items-center justify-between gap-2">
+                        {{-- Status + visibility --}}
+                        <div class="flex items-center gap-1.5">
+                            @php($status = $group->status)
+                            <span @class([
+                                'rounded-full px-2 py-0.5 text-xs font-medium',
+                                'bg-green-100 text-green-800' => $status === ForumGroupStatus::Active,
+                                'bg-border-muted text-muted' => $status === ForumGroupStatus::Deactivated,
+                                'bg-amber-100 text-amber-800' => $status === ForumGroupStatus::Archived,
+                            ])>{{ __('forums.status.'.$status->value) }}</span>
 
-                        @if ($this->canManage)
-                            <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
-                                    class="rounded-lg border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50">
-                                {{ __('forums.actions.manage') }}
-                            </button>
-                        @endif
+                            <span class="inline-flex items-center gap-1 rounded-full border border-border-muted px-2 py-0.5 text-xs text-muted">
+                                <x-icons.visibility :visibility="$group->visibility" class="h-3.5 w-3.5" />
+                                {{ __('forums.visibility.'.$group->visibility->value) }}
+                            </span>
+                        </div>
+
+                        {{-- Discussions (all viewers) + Manage (managers only) --}}
+                        <div class="flex shrink-0 items-center gap-2">
+                            <a href="{{ $this->discussionsUrl($group) }}" wire:navigate
+                               class="rounded-lg border border-border-muted px-3 py-1 text-sm font-medium text-main transition hover:opacity-80">
+                                {{ __('forums.actions.discussions') }}
+                            </a>
+                            @if ($this->canManage)
+                                <button type="button" wire:click="$dispatch('openModal', { component: 'communities.services.forums.forum-group-modal', arguments: { circleId: {{ $circle->id }}, groupId: {{ $group->id }} } })"
+                                        class="rounded-lg border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50">
+                                    {{ __('forums.actions.manage') }}
+                                </button>
+                            @endif
+                        </div>
                     </div>
                 </div>
             </div>

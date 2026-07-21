@@ -268,6 +268,21 @@ class ForumGroupsTest extends TestCase
             ->assertSee('communities.services.forums.forum-group-modal', false);
     }
 
+    public function test_container_shows_heading_visibility_and_discussions_button(): void
+    {
+        $circle = $this->makeCircle();
+        app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge', 'visibility' => 'private']);
+        $admin = User::factory()->create();
+        $this->grantGlobalRole($admin, 'admin');
+        $this->actingAs($admin->fresh());
+
+        Livewire::test(ForumServiceContainer::class, ['circle' => $circle])
+            ->assertSee('Forum Groups')  // heading
+            ->assertSee('Private')       // visibility label on the card
+            ->assertSee('Discussions')   // per-card Discussions button (+ stat label)
+            ->assertSee('Manage');       // manager button
+    }
+
     public function test_modal_forbidden_for_non_managers(): void
     {
         $circle = $this->makeCircle();
