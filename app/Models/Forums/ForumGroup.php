@@ -52,6 +52,20 @@ class ForumGroup extends Model
     }
 
     /**
+     * The group's participant count: the sum of the participant counts of all
+     * its (non-deleted) child discussions (see ForumDiscussion::participantCount
+     * — creator ∪ commenters, unique per discussion). This is a SUM, so a user
+     * active in two of the group's discussions is counted in each. One comments
+     * query total (no N+1).
+     */
+    public function participantCount(): int
+    {
+        return array_sum(ForumDiscussion::participantCountsFor(
+            $this->forumDiscussions()->get(['id', 'created_by']),
+        ));
+    }
+
+    /**
      * Who may start a discussion here: the group's creator, or a manager of the
      * owning circle (circle_admin / admin / superadmin). Gates the "+ Create
      * Discussion" button and the modal's save.

@@ -4,6 +4,7 @@ namespace App\Livewire\Communities\Services\Forums;
 
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
+use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Collection;
@@ -106,6 +107,45 @@ class ForumServiceContainer extends Component
         return (int) $this->viewableGroups()->sum('discussions_count');
     }
 
+    /**
+     * Participant count per viewable group: [group_id => count]. Every viewable
+     * group's discussions are fetched once and their per-discussion participant
+     * counts (creator ∪ commenters) resolved in a single comments query, then
+     * summed back per group. Feeds both the per-card count and totalParticipants.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function participantCountsByGroup(): array
+    {
+        $groupIds = $this->viewableGroups()->pluck('id')->all();
+
+        $byGroup = array_fill_keys($groupIds, 0);
+
+        if ($groupIds === []) {
+            return $byGroup;
+        }
+
+        $discussions = ForumDiscussion::query()
+            ->whereIn('forum_group_id', $groupIds)
+            ->get(['id', 'forum_group_id', 'created_by']);
+
+        $perDiscussion = ForumDiscussion::participantCountsFor($discussions);
+
+        foreach ($discussions as $d) {
+            $byGroup[$d->forum_group_id] += $perDiscussion[$d->id] ?? 0;
+        }
+
+        return $byGroup;
+    }
+
+    /** Total participants across the groups the viewer can see (sum of the map). */
+    #[Computed]
+    public function totalParticipants(): int
+    {
+        return array_sum($this->participantCountsByGroup());
+    }
+
     // Create/Edit modals are opened via a Blade $dispatch('openModal', …) in the
     // view (the app-wide wire-elements pattern), not a PHP dispatch — the modal
     // host lives on the parent page and Blade dispatch reaches it reliably.
@@ -121,7 +161,7 @@ class ForumServiceContainer extends Component
 
         if ($group) {
             $this->service()->deactivateGroup($group);
-            unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions);
+            unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions, $this->participantCountsByGroup, $this->totalParticipants);
         }
     }
 
@@ -129,7 +169,7 @@ class ForumServiceContainer extends Component
     #[On('forum-groups-changed')]
     public function onGroupsChanged(): void
     {
-        unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions);
+        unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions, $this->participantCountsByGroup, $this->totalParticipants);
     }
 
     /**

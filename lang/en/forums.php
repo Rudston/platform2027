@@ -100,7 +100,12 @@ return [
     'edit_post'                => 'Edit',
     'save_post'                => 'Save',
     'responses_heading'        => 'Responses',
-    'responses_placeholder'    => 'Responses go here',
+    'no_responses'             => 'No responses yet.',
+    'post'                     => 'Post',
+    'post_response_placeholder' => 'Post a response…',
+    'reply'                    => 'Reply',
+    'reply_placeholder'        => 'Write a reply…',
+    'replying_to'              => 'replying to :author',
 
     'badge' => [
         'pinned' => 'Pinned',

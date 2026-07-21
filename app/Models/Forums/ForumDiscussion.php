@@ -97,9 +97,59 @@ class ForumDiscussion extends Model
         return $this->participants()->whereNull('left_at')->get();
     }
 
+    /**
+     * The number of participants: the unique users who have contributed to the
+     * discussion — its creator plus everyone who has posted a comment, counted
+     * ONCE each (the creator commenting doesn't count her twice).
+     *
+     * NOTE: this is a derived contribution metric, distinct from the explicit
+     * join/leave subscription in participants() / activeParticipants().
+     */
     public function participantCount(): int
     {
-        return $this->participants()->whereNull('left_at')->count();
+        return static::participantCountsFor([$this])[$this->getKey()] ?? 0;
+    }
+
+    /**
+     * Participant count per discussion (creator ∪ its distinct commenters,
+     * unique within each discussion) for a set of discussions, resolved in a
+     * SINGLE comments query — so callers summing across a group / circle avoid
+     * an N+1. Each discussion must carry at least `id` and `created_by`.
+     *
+     * @param  \Illuminate\Support\Collection<int, self>|array<int, self>  $discussions
+     * @return array<int, int> [discussion_id => participant count]
+     */
+    public static function participantCountsFor(iterable $discussions): array
+    {
+        $discussions = collect($discussions);
+        $ids = $discussions->pluck('id')->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        // [discussion_id => [distinct commenter user_ids]] in one query.
+        $commenters = Comment::query()
+            ->where('commentable_type', (new self)->getMorphClass())
+            ->whereIn('commentable_id', $ids)
+            ->whereNotNull('user_id')
+            ->get(['commentable_id', 'user_id'])
+            ->groupBy('commentable_id')
+            ->map(fn ($rows) => $rows->pluck('user_id')->unique()->all());
+
+        $counts = [];
+        foreach ($discussions as $d) {
+            $users = $commenters->get($d->id, []);
+
+            // Fold the creator into the set (once — skip if she also commented).
+            if ($d->created_by !== null && ! in_array($d->created_by, $users, true)) {
+                $users[] = $d->created_by;
+            }
+
+            $counts[$d->id] = count($users);
+        }
+
+        return $counts;
     }
 
     public function isJoinedBy(?User $user): bool

@@ -11,9 +11,10 @@
             <span class="font-semibold text-main">{{ $this->totalGroups }}</span>
             <span class="text-muted">{{ __('forums.total_groups') }}</span>
         </div>
-        {{-- Participants: hardcoded 0 — built out later. --}}
+        {{-- Participants: summed across all viewable groups' discussions
+             (each discussion = creator ∪ its unique commenters). --}}
         <div>
-            <span class="font-semibold text-main">0</span>
+            <span class="font-semibold text-main">{{ $this->totalParticipants }}</span>
             <span class="text-muted">{{ __('forums.participants') }}</span>
         </div>
         <div>
@@ -92,7 +93,7 @@
                     @endif
 
                     <div class="text-xs text-muted">
-                        {{ __('forums.participants') }} 0 ·
+                        {{ __('forums.participants') }} {{ $this->participantCountsByGroup[$group->id] ?? 0 }} ·
                         {{ __('forums.discussions_count', ['count' => $group->discussions_count]) }} ·
                         {{ __('forums.created', ['date' => $group->created_at->format('d M Y')]) }}
                     </div>

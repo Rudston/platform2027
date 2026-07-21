@@ -47,6 +47,8 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000001_add_content_edited_at_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_19_000001_create_forum_discussion_participants_table.php'))->up();
+        (include database_path('migrations/2026_07_21_000002_create_comments_table.php'))->up();
+        (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
     }
@@ -207,11 +209,14 @@ class ForumDiscussionsTest extends TestCase
 
         $page->join();
         $this->assertTrue($page->isJoined());
-        $this->assertSame(1, $page->participantCount());
 
         $page->leave();
         $this->assertFalse($page->isJoined());
-        $this->assertSame(0, $page->participantCount());
+
+        // Participant count is the contribution metric (creator ∪ commenters),
+        // NOT the join/leave subscription — so it stays at the creator-only
+        // baseline of 1 here regardless of the member joining or leaving.
+        $this->assertSame(1, $page->participantCount());
     }
 
     public function test_author_can_edit_first_post_and_it_marks_edited(): void
@@ -271,6 +276,162 @@ class ForumDiscussionsTest extends TestCase
         $this->assertFalse($d->fresh()->isEdited());
     }
 
+    public function test_participant_can_post_root_and_reply(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle); // public
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $member = $this->member($circle);
+        $this->actingAs($member->fresh());
+
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        // Root response.
+        $page->newRootContent = 'First response';
+        $page->postRoot();
+        $root = $d->comments()->whereNull('parent_id')->first();
+        $this->assertNotNull($root);
+        $this->assertSame('First response', $root->content);
+        $this->assertSame('', $page->newRootContent);
+
+        // Reply to it.
+        $page->reply($root->id);
+        $this->assertSame($root->id, $page->replyingToId);
+        $page->replyContent = 'A reply';
+        $page->postReply();
+        $reply = $d->comments()->where('parent_id', $root->id)->first();
+        $this->assertNotNull($reply);
+        $this->assertSame('A reply', $reply->content);
+        $this->assertNull($page->replyingToId); // composer closed after posting
+    }
+
+    public function test_view_only_visitor_cannot_post_or_like(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $author = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $author, ['title' => 'T']);
+        $comment = $d->comments()->create(['user_id' => $author->id, 'content' => 'hi']);
+
+        // A logged-in NON-member (can view public, cannot participate).
+        $this->actingAs(User::factory()->create());
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        $this->assertFalse($page->canParticipate());
+
+        $page->newRootContent = 'Nope';
+        $page->postRoot();               // guarded no-op
+        $page->toggleLike($comment->id); // guarded no-op
+
+        $this->assertSame(1, $d->comments()->count()); // only the author's comment
+        $this->assertSame(0, $comment->likes()->count());
+        // ...but the thread is still readable.
+        $this->assertCount(1, $page->responses()['roots']);
+    }
+
+    public function test_like_toggle(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $comment = $d->comments()->create(['user_id' => User::factory()->create()->id, 'content' => 'hi']);
+        $member = $this->member($circle);
+        $this->actingAs($member->fresh());
+
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        $page->toggleLike($comment->id);
+        $this->assertSame(1, $comment->likes()->count());
+
+        $page->toggleLike($comment->id); // toggles off
+        $this->assertSame(0, $comment->likes()->count());
+    }
+
+    public function test_responses_order_pinned_first_and_exclude_hidden(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $author = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $author, ['title' => 'T']);
+
+        $a = $d->comments()->create(['user_id' => $author->id, 'content' => 'A']);
+        $a->update(['created_at' => now()->subDays(3)]);
+        $b = $d->comments()->create(['user_id' => $author->id, 'content' => 'B']);
+        $b->update(['created_at' => now()->subDay()]);
+        $pinned = $d->comments()->create(['user_id' => $author->id, 'content' => 'P', 'pinned' => true, 'pinned_position' => 1]);
+        $pinned->update(['created_at' => now()]); // newest, but pinned → first
+        $d->comments()->create(['user_id' => $author->id, 'content' => 'Hidden', 'hidden' => true]);
+
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        $roots = $page->responses()['roots'];
+        // Pinned first, then the rest by created_at asc; hidden excluded.
+        $this->assertSame(['P', 'A', 'B'], $roots->pluck('content')->all());
+    }
+
+    public function test_discussion_participant_count_is_creator_plus_unique_commenters(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $creator = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $creator, ['title' => 'T']);
+
+        // Just the creator, before anyone comments.
+        $this->assertSame(1, $d->participantCount());
+
+        // A different user comments → 2 unique users.
+        $b = User::factory()->create();
+        $d->comments()->create(['user_id' => $b->id, 'content' => 'x']);
+        $this->assertSame(2, $d->participantCount());
+
+        // The creator comments (twice) → still 2 (she isn't counted again).
+        $d->comments()->create(['user_id' => $creator->id, 'content' => 'y']);
+        $d->comments()->create(['user_id' => $creator->id, 'content' => 'z']);
+        $this->assertSame(2, $d->participantCount());
+
+        // A third user comments twice → 3 unique users.
+        $c = User::factory()->create();
+        $d->comments()->create(['user_id' => $c->id, 'content' => 'p']);
+        $d->comments()->create(['user_id' => $c->id, 'content' => 'q']);
+        $this->assertSame(3, $d->participantCount());
+    }
+
+    public function test_group_participant_count_sums_child_discussions(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $a = User::factory()->create();
+        $b = User::factory()->create();
+        $c = User::factory()->create();
+
+        // D1: creator A, commenter B → {A, B} = 2
+        $d1 = app(ForumService::class)->createDiscussion($group, $a, ['title' => 'D1']);
+        $d1->comments()->create(['user_id' => $b->id, 'content' => 'x']);
+
+        // D2: creator B, commenters A and C → {B, A, C} = 3
+        $d2 = app(ForumService::class)->createDiscussion($group, $b, ['title' => 'D2']);
+        $d2->comments()->create(['user_id' => $a->id, 'content' => 'y']);
+        $d2->comments()->create(['user_id' => $c->id, 'content' => 'z']);
+
+        // Sum across discussions (A and B are counted in each). 2 + 3 = 5.
+        $this->assertSame(5, $group->participantCount());
+
+        // An empty group has no participants.
+        $this->assertSame(0, $this->makeGroup($circle)->participantCount());
+    }
+
     public function test_visitor_cannot_participate(): void
     {
         $circle = $this->makeCircle();
@@ -286,6 +447,8 @@ class ForumDiscussionsTest extends TestCase
 
         $this->assertFalse($page->canParticipate());
         $page->join(); // guarded no-op
-        $this->assertSame(0, $page->participantCount());
+        $this->assertFalse($page->isJoined());
+        // The failed join adds nobody; the count is just the creator (1).
+        $this->assertSame(1, $page->participantCount());
     }
 }

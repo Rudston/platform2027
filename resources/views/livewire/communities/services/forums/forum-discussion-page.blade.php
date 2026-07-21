@@ -62,12 +62,39 @@
             @endif
         </div>
 
-        {{-- Responses — the posts/comments engine renders here (next step).
-             Sized to grow into most of the page height, scrolling when needed. --}}
+        {{-- Responses (the comment thread — $discussion->posts is the forum-facing
+             alias for the generic comments relation). Grows into most of the page
+             height, scrolling when needed. --}}
         <div class="mt-8">
             <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('forums.responses_heading') }}</h2>
             <div class="mt-2 min-h-[40vh] max-h-[65vh] overflow-y-auto rounded-lg border border-border-muted p-5">
-                <p class="text-sm text-muted">{{ __('forums.responses_placeholder') }}</p>
+                @php($resp = $this->responses)
+                @forelse ($resp['roots'] as $root)
+                    @include('livewire.communities.services.forums.partials.comment', [
+                        'comment' => $root,
+                        'level' => 1,
+                        'byParent' => $resp['byParent'],
+                        'byId' => $resp['byId'],
+                        'liked' => $resp['liked'],
+                    ])
+                @empty
+                    <p class="text-sm text-muted">{{ __('forums.no_responses') }}</p>
+                @endforelse
+
+                {{-- New root response composer (participants only; view-only
+                     visitors see the thread but no composer). --}}
+                @if ($this->canParticipate)
+                    <div class="mt-6 border-t border-border-muted pt-4">
+                        <textarea wire:model="newRootContent" rows="3"
+                                  placeholder="{{ __('forums.post_response_placeholder') }}"
+                                  class="w-full rounded-lg border border-border-muted bg-surface px-3 py-2 text-sm text-main placeholder:text-muted"></textarea>
+                        @error('newRootContent') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        <div class="mt-2 flex justify-end">
+                            <button type="button" wire:click="postRoot"
+                                    class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">{{ __('forums.post') }}</button>
+                        </div>
+                    </div>
+                @endif
             </div>
         </div>
 

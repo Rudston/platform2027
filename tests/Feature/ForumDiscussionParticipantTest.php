@@ -51,13 +51,12 @@ class ForumDiscussionParticipantTest extends TestCase
         $user = User::factory()->create();
 
         $this->assertFalse($discussion->isJoinedBy($user));
-        $this->assertSame(0, $discussion->participantCount());
+        $this->assertCount(0, $discussion->activeParticipants());
 
         $discussion->join($user);
         $discussion->join($user); // idempotent — no second active row
 
         $this->assertTrue($discussion->isJoinedBy($user));
-        $this->assertSame(1, $discussion->participantCount());
         $this->assertCount(1, $discussion->activeParticipants());
     }
 
@@ -70,7 +69,7 @@ class ForumDiscussionParticipantTest extends TestCase
         $discussion->leave($user);
 
         $this->assertFalse($discussion->isJoinedBy($user));
-        $this->assertSame(0, $discussion->participantCount());
+        $this->assertCount(0, $discussion->activeParticipants());
         // Row is kept (closed), not deleted.
         $this->assertSame(1, $discussion->participants()->count());
         $this->assertNotNull($discussion->participants()->first()->left_at);
@@ -86,7 +85,7 @@ class ForumDiscussionParticipantTest extends TestCase
         $discussion->join($user);
 
         $this->assertTrue($discussion->isJoinedBy($user));
-        $this->assertSame(1, $discussion->participantCount());   // one active
+        $this->assertCount(1, $discussion->activeParticipants());   // one active
         $this->assertSame(2, $discussion->participants()->count()); // two rows (history kept)
     }
 
