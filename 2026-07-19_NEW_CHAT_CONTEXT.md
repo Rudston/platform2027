@@ -214,8 +214,11 @@ Every circle has at least a Country-level location (mandatory, not nullable).
     (route communities.forums.discussions.show, scopeBindings via
     ForumGroup::forumDiscussions()) shows the first post read-only + Join/Leave
     (gated by canParticipate) + participant count. Both forum pages 404 unless
-    the viewer canView the group (managers bypass). Deferred: replies/comments,
-    moderation UI, pin/lock toggles, contribution tracking, search.
+    the viewer canView the group (managers bypass). The discussion AUTHOR can
+    edit the first post's content in place (canEditContentBy — author only;
+    ForumService::updateDiscussionContent stamps content_edited_at → isEdited()
+    shows "(Edited)"). Deferred: replies/comments, moderation UI, pin/lock
+    toggles, contribution tracking, search.
 
 21. **Theme-based tagging + tag suggestions** — a lightweight descriptive tag
     layer over `themes`, UNRELATED to ThemeCommunity. `taggables` polymorphic

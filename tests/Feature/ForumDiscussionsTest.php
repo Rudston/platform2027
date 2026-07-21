@@ -45,6 +45,7 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
+        (include database_path('migrations/2026_07_21_000001_add_content_edited_at_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_19_000001_create_forum_discussion_participants_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
@@ -211,6 +212,63 @@ class ForumDiscussionsTest extends TestCase
         $page->leave();
         $this->assertFalse($page->isJoined());
         $this->assertSame(0, $page->participantCount());
+    }
+
+    public function test_author_can_edit_first_post_and_it_marks_edited(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $author = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $author, ['title' => 'Topic', 'content' => 'Original']);
+
+        $this->assertFalse($d->isEdited());
+        $this->assertTrue($d->canEditContentBy($author));
+
+        $this->actingAs($author->fresh());
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        $page->startEditingContent();
+        $this->assertTrue($page->editingContent);
+        $this->assertSame('Original', $page->draftContent);
+
+        $page->draftContent = 'Revised';
+        $page->saveContent();
+
+        $fresh = $d->fresh();
+        $this->assertSame('Revised', $fresh->content);
+        $this->assertTrue($fresh->isEdited());
+        $this->assertFalse($page->editingContent);
+    }
+
+    public function test_non_author_cannot_edit_first_post(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $author = User::factory()->create();
+        $d = app(ForumService::class)->createDiscussion($group, $author, ['title' => 'Topic', 'content' => 'Original']);
+
+        // Even a circle manager (not the author) can't edit the content.
+        $manager = User::factory()->create();
+        DB::table('roles')->insert(['name' => 'admin', 'guard_name' => 'web', 'circle_id' => null]);
+        DB::table('model_has_roles')->insert(['role_id' => DB::table('roles')->where('name', 'admin')->value('id'), 'model_type' => User::class, 'model_id' => $manager->id, 'circle_id' => null]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $this->assertFalse($d->canEditContentBy($manager->fresh()));
+
+        $this->actingAs($manager->fresh());
+        $page = new ForumDiscussionPage;
+        $page->circle = $circle;
+        $page->group = $group;
+        $page->discussion = $d;
+
+        $page->draftContent = 'Hacked';
+        $page->saveContent(); // guarded no-op
+
+        $this->assertSame('Original', $d->fresh()->content);
+        $this->assertFalse($d->fresh()->isEdited());
     }
 
     public function test_visitor_cannot_participate(): void

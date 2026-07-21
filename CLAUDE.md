@@ -407,6 +407,12 @@ mechanism. (RequestResource keeps its own subtree-based inline composition.)
   a Join/Leave control gated by `ForumGroup::canParticipate()`, with a
   participant count. Both pages **abort 404 unless the viewer canView the group**
   (managers bypass) — closes the direct-URL visibility hole.
+- **First-post editing:** the discussion's AUTHOR (only — not managers) may edit
+  the content in place on the detail page (`canEditContentBy()`; inline
+  textarea via `startEditingContent`/`saveContent` → `ForumService::
+  updateDiscussionContent()`). Editing stamps `forum_discussions.content_edited_at`
+  (dedicated column, NOT touched by future pin/lock/moderation) → `isEdited()`
+  renders an italic "(Edited)" next to the author's name.
 - **Deferred (later phases):** pin/lock toggle UI, moderation UI, replies/
   comments, contribution tracking on the participant pivot, search.
 

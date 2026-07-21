@@ -6,14 +6,15 @@ use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
+use App\Services\Circles\ForumService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
- * A forum discussion's detail page: the first post (the discussion's content,
- * read-only — no reply composer this phase) plus a Join/Leave control gated by
- * the group's participation rules.
+ * A forum discussion's detail page: the first post (the discussion's content —
+ * editable in place by its author) plus a Join/Leave control gated by the
+ * group's participation rules. No reply composer this phase.
  */
 #[Layout('layouts.main')]
 class ForumDiscussionPage extends Component
@@ -26,6 +27,11 @@ class ForumDiscussionPage extends Component
 
     /** Where "back" returns to — the group's Discussions page we came from. */
     public string $backUrl;
+
+    /** Inline first-post edit (author only). */
+    public bool $editingContent = false;
+
+    public string $draftContent = '';
 
     public function mount(Circle $circle, ForumGroup $forumGroup, ForumDiscussion $forumDiscussion): void
     {
@@ -94,6 +100,49 @@ class ForumDiscussionPage extends Component
             $this->discussion->leave($user);
             unset($this->isJoined, $this->participantCount);
         }
+    }
+
+    /** Whether the viewer may edit the first post's content (author only). */
+    #[Computed]
+    public function canEditContent(): bool
+    {
+        return $this->discussion->canEditContentBy(auth()->user());
+    }
+
+    public function startEditingContent(): void
+    {
+        if (! $this->canEditContent()) {
+            return;
+        }
+
+        $this->draftContent = $this->discussion->content;
+        $this->editingContent = true;
+    }
+
+    public function cancelEditingContent(): void
+    {
+        $this->editingContent = false;
+        $this->draftContent = '';
+    }
+
+    public function saveContent(): void
+    {
+        // Re-check server-side (never trust the toggled UI state).
+        if (! $this->canEditContent()) {
+            $this->editingContent = false;
+
+            return;
+        }
+
+        $validated = $this->validate([
+            'draftContent' => ['required', 'string', 'max:20000'],
+        ]);
+
+        app(ForumService::class)->updateDiscussionContent($this->discussion, $validated['draftContent']);
+
+        $this->discussion->refresh();
+        $this->editingContent = false;
+        $this->draftContent = '';
     }
 
     private function resolveBackUrl(mixed $from): string

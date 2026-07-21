@@ -23,6 +23,7 @@ class ForumDiscussion extends Model
         'moderation_status' => ForumDiscussionModerationStatus::class,
         'is_pinned' => 'boolean',
         'is_locked' => 'boolean',
+        'content_edited_at' => 'datetime',
     ];
 
     public function group(): BelongsTo
@@ -33,6 +34,20 @@ class ForumDiscussion extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** True once the author has edited the first post's content (drives "(Edited)"). */
+    public function isEdited(): bool
+    {
+        return $this->content_edited_at !== null;
+    }
+
+    /** Only the discussion's author may edit the first post's content. */
+    public function canEditContentBy(?User $user): bool
+    {
+        return $user !== null
+            && $this->created_by !== null
+            && $this->created_by === $user->getKey();
     }
 
     /*

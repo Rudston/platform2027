@@ -95,6 +95,9 @@ return [
     'join_discussion'          => 'Join Discussion',
     'leave_discussion'         => 'Leave Discussion',
     'leave_discussion_confirm' => 'Leave this discussion?',
+    'edited'                   => '(Edited)',
+    'edit_post'                => 'Edit',
+    'save_post'                => 'Save',
 
     'badge' => [
         'pinned' => 'Pinned',

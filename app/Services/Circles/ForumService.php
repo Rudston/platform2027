@@ -100,6 +100,17 @@ class ForumService implements CircleServiceContract
         ]);
     }
 
+    /** Edit a discussion's first-post content, stamping content_edited_at. */
+    public function updateDiscussionContent(ForumDiscussion $discussion, string $content): ForumDiscussion
+    {
+        $discussion->update([
+            'content' => $content,
+            'content_edited_at' => now(),
+        ]);
+
+        return $discussion;
+    }
+
     /** Whether a discussion slug already exists in a group (optionally ignoring one). */
     public function discussionSlugExists(ForumGroup $group, string $slug, ?int $ignoreId = null): bool
     {
