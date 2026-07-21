@@ -207,6 +207,30 @@ class ForumDiscussionPage extends Component
         return ['roots' => $roots, 'byParent' => $byParent, 'byId' => $all->keyBy('id'), 'liked' => $liked];
     }
 
+    /**
+     * Poll target (wire:poll.10s) for near-live updates — Tier 0 polling, no
+     * broadcasting. Forces the comment thread + participant count to re-fetch on
+     * the next render (new/edited/tombstoned comments, updated like counts).
+     *
+     * Guard: while the viewer has a reply OR edit composer open with unsaved
+     * content, do nothing — never let a background poll clobber text someone is
+     * mid-typing. (The composer's bound value round-trips on the poll request, so
+     * skipping the refresh leaves it untouched.) The comment list still refreshes
+     * on subsequent ticks once they stop typing or submit.
+     */
+    public function refreshComments(): void
+    {
+        if ($this->replyingToId !== null && filled($this->replyContent)) {
+            return;
+        }
+
+        if ($this->editingCommentId !== null && filled($this->editContent)) {
+            return;
+        }
+
+        unset($this->responses, $this->participantCount);
+    }
+
     /** Post a new root response (bottom composer). Gated by canParticipate. */
     public function postRoot(): void
     {

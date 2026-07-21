@@ -78,8 +78,13 @@
 
         {{-- Responses (the comment thread — $discussion->posts is the forum-facing
              alias for the generic comments relation). Grows into most of the page
-             height, scrolling when needed. --}}
-        <div class="mt-8">
+             height, scrolling when needed.
+
+             Near-live updates via Tier-0 polling (no websockets): every 10s call
+             refreshComments — NOT wire:poll on the root — which re-fetches the
+             thread but no-ops while a composer has unsaved text, so a poll never
+             wipes what someone is mid-typing. --}}
+        <div class="mt-8" wire:poll.10s="refreshComments">
             <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('forums.responses_heading') }}</h2>
             <div class="mt-2 min-h-[40vh] max-h-[65vh] overflow-y-auto rounded-lg border border-border-muted p-5">
                 @php($resp = $this->responses)

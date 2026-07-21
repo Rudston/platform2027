@@ -575,6 +575,37 @@ class ForumDiscussionsTest extends TestCase
         $this->assertSame(2, $d->participantCount()); // A, B (C's only comment tombstoned)
     }
 
+    public function test_poll_refresh_surfaces_new_comments_but_keeps_an_open_draft(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $existing = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'first comment']);
+        $this->actingAs($this->member($circle)->fresh());
+
+        $t = Livewire::test(ForumDiscussionPage::class, [
+            'circle' => $circle,
+            'forumGroup' => $group,
+            'forumDiscussion' => $d,
+        ]);
+
+        // The poll is wired to the scoped action, not the root component.
+        $t->assertSee('first comment')
+            ->assertSeeHtml('wire:poll.10s="refreshComments"');
+
+        // The viewer opens a reply composer and starts typing.
+        $t->set('replyingToId', $existing->id)->set('replyContent', 'half-written reply');
+
+        // Someone else posts while they're typing.
+        $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'brand new comment']);
+
+        // A poll tick fires: the new comment appears, the draft is untouched.
+        $t->call('refreshComments')
+            ->assertSee('brand new comment')
+            ->assertSet('replyContent', 'half-written reply')
+            ->assertSet('replyingToId', $existing->id);
+    }
+
     public function test_visitor_cannot_participate(): void
     {
         $circle = $this->makeCircle();
