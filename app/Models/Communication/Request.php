@@ -2,7 +2,9 @@
 
 namespace App\Models\Communication;
 
+use App\Contracts\Stewardship\CircleStewardshipQueue;
 use App\Enums\RequestType;
+use App\Filament\Resources\Requests\RequestResource;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Organisation;
@@ -12,9 +14,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
-class Request extends Model
+class Request extends Model implements CircleStewardshipQueue
 {
     use SoftDeletes;
 
@@ -43,6 +46,38 @@ class Request extends Model
         'responded_at' => 'datetime',
         'metadata' => 'array',
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | CircleStewardshipQueue (surfaced on the per-circle Oversight page)
+    |--------------------------------------------------------------------------
+    */
+
+    public static function queueLabel(): string
+    {
+        return 'Pending Requests';
+    }
+
+    public static function pendingCountForCircle(Circle $circle): int
+    {
+        return static::query()->where('circle_id', $circle->id)->pending()->count();
+    }
+
+    public static function oldestPendingAgeForCircle(Circle $circle): ?Carbon
+    {
+        return static::query()
+            ->where('circle_id', $circle->id)
+            ->pending()
+            ->oldest()
+            ->first()?->created_at;
+    }
+
+    public static function filamentUrlForCircle(Circle $circle): string
+    {
+        // RequestResource has no circle filter to target, so link to its index
+        // unfiltered (rather than building filter-URL plumbing here).
+        return RequestResource::getUrl('index', panel: 'admin');
+    }
 
     /*
     |--------------------------------------------------------------------------

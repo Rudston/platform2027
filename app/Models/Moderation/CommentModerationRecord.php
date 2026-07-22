@@ -2,13 +2,18 @@
 
 namespace App\Models\Moderation;
 
+use App\Contracts\Stewardship\CircleStewardshipQueue;
 use App\Enums\Moderation\ModerationAction;
 use App\Enums\Moderation\ModerationFlagSource;
+use App\Filament\Resources\CommentModerationRecords\CommentModerationRecordResource;
+use App\Models\Circles\Circle;
 use App\Models\Comment;
+use App\Models\Forums\ForumDiscussion;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * One entry in the unified comment moderation queue. Created either by the AI
@@ -19,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * can compare it against `moderated_content` — what the comment became if the
  * author edited it afterwards.
  */
-class CommentModerationRecord extends Model
+class CommentModerationRecord extends Model implements CircleStewardshipQueue
 {
     protected $guarded = [];
 
@@ -122,5 +127,50 @@ class CommentModerationRecord extends Model
         ]);
 
         $this->comment?->deleteBy($admin);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CircleStewardshipQueue (surfaced on the per-circle Oversight page)
+    |--------------------------------------------------------------------------
+    */
+
+    public static function queueLabel(): string
+    {
+        return 'Comment Moderation';
+    }
+
+    public static function pendingCountForCircle(Circle $circle): int
+    {
+        return static::pendingForCircleQuery($circle)->count();
+    }
+
+    public static function oldestPendingAgeForCircle(Circle $circle): ?Carbon
+    {
+        return static::pendingForCircleQuery($circle)->oldest()->first()?->created_at;
+    }
+
+    public static function filamentUrlForCircle(Circle $circle): string
+    {
+        return CommentModerationRecordResource::getUrl(
+            'index',
+            ['tableFilters' => ['circle' => ['circle_id' => $circle->id]]],
+            panel: 'admin',
+        );
+    }
+
+    /**
+     * Unresolved records whose comment lives in this circle's forums, reached
+     * comment → commentable(ForumDiscussion) → group(ForumGroup) → circle_id.
+     */
+    protected static function pendingForCircleQuery(Circle $circle): Builder
+    {
+        return static::query()
+            ->pending()
+            ->whereHas('comment', fn (Builder $c) => $c->whereHasMorph(
+                'commentable',
+                [ForumDiscussion::class],
+                fn (Builder $d) => $d->whereHas('group', fn (Builder $g) => $g->where('circle_id', $circle->id)),
+            ));
     }
 }

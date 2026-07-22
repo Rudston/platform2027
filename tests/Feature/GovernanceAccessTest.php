@@ -153,15 +153,15 @@ class GovernanceAccessTest extends TestCase
         $this->assertSame([], Circle::query()->manageableBy(null)->pluck('id')->all());
     }
 
-    public function test_comment_moderation_resource_is_admin_only_for_now(): void
+    public function test_comment_moderation_resource_is_visible_to_admins_and_circle_admins(): void
     {
         $circle = $this->makeCircle(null, null);
 
-        // circle_admin: not yet (scoping is a deferred stewardship follow-up).
+        // circle_admin can now view (records are scoped in getEloquentQuery).
         $circleAdmin = User::factory()->create();
         $this->grantCircleAdmin($circleAdmin, $circle->id);
         $this->actingAs($circleAdmin->fresh());
-        $this->assertFalse(CommentModerationRecordResource::canViewAny());
+        $this->assertTrue(CommentModerationRecordResource::canViewAny());
 
         // global admin: yes.
         $admin = User::factory()->create();
@@ -172,6 +172,32 @@ class GovernanceAccessTest extends TestCase
         // ordinary user: no.
         $this->actingAs(User::factory()->create());
         $this->assertFalse(CommentModerationRecordResource::canViewAny());
+    }
+
+    public function test_request_stewardship_queue_metrics(): void
+    {
+        $circle = $this->makeCircle(null, null);
+        $other = $this->makeCircle(null, null);
+        $requester = User::factory()->create();
+
+        $this->assertSame('Pending Requests', Request::queueLabel());
+        $this->assertSame(0, Request::pendingCountForCircle($circle));
+        $this->assertNull(Request::oldestPendingAgeForCircle($circle));
+
+        $oldest = $this->makeRequest($circle->id, null, $requester); // pending
+        $oldest->update(['created_at' => now()->subDays(2)]);
+        $this->makeRequest($circle->id, null, $requester);           // pending
+        $this->makeRequest($other->id, null, $requester);            // different circle
+        $this->makeRequest($circle->id, null, $requester)->update(['status' => 'approved']); // not pending
+
+        $this->assertSame(2, Request::pendingCountForCircle($circle));
+        $this->assertSame(
+            $oldest->created_at->timestamp,
+            Request::oldestPendingAgeForCircle($circle)?->timestamp,
+        );
+
+        // Links to the (registered) Filament index.
+        $this->assertStringContainsString('admin', Request::filamentUrlForCircle($circle));
     }
 
     public function test_panel_access_is_granted_to_admins_and_circle_admins_only(): void

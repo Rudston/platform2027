@@ -5,15 +5,19 @@ namespace App\Filament\Resources\CommentModerationRecords;
 use App\Enums\Moderation\ModerationAction;
 use App\Enums\Moderation\ModerationFlagSource;
 use App\Filament\Resources\CommentModerationRecords\Pages\ListCommentModerationRecords;
+use App\Models\Circles\Circle;
+use App\Models\Forums\ForumDiscussion;
 use App\Models\Moderation\CommentModerationRecord;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -25,11 +29,10 @@ use UnitEnum;
  * resolves via Approve / Hide / Delete. Under the Governance nav group, same
  * pattern as RequestResource.
  *
- * ACCESS: admin/superadmin only, unscoped — for now.
- * TODO (stewardship follow-up): scope getEloquentQuery() to circle_admins via
- * Circle::scopeManageableBy through the comment → forumDiscussion → forumGroup →
- * circle chain, and admit circle_admins in canViewAny(), so they see records for
- * their own circles' forums (mirrors RequestResource's role-scoped query).
+ * ACCESS: global admins/superadmins see everything; a circle_admin sees only
+ * records whose comment lives in a circle they manage (comment → forumDiscussion
+ * → forumGroup → circle), scoped in getEloquentQuery() — the single choke point
+ * for both listing and record resolution.
  */
 class CommentModerationRecordResource extends Resource
 {
@@ -43,12 +46,35 @@ class CommentModerationRecordResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return (bool) static::authUser()?->hasAnyRole(['admin', 'superadmin']);
+        $user = static::authUser();
+
+        if ($user === null) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['admin', 'superadmin'])
+            || Circle::administeredBy($user)->isNotEmpty();
     }
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['comment.user', 'moderator']);
+        $query = parent::getEloquentQuery()->with(['comment.user', 'moderator']);
+
+        $user = static::authUser();
+
+        // A circle_admin sees only records whose comment lives in a circle they
+        // manage; global admins/superadmins are unscoped.
+        if ($user !== null && ! $user->hasAnyRole(['admin', 'superadmin'])) {
+            $manageableCircleIds = Circle::query()->manageableBy($user)->pluck('id');
+
+            $query->whereHas('comment', fn (Builder $c) => $c->whereHasMorph(
+                'commentable',
+                [ForumDiscussion::class],
+                fn (Builder $d) => $d->whereHas('group', fn (Builder $g) => $g->whereIn('circle_id', $manageableCircleIds)),
+            ));
+        }
+
+        return $query;
     }
 
     /** The current panel user as an App\Models\User (or null). */
@@ -121,6 +147,28 @@ class CommentModerationRecordResource extends Resource
                     ->placeholder('All')
                     ->trueLabel('Resolved')
                     ->falseLabel('Pending'),
+                // Pre-fillable from the Oversight page via
+                // CommentModerationRecord::filamentUrlForCircle().
+                Filter::make('circle')
+                    ->schema([
+                        Select::make('circle_id')
+                            ->label('Circle')
+                            ->options(fn (): array => Circle::query()->orderBy('name')->pluck('name', 'id')->all())
+                            ->searchable(),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $circleId = $data['circle_id'] ?? null;
+
+                        if (blank($circleId)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('comment', fn (Builder $c) => $c->whereHasMorph(
+                            'commentable',
+                            [ForumDiscussion::class],
+                            fn (Builder $d) => $d->whereHas('group', fn (Builder $g) => $g->where('circle_id', (int) $circleId)),
+                        ));
+                    }),
             ])
             ->recordActions([
                 static::approveAction(),

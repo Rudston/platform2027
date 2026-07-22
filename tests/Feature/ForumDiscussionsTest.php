@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Moderation\ModerationAction;
 use App\Enums\Moderation\ModerationFlagSource;
+use App\Filament\Resources\CommentModerationRecords\CommentModerationRecordResource;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionModal;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
 use App\Livewire\Communities\Services\Forums\ForumGroupPage;
@@ -614,6 +615,43 @@ class ForumDiscussionsTest extends TestCase
         $r2->refresh();
         $this->assertTrue($r2->moderated);
         $this->assertSame(ModerationAction::Deleted, $r2->moderation_action);
+    }
+
+    public function test_comment_moderation_stewardship_metrics_and_resource_scoping(): void
+    {
+        $circleA = $this->makeCircle();
+        $circleB = $this->makeCircle();
+        $groupA = $this->makeGroup($circleA);
+        $groupB = $this->makeGroup($circleB);
+        $dA = app(ForumService::class)->createDiscussion($groupA, User::factory()->create(), ['title' => 'A']);
+        $dB = app(ForumService::class)->createDiscussion($groupB, User::factory()->create(), ['title' => 'B']);
+
+        $cA = $dA->comments()->create(['user_id' => $this->member($circleA)->id, 'content' => 'a']);
+        $cB = $dB->comments()->create(['user_id' => $this->member($circleB)->id, 'content' => 'b']);
+        $recA = CommentModerationRecord::open($cA, ModerationFlagSource::Ai, 'x');
+        $recA->update(['created_at' => now()->subDay()]);
+        $recB = CommentModerationRecord::open($cB, ModerationFlagSource::User);
+
+        // Per-circle metrics reach through comment → discussion → group → circle.
+        $this->assertSame('Comment Moderation', CommentModerationRecord::queueLabel());
+        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circleA));
+        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circleB));
+        $this->assertNotNull(CommentModerationRecord::oldestPendingAgeForCircle($circleA));
+
+        // Resolved records drop out of the pending metrics.
+        $recA->update(['moderated' => true]);
+        $this->assertSame(0, CommentModerationRecord::pendingCountForCircle($circleA));
+        $this->assertNull(CommentModerationRecord::oldestPendingAgeForCircle($circleA));
+
+        // Resource query: a circle_admin of B sees only B's records.
+        $this->actingAs($this->makeManager($circleB)->fresh());
+        $this->assertSame(
+            [$recB->id],
+            CommentModerationRecordResource::getEloquentQuery()->pluck('id')->all(),
+        );
+
+        // Deep link carries the circle filter.
+        $this->assertStringContainsString((string) $circleB->id, CommentModerationRecord::filamentUrlForCircle($circleB));
     }
 
     public function test_participant_count_excludes_deleted_authors(): void
