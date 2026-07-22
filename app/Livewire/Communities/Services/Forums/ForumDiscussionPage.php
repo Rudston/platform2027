@@ -172,8 +172,9 @@ class ForumDiscussionPage extends Component
      *  - byParent: [parent_id => children in created_at asc]
      *  - byId: keyed lookup (for the "replying to {author}" label)
      *  - liked: comment ids the current user has liked
+     *  - pendingAiReview: comment ids quarantined pending AI review
      *
-     * @return array{roots: Collection, byParent: array<int, array>, byId: Collection, liked: array<int, int>}
+     * @return array{roots: Collection, byParent: array<int, array>, byId: Collection, liked: array<int, int>, pendingAiReview: array<int, int>}
      */
     #[Computed]
     public function responses(): array
@@ -206,7 +207,22 @@ class ForumDiscussionPage extends Component
                 ->all();
         }
 
-        return ['roots' => $roots, 'byParent' => $byParent, 'byId' => $all->keyBy('id'), 'liked' => $liked];
+        // Quarantine state, batched: ONE query for every comment on the page
+        // (the set form of Comment::pendingAiReview()), never per-row.
+        $pendingAiReview = CommentModerationRecord::query()
+            ->pendingAi()
+            ->whereIn('comment_id', $all->pluck('id'))
+            ->distinct()
+            ->pluck('comment_id')
+            ->all();
+
+        return [
+            'roots' => $roots,
+            'byParent' => $byParent,
+            'byId' => $all->keyBy('id'),
+            'liked' => $liked,
+            'pendingAiReview' => $pendingAiReview,
+        ];
     }
 
     /**

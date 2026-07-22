@@ -95,6 +95,7 @@
                         'byParent' => $resp['byParent'],
                         'byId' => $resp['byId'],
                         'liked' => $resp['liked'],
+                        'pendingAiReview' => $resp['pendingAiReview'],
                     ])
                 @empty
                     <p class="text-sm text-muted">{{ __('forums.no_responses') }}</p>

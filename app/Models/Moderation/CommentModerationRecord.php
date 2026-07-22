@@ -54,6 +54,16 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
     }
 
     /**
+     * Unresolved AI-sourced records — the single definition of "pending AI
+     * review". Drives the quarantine display (Comment::pendingAiReview() and the
+     * batched list lookup both go through this so the condition never diverges).
+     */
+    public function scopePendingAi(Builder $query): void
+    {
+        $query->where('moderated', false)->where('flagged_by', ModerationFlagSource::Ai->value);
+    }
+
+    /**
      * Open a PENDING record for a comment from a given source, create-or-reuse:
      * if an unmoderated record already exists for this comment+source, return it
      * rather than stacking a duplicate. Ai and User sources legitimately coexist

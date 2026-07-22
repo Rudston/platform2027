@@ -654,6 +654,93 @@ class ForumDiscussionsTest extends TestCase
         $this->assertStringContainsString((string) $circleB->id, CommentModerationRecord::filamentUrlForCircle($circleB));
     }
 
+    public function test_only_unresolved_ai_records_trigger_pending_review(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $c = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'hi']);
+
+        // A user-sourced flag alone does NOT quarantine.
+        CommentModerationRecord::open($c, ModerationFlagSource::User);
+        $this->assertFalse($c->fresh()->pendingAiReview());
+
+        // An unresolved AI record does.
+        $ai = CommentModerationRecord::open($c, ModerationFlagSource::Ai, 'x');
+        $this->assertTrue($c->fresh()->pendingAiReview());
+
+        // Resolving it (e.g. admin Approve) reverts naturally — no unhide step.
+        $ai->update(['moderated' => true]);
+        $this->assertFalse($c->fresh()->pendingAiReview());
+    }
+
+    public function test_pending_ai_review_is_batched_not_n_plus_one(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+
+        $flagged = collect();
+        foreach (range(1, 3) as $i) {
+            $c = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => "c{$i}"]);
+            CommentModerationRecord::open($c, ModerationFlagSource::Ai, 'x');
+            $flagged->push($c->id);
+        }
+        $clean = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'clean']);
+
+        $this->actingAs($this->member($circle)->fresh());
+        $page = $this->pageFor($circle, $group, $d);
+
+        DB::enableQueryLog();
+        $resp = $page->responses();
+        $moderationQueries = collect(DB::getQueryLog())
+            ->filter(fn (array $q): bool => str_contains($q['query'], 'comment_moderation_records'))
+            ->count();
+        DB::disableQueryLog();
+
+        // ONE query for the whole page regardless of comment count (no per-row).
+        $this->assertSame(1, $moderationQueries);
+        $this->assertEqualsCanonicalizing($flagged->all(), $resp['pendingAiReview']);
+        $this->assertNotContains($clean->id, $resp['pendingAiReview']);
+    }
+
+    public function test_pending_ai_review_renders_three_ways_by_viewer(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+
+        $author = $this->member($circle);
+        $flagged = $d->comments()->create(['user_id' => $author->id, 'content' => 'SECRETFLAGGEDTEXT']);
+        // A reply beneath it must stay visible to everyone (tombstone, not hide).
+        $d->comments()->create(['user_id' => $this->member($circle)->id, 'parent_id' => $flagged->id, 'content' => 'VISIBLEREPLY']);
+        CommentModerationRecord::open($flagged, ModerationFlagSource::Ai, 'bad words');
+
+        $args = ['circle' => $circle, 'forumGroup' => $group, 'forumDiscussion' => $d];
+
+        // 1. Author: full content + generic warning (never the AI reasoning).
+        $this->actingAs($author->fresh());
+        Livewire::test(ForumDiscussionPage::class, $args)
+            ->assertSee('SECRETFLAGGEDTEXT')
+            ->assertSee('awaiting review')
+            ->assertDontSee('bad words')
+            ->assertSee('VISIBLEREPLY');
+
+        // 2. Moderator: full content + informational badge.
+        $this->actingAs($this->makeManager($circle)->fresh());
+        Livewire::test(ForumDiscussionPage::class, $args)
+            ->assertSee('SECRETFLAGGEDTEXT')
+            ->assertSee('Pending Review')
+            ->assertSee('VISIBLEREPLY');
+
+        // 3. Another participant: tombstone, no content; the reply still shows.
+        $this->actingAs($this->member($circle)->fresh());
+        Livewire::test(ForumDiscussionPage::class, $args)
+            ->assertDontSee('SECRETFLAGGEDTEXT')
+            ->assertSee('This comment is pending review')
+            ->assertSee('VISIBLEREPLY');
+    }
+
     public function test_participant_count_excludes_deleted_authors(): void
     {
         $circle = $this->makeCircle();

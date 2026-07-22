@@ -96,6 +96,17 @@ class Comment extends Model
         return $this->hasMany(CommentModerationRecord::class);
     }
 
+    /**
+     * Whether this comment is quarantined pending AI review — i.e. an unresolved
+     * AI-sourced moderation record exists for it. Derived, NOT a stored column.
+     * (User-sourced flags never trigger this.) For a list, batch the equivalent
+     * lookup instead of calling this per row — see ForumDiscussionPage::responses.
+     */
+    public function pendingAiReview(): bool
+    {
+        return $this->moderationRecords()->pendingAi()->exists();
+    }
+
     /** True for a top-level comment (no parent). */
     public function isRoot(): bool
     {

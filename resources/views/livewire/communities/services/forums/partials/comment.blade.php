@@ -13,8 +13,22 @@
     // A tombstoned parent must not leak its author's name via a child's label.
     $parent = $byId[$comment->parent_id] ?? null;
     $parentName = ($parent && ! $parent->is_deleted) ? ($parent->user?->name ?? '—') : __('forums.response.deleted_author');
+
+    // Quarantine (pending AI review) — three-way by viewer. Author sees a
+    // warning + full content; a moderator sees a badge + full content; everyone
+    // else sees a tombstone (replies below still render). Never applies once the
+    // comment is deleted (delete tombstone wins).
+    $isPendingAi = ! $comment->is_deleted && in_array($comment->id, $pendingAiReview, true);
+    $showAuthorWarning = $isPendingAi && $isOwn;
+    $showModeratorBadge = $isPendingAi && ! $isOwn && $this->canManageThread;
+    $showPendingTombstone = $isPendingAi && ! $isOwn && ! $this->canManageThread;
 @endphp
-<div wire:key="comment-{{ $comment->id }}" class="{{ $indentClass }} border-l border-border-muted pl-3 mt-3">
+<div wire:key="comment-{{ $comment->id }}" @class([
+    'mt-3 border-l pl-3',
+    $indentClass,
+    'border-border-muted' => ! $showAuthorWarning,
+    'border-red-400 bg-red-50' => $showAuthorWarning,
+])>
     <p class="text-xs text-muted">
         @if ($comment->is_deleted)
             <span class="font-medium italic text-muted">{{ __('forums.response.deleted_author') }}</span>
@@ -28,6 +42,10 @@
         @if (! $comment->is_deleted && $comment->pinned && $comment->parent_id === null)
             <span class="ml-1 rounded-full border border-border-muted px-2 py-0.5 text-xs text-muted">{{ __('forums.badge.pinned') }}</span>
         @endif
+        {{-- Informational badge for someone who can act on the quarantine. --}}
+        @if ($showModeratorBadge)
+            <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{{ __('forums.response.pending_badge') }}</span>
+        @endif
         {{-- Once nesting is visually flattened (level 4+), keep the context. --}}
         @if ($level >= 4)
             <span class="italic">{{ __('forums.replying_to', ['author' => $parentName]) }}</span>
@@ -37,6 +55,9 @@
     {{-- Body: tombstone placeholder / inline editor / plain content --}}
     @if ($comment->is_deleted)
         <div class="mt-1 text-sm italic text-muted">{{ __('forums.response.deleted') }}</div>
+    @elseif ($showPendingTombstone)
+        {{-- Quarantined from public view; distinct wording from "[deleted]". --}}
+        <div class="mt-1 text-sm italic text-muted">{{ __('forums.response.pending') }}</div>
     @elseif ($isEditing)
         <div class="mt-1" wire:key="edit-composer-{{ $comment->id }}">
             <textarea wire:model="editContent" rows="3"
@@ -51,10 +72,14 @@
         </div>
     @else
         <div class="mt-1 whitespace-pre-line text-sm text-main">{{ $comment->content }}</div>
+        {{-- Generic warning to the author — deliberately NOT the AI's reasoning. --}}
+        @if ($showAuthorWarning)
+            <p class="mt-1 text-xs text-red-600">{{ __('forums.response.pending_author_note') }}</p>
+        @endif
     @endif
 
-    {{-- Actions: never on a tombstone, and hidden on the comment being edited. --}}
-    @if (! $comment->is_deleted && ! $isEditing)
+    {{-- Actions: never on a (deleted or pending) tombstone, nor while editing. --}}
+    @if (! $comment->is_deleted && ! $isEditing && ! $showPendingTombstone)
         <div class="mt-1 flex flex-wrap items-center gap-4 text-xs">
             @if ($this->canParticipate)
                 <button type="button" wire:click="toggleLike({{ $comment->id }})"
@@ -102,8 +127,8 @@
         </div>
     @endif
 
-    {{-- Inline reply composer (only under the currently-open, non-deleted comment) --}}
-    @if ($this->canParticipate && ! $comment->is_deleted && $this->replyingToId === $comment->id)
+    {{-- Inline reply composer (only under the currently-open, non-tombstoned comment) --}}
+    @if ($this->canParticipate && ! $comment->is_deleted && ! $showPendingTombstone && $this->replyingToId === $comment->id)
         <div class="mt-2" wire:key="reply-composer-{{ $comment->id }}">
             <textarea wire:model="replyContent" rows="3"
                       placeholder="{{ __('forums.reply_placeholder') }}"
@@ -126,6 +151,7 @@
             'byParent' => $byParent,
             'byId' => $byId,
             'liked' => $liked,
+            'pendingAiReview' => $pendingAiReview,
         ])
     @endforeach
 </div>
