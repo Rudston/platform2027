@@ -10,10 +10,18 @@
     </a>
 
     <div class="mt-4 rounded-lg border border-border-muted bg-surface p-8 shadow-sm">
-        {{-- Header: type icon + name --}}
-        <div class="flex items-start gap-3">
-            <span class="text-3xl" aria-hidden="true">{{ $this->icon() }}</span>
-            <h1 class="text-2xl font-bold text-main">{{ $circle->name }}</h1>
+        {{-- Header: type icon + name; admin-only Oversight link on the right --}}
+        <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3">
+                <span class="text-3xl" aria-hidden="true">{{ $this->icon() }}</span>
+                <h1 class="text-2xl font-bold text-main">{{ $circle->name }}</h1>
+            </div>
+            @if ($this->canOverseeCircle)
+                <a href="{{ route('communities.oversight', $circle) }}" wire:navigate
+                   class="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-100">
+                    {{ __('stewardship.link') }} →
+                </a>
+            @endif
         </div>
 
         {{-- Top meta: location / admins / members on the left; for organisation

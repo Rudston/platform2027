@@ -185,7 +185,8 @@ class GovernanceAccessTest extends TestCase
         $this->assertNull(Request::oldestPendingAgeForCircle($circle));
 
         $oldest = $this->makeRequest($circle->id, null, $requester); // pending
-        $oldest->update(['created_at' => now()->subDays(2)]);
+        // created_at isn't fillable on Request — forceFill past mass assignment.
+        $oldest->forceFill(['created_at' => now()->subDays(2)])->save();
         $this->makeRequest($circle->id, null, $requester);           // pending
         $this->makeRequest($other->id, null, $requester);            // different circle
         $this->makeRequest($circle->id, null, $requester)->update(['status' => 'approved']); // not pending

@@ -75,9 +75,22 @@ class ContentBlockSeeder extends Seeder
             );
         }
 
+        // Stewardship: the neglect threshold (in days). If a circle's oldest
+        // pending queue item is older than this, the Oversight page highlights
+        // it. A plain number (is_html = false) editable in the ContentBlock
+        // resource — this is the app's existing admin-configurable-value store.
+        ContentBlock::updateOrCreate(
+            ['key' => 'stewardship.neglect_days'],
+            [
+                'description' => 'Days after which an unactioned circle queue item is flagged as neglected on the Oversight page',
+                'content' => ['en' => '7', 'pt_BR' => ''],
+                'is_html' => false,
+            ],
+        );
+
         $this->command->info(sprintf(
             'Seeded %d content blocks.',
-            count($blocks) + count($howToTypes),
+            count($blocks) + count($howToTypes) + 1,
         ));
     }
 }

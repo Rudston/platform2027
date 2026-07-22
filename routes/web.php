@@ -7,6 +7,7 @@ use App\Livewire\Auth\ForgotPassword;
 use App\Livewire\Auth\Login;
 use App\Livewire\Auth\Register;
 use App\Livewire\Auth\ResetPassword;
+use App\Livewire\Communities\CircleOversightPage;
 use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
 use App\Livewire\Communities\Services\Forums\ForumGroupPage;
@@ -26,6 +27,10 @@ Route::get('/locale/{locale}', LocaleController::class)->name('locale.update');
 
 // Single community (circle) full page. Public for now — permissions later.
 Route::get('/communities/{circle}', CommunityPage::class)->name('communities.show');
+
+// Per-circle stewardship oversight — platform admins/superadmins only (the
+// component 403s everyone else, including circle_admins).
+Route::get('/communities/{circle}/oversight', CircleOversightPage::class)->name('communities.oversight');
 
 // A forum group's Discussions page. scopeBindings() resolves {forumGroup:slug}
 // within {circle} (slugs are unique per circle, not globally).

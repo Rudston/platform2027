@@ -1,0 +1,323 @@
+Implement the unified comment moderation queue: schema, models, a
+stubbed AI checker (interface-based, swappable later), unifying
+user-flags into the same queue, an admin Hide action, and a Filament
+dashboard. Read every existing file first — Comment model, its
+migrations, the delete/edit/flag actions from the previous step, and
+the existing Filament RequestResource (under Governance) as the
+pattern to follow for the new dashboard.
+
+## Reference material
+`_reference/legacy-comments/` does not contain the old OpenAIService itself but does
+contain the CommentModerationRecord model; the old comment_moderation_records schema is supplied separately in this conversation).
+
+Same rules
+as always: read for intent only, do not copy Livewire 3/old-schema
+patterns verbatim, do not leave dependencies pointing into that folder.
+Specifically do NOT port these three things from the old schema —
+they were legacy duplication, not requirements:
+- `referenced_type`/`referenced_id` — replaced by a direct `comment_id`
+  FK, since Comment already carries its own commentable polymorphism
+- `comment_thread_id`/`comment_thread_message_id` — comments already
+  collapsed into one table; no split to preserve
+- `author_name` — derive from the `user_id` relation, don't denormalize
+
+## Schema
+
+### Alter `comments`
+- `hidden` already exists — confirm it's still filtered out of every
+  comment-list query (it was added in an earlier step; don't
+  reintroduce it if that filter regressed)
+- Add `ai_checked_at` — nullable timestamp. Null = not yet checked by
+  the AI checker (or checked value has been invalidated by an edit —
+  see below). Non-null = checked, whether or not it was flagged.
+- Add `hidden_at` — nullable timestamp
+- Add `hidden_by_user_id` — nullable FK to users.id, nullOnDelete
+  (mirrors the existing `deleted_by_user_id` pattern from the delete
+  step — same audit shape, don't invent a different convention)
+
+### New table `comment_moderation_records`
+- id
+- comment_id — FK to comments.id, cascade on delete
+- flagged_by — string/enum column, backed by a new
+  `App\Enums\Moderation\ModerationFlagSource` enum: `Ai`, `User`
+- content — text. Snapshot of the comment's content AT THE MOMENT this
+  record was created — not a live reference. This is what makes
+  `fixed_by_author` meaningful later.
+- ai_message — text, nullable. The checker's feedback/reasoning when
+  `flagged_by` is Ai; null for User-sourced records.
+- moderated — bool, default false
+- moderated_as_ok — bool, default false
+- moderation_action — string/enum column, backed by
+  `App\Enums\Moderation\ModerationAction`: `Approved`, `Hidden`,
+  `Deleted`. Nullable until an admin acts.
+- moderated_by_user_id — nullable FK to users.id, nullOnDelete
+- fixed_by_author — bool, default false
+- moderated_content — text, nullable. Set when the author edits the
+  comment AFTER this record was created but BEFORE an admin has acted
+  — captures what it became, for the admin to compare against `content`.
+- timestamps
+
+Do not create a duplicate PENDING record for the same comment+source
+combination — if an unmoderated (`moderated = false`) record already
+exists for a comment from the same `flagged_by` source, reuse it
+rather than inserting a new row. (Two records CAN legitimately coexist
+for the same comment if one is Ai-sourced and one is User-sourced —
+that's fine, don't try to merge those into one row.)
+
+## AI checker — interface now, stub implementation, real AI later
+
+`App\Contracts\Moderation\CommentModerationCheckerContract`:
+```php
+interface CommentModerationCheckerContract
+{
+    public function check(string $content): ModerationCheckResult;
+}
+```
+
+A small value object `App\Support\Moderation\ModerationCheckResult`
+(or similar) holding: `containsOffensiveContent: bool`, `message: ?string`.
+
+`App\Services\Moderation\StubModerationChecker implements
+CommentModerationCheckerContract` — deterministic, no external call.
+Make it actually testable rather than a no-op: check the content
+against a small hardcoded trigger-word list (e.g. a config array with
+one or two obviously-fake test words like "moderationtestflag") so the
+pipeline can be exercised end-to-end without a real API key. Everything
+else returns not-offensive. Do NOT call OpenAI or any external service
+in this step.
+
+Bind the interface to the stub in a service provider — this binding is
+the ONLY place that needs to change when real AI (OpenAI, or a future
+local LLM) replaces the stub. Don't let any other code reference
+`StubModerationChecker` directly; always resolve via the interface.
+
+## Checking pipeline
+
+`comments:check-moderation` console command (mirror the existing
+`requests:expire` command's conventions — chunkById, idempotent):
+- Selects comments where `ai_checked_at IS NULL` and `is_deleted = false`
+- For each, resolves `CommentModerationCheckerContract` and calls
+  `check($comment->content)`
+- Sets `ai_checked_at = now()` regardless of outcome
+- If `containsOffensiveContent` is true, create/reuse a
+  `comment_moderation_records` row per the dedupe rule above, with
+  `flagged_by = Ai`, `content` = current comment content,
+  `ai_message` = the result's message
+- Schedule it in routes/console.php. Old system ran this "frequently" —
+  use every 10 minutes for now (`->everyTenMinutes()`); this is cheap
+  to change and only matters once a real API with actual cost is wired
+  in, so don't over-think the cadence yet.
+
+## Wire the existing edit action to invalidate + track fixes
+
+In the comment edit action (built in the previous step):
+- When content actually changes, set `ai_checked_at = null` (queues a
+  recheck)
+- If there is an existing UNMODERATED record (any source) for this
+  comment, set that record's `fixed_by_author = true` and
+  `moderated_content` = the new content. Do NOT auto-resolve the
+  record (`moderated` stays false) — the admin still reviews and
+  decides; this only gives them the "author already tried to fix it"
+  signal plus the before/after comparison.
+
+## Unify the user-flag button into this queue
+
+Change the existing "Flag as offensive" action (built two steps ago):
+still sets `comments.flagged_as_offensive = true` (idempotent, as
+before — keep that column and behavior as the cheap per-comment
+indicator), AND additionally creates/reuses a
+`comment_moderation_records` row with `flagged_by = User`, `content`
+= current comment content, `ai_message` = null. Same dedupe rule (don't
+create a second pending User-sourced record if one's already pending
+for this comment). No other change to the flag button's visible
+behavior (still silent to everyone but the flagger, still no visible
+effect on the comment itself — this step is only wiring it into the
+queue an admin can see).
+
+## Admin "Hide" action (front end)
+
+Alongside the existing Delete action on each comment in the discussion
+detail view: add a "Hide" action, visible under the same authorization
+gate as delete (`Circle::isManageableBy` — reuse `Comment::canDelete`'s
+gate logic, or extract a shared `canModerate` check if that reads
+better; don't duplicate the authorization condition inline in two
+places).
+
+Add `Comment::hide(User $actor)`: sets `hidden = true`, `hidden_at =
+now()`, `hidden_by_user_id = $actor->id`. A hidden comment is excluded
+from the comment list query (same filter as `is_deleted` — confirm
+both exclusions are applied together, not one overriding the other's
+intent). Unlike delete, hiding does NOT need the has-replies/tombstone
+branching — a hidden comment and its replies are simply not rendered
+at all; there's no tombstone concept for hide.
+
+## Filament dashboard
+
+New resource `CommentModerationRecordResource` under the existing
+`Governance` nav group (same group as RequestResource — follow its
+structure for list/view page conventions, badge columns, and action
+patterns).
+
+Table columns: created_at, flagged_by badge, comment author (via
+relation), content (truncated), ai_message (truncated, only shown when
+flagged_by = Ai), moderated toggle/badge, fixed_by_author badge,
+moderation_action.
+
+Filters: flagged_by (Ai/User), moderated status (pending/resolved).
+
+Row actions, visible only while `moderated = false`:
+- **Approve** — sets `moderated_as_ok = true`, `moderated = true`,
+  `moderation_action = Approved`, `moderated_by_user_id` = current
+  admin. No change to the comment.
+- **Hide** — calls the same `Comment::hide($actor)` method added
+  above, then sets `moderated = true`, `moderation_action = Hidden`,
+  `moderated_by_user_id`.
+- **Delete** — calls the EXISTING `Comment::delete($actor)` method
+  from the earlier delete step (same tombstone-if-has-replies logic —
+  do not write a second delete implementation here), then sets
+  `moderated = true`, `moderation_action = Deleted`,
+  `moderated_by_user_id`.
+
+Access this step: admin/superadmin only, unscoped — do NOT attempt
+circle_admin scoping yet. Scoping this the way RequestResource scopes
+to circle_admins would require walking Comment → ForumDiscussion →
+ForumGroup → Circle and deciding whether a circle_admin should see
+records for their own circle's forums; that's a real design decision,
+not a mechanical copy of RequestResource's pattern — leave it for a
+follow-up once we've discussed it, and note that as a TODO comment in
+the resource.
+
+## Explicit non-goals
+- No real OpenAI (or any external) API call
+- No local LLM integration
+- No circle_admin-scoped visibility on the dashboard
+- No per-discussion moderator assignment or discussion close/reopen
+  (a separate future feature, not part of this queue)
+- No un-hiding / un-deleting UI
+- No notification to the author when their comment is hidden/deleted
+  by an admin
+
+Stop after the schema + models + stub checker + console command are
+working, for review, before building the Filament resource and the
+front-end Hide action.
+
+====
+Add pending-AI-review display state to the discussion UI: quarantine
+a comment from public view (tombstone-style, replies stay visible)
+while an unresolved AI-sourced moderation record exists, show a
+warning indicator to the comment's own author, and show full content
++ a badge to anyone who can moderate this circle. Read the Comment
+model, the comment list Blade view, the tombstone/delete rendering
+from the earlier delete step, and CommentModerationRecord before
+touching any of this.
+
+## Derived state, not a stored column
+
+Do NOT add a new boolean/timestamp on `comments` for this. The state
+is fully derivable: "is this comment pending AI review?" =
+`comment_moderation_records` has a row for this comment where
+`flagged_by = Ai` AND `moderated = false`. Add a scope/accessor for
+this, e.g. `Comment::pendingAiReview(): bool` or a query scope
+`scopePendingAiReview` — whichever fits this app's existing accessor
+conventions.
+
+CRITICAL — batch this, don't N+1 it. If the comment list checks this
+per-row inside a loop, that's the same eager/lazy mistake flagged
+earlier in this project: one query up front (moderation records for
+all comment_ids on this page, grouped by comment_id) passed into the
+render, not a query-per-comment. Follow the same pattern already used
+for member counts / tag lists elsewhere in this app.
+
+## Three-way rendering per comment
+
+For a comment where `pendingAiReview()` is true, rendering depends on
+WHO is viewing:
+
+1. **The comment's own author** — full content still renders, but with
+   a visible warning treatment (e.g. a red-tinted border/background on
+   that comment, consistent with whatever "warning" styling convention
+   this app already uses elsewhere — check before inventing a new
+   color). Label it something like "Pending review" on hover/always-
+   visible small text — do NOT expose the AI's actual `ai_message`
+   reasoning to the author; a generic explanation is enough (e.g. "This
+   post is awaiting review and isn't visible to others yet"). Exposing
+   the exact triggering reasoning risks teaching people how to phrase
+   around the checker.
+
+2. **Anyone who can moderate this circle** (same gate used for the
+   Hide/Delete actions — `Circle::isManageableBy`, or the shared
+   `canModerate` check if one was extracted in the earlier step) —
+   full content renders normally, PLUS a small "Pending Review" badge
+   (distinct from the author's warning styling — this is an informational
+   badge for someone who can act, not a warning to someone who can't).
+   Clicking/tapping the badge can link to the record in Filament if
+   that's cheap to wire up; if not trivial, a plain non-interactive
+   badge is fine for this step.
+
+3. **Everyone else** — tombstone-style placeholder, same rendering
+   slot/mechanism as a deleted-with-replies comment, but with a
+   different placeholder string: something like "This comment is
+   pending review" (do not reuse "[deleted]" text — a viewer should be
+   able to tell these apart if they think about it, even if casually
+   they look similar). Like the delete tombstone:
+   - No like button/count
+   - No "Reply" link
+   - Existing replies underneath remain fully visible and fully
+     functional (this is the entire point of choosing tombstone over
+     full-hide)
+
+## Do not touch the console command or the Approve/Hide/Delete actions
+
+This step is display-only. When an admin eventually Approves the
+record via Filament (`moderated = true`, `moderation_action =
+Approved`), the comment naturally reverts to normal rendering for
+everyone on the next load, because `pendingAiReview()` becomes false —
+no additional code needed to "unhide" it, confirm this falls out
+correctly rather than adding an explicit unhide step.
+
+If an admin Hides or Deletes the record instead, the EXISTING hide/
+delete rendering (built in prior steps) takes over as normal — a
+comment can't be simultaneously "pending" and "hidden," since Hide/
+Delete both set `moderated = true` on the record, which clears the
+pending state at the same moment the hidden/deleted state kicks in.
+
+## Explicitly unaffected by this step
+
+- User-sourced (`flagged_by = User`) unresolved records — these
+  continue to have NO visible effect on rendering for anyone, per the
+  earlier decision. Only Ai-sourced unresolved records trigger this
+  quarantine display. Do not conflate the two conditions.
+- No pre-publish hold — a brand-new comment with `ai_checked_at NULL`
+  (not yet checked at all) renders completely normally for everyone
+  until/unless a later check actually flags it. This step only reacts
+  to an existing flagged-and-unresolved record.
+- wire:poll behavior from the earlier polling step — a comment
+  flippingcommit
+
+
+  ===== LLMs =====
+  For basic comment moderation, you don't need a state-of-the-art 70B model. A small, instruction-tuned model (3–8B parameters) is usually sufficient and can run locally on a decent CPU or much faster on a GPU.
+
+  Here are the models I'd consider, ordered roughly by my recommendation.
+
+  Model	Size	Good for moderation?
+  | Model                        | Size | Good for moderation? |       Runs on CPU?      |
+  | ---------------------------- | ---: | :------------------: | :---------------------: |
+  | **Llama 3.2 3B Instruct**    |   3B |         ⭐⭐⭐⭐⭐        |  Yes (slow but usable)  |
+  | **Qwen2.5 3B Instruct**      |   3B |         ⭐⭐⭐⭐⭐        |           Yes           |
+  | **Gemma 3 4B**               |   4B |         ⭐⭐⭐⭐☆        |           Yes           |
+  | **Phi-4 Mini**               |  ~4B |         ⭐⭐⭐⭐☆        |           Yes           |
+  | **Mistral 7B Instruct v0.3** |   7B |         ⭐⭐⭐⭐⭐        | Yes (more RAM required) |
+
+  FILESIZE:
+  For **Llama 3.2 3B Instruct**, the approximate file size depends mostly on the **precision / quantization** used:
+
+  | Format | Approx file size |
+  | --- | --- |
+  | **FP32** | ~12 GB |
+  | **FP16 / BF16** | ~6 GB |
+  | **INT8** | ~3 GB |
+  | **4-bit quantized** | ~1.5–2 GB |
+  | **2-bit quantized** | ~0.8–1.2 GB |
+  Rule of thumb: file size ≈ number of parameters × bytes per parameter
+

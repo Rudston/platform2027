@@ -10,7 +10,9 @@ use App\Models\Circles\CircleMembership;
 use App\Models\Circles\Service;
 use App\Models\Communities\OrganisationCommunity;
 use App\Models\Organisation;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -46,7 +48,7 @@ class CommunityPage extends Component
     {
         // Pending circles are not publicly viewable — only admins/superadmins
         // may reach them by direct URL (mirrors the Explore visibleTo() scope).
-        /** @var \App\Models\User|null $user */
+        /** @var User|null $user */
         $user = auth()->user();
         abort_unless($circle->isVisibleTo($user), 404);
 
@@ -78,12 +80,23 @@ class CommunityPage extends Component
      * Users who administer this circle (circle_admin role scoped to it).
      * Computed so the query runs once per render.
      *
-     * @return Collection<int, \App\Models\User>
+     * @return Collection<int, User>
      */
     #[Computed]
     public function administrators(): Collection
     {
         return $this->circle->administrators();
+    }
+
+    /**
+     * Whether the viewer may open this circle's Oversight page — platform
+     * admins/superadmins ONLY (deliberately NOT circle_admins; the page watches
+     * them). Gates the admin-only oversight link in the header.
+     */
+    #[Computed]
+    public function canOverseeCircle(): bool
+    {
+        return (bool) auth()->user()?->hasAnyRole(['admin', 'superadmin']);
     }
 
     /** Circle tags (alphabetical) for the read-only display row. */
@@ -120,7 +133,7 @@ class CommunityPage extends Component
      * Eligibility for joining (for a logged-in non-member). Guests get a
      * not-allowed 'guest' result so the UI prompts a login instead.
      *
-     * @return array{allowed: bool, reason: ?string, available_at: ?\Illuminate\Support\Carbon, swappable: \Illuminate\Support\Collection}
+     * @return array{allowed: bool, reason: ?string, available_at: ?Carbon, swappable: SupportCollection}
      */
     #[Computed]
     public function joinState(): array
@@ -240,12 +253,12 @@ class CommunityPage extends Component
     {
         return match ($this->circle->circleable_type) {
             CommunityType::LocationCommunity->value => '📍',
-            CommunityType::Organisation->value      => '🏛',
-            CommunityType::Campaign->value          => '📢',
-            CommunityType::Course->value            => '🎓',
-            CommunityType::Event->value             => '📅',
-            CommunityType::ThemeCommunity->value    => '💡',
-            default                                 => '🌍',
+            CommunityType::Organisation->value => '🏛',
+            CommunityType::Campaign->value => '📢',
+            CommunityType::Course->value => '🎓',
+            CommunityType::Event->value => '📅',
+            CommunityType::ThemeCommunity->value => '💡',
+            default => '🌍',
         };
     }
 
@@ -359,7 +372,7 @@ class CommunityPage extends Component
     #[Computed]
     public function canAddSelfAsCircleAdmin(): bool
     {
-        /** @var \App\Models\User|null $user */
+        /** @var User|null $user */
         $user = auth()->user();
 
         // Self-contained (uses activeMembership, not the membership computed) so
@@ -377,7 +390,7 @@ class CommunityPage extends Component
             return;
         }
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
         $this->circle->addAdministrator($user);
 
@@ -399,7 +412,7 @@ class CommunityPage extends Component
      */
     public function removeSelfAsCircleAdmin(): void
     {
-        /** @var \App\Models\User|null $user */
+        /** @var User|null $user */
         $user = auth()->user();
 
         if ($user === null || ! $this->circle->isAdministeredBy($user)) {
