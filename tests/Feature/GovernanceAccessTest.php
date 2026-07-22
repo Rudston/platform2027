@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\CommunityType;
 use App\Filament\Pages\Dashboard;
+use App\Filament\Resources\CommentModerationRecords\CommentModerationRecordResource;
 use App\Filament\Resources\ContentBlocks\ContentBlockResource;
 use App\Filament\Resources\Requests\RequestResource;
 use App\Models\Circles\Circle;
@@ -120,6 +121,57 @@ class GovernanceAccessTest extends TestCase
         $administered = Circle::administeredBy($user);
         $this->assertEqualsCanonicalizing([$place->id], $administered->pluck('id')->all());
         $this->assertTrue(Circle::administeredBy(null)->isEmpty());
+    }
+
+    public function test_scope_manageable_by_matches_the_single_record_check(): void
+    {
+        $a = $this->makeCircle(null, null);
+        $b = $this->makeCircle(null, null);
+        $c = $this->makeCircle(null, null);
+
+        $circleAdmin = User::factory()->create();
+        $this->grantCircleAdmin($circleAdmin, $a->id);
+
+        // circle_admin: scope returns only their circle, matching isManageableBy.
+        $this->assertEqualsCanonicalizing(
+            [$a->id],
+            Circle::query()->manageableBy($circleAdmin)->pluck('id')->all(),
+        );
+        $this->assertTrue($a->isManageableBy($circleAdmin));
+        $this->assertFalse($b->isManageableBy($circleAdmin));
+
+        // global admin: everything, unfiltered.
+        $admin = User::factory()->create();
+        $this->grantGlobalRole($admin, 'admin');
+        $this->assertEqualsCanonicalizing(
+            [$a->id, $b->id, $c->id],
+            Circle::query()->manageableBy($admin)->pluck('id')->all(),
+        );
+
+        // no manage role, and a guest: no circles.
+        $this->assertSame([], Circle::query()->manageableBy(User::factory()->create())->pluck('id')->all());
+        $this->assertSame([], Circle::query()->manageableBy(null)->pluck('id')->all());
+    }
+
+    public function test_comment_moderation_resource_is_admin_only_for_now(): void
+    {
+        $circle = $this->makeCircle(null, null);
+
+        // circle_admin: not yet (scoping is a deferred stewardship follow-up).
+        $circleAdmin = User::factory()->create();
+        $this->grantCircleAdmin($circleAdmin, $circle->id);
+        $this->actingAs($circleAdmin->fresh());
+        $this->assertFalse(CommentModerationRecordResource::canViewAny());
+
+        // global admin: yes.
+        $admin = User::factory()->create();
+        $this->grantGlobalRole($admin, 'admin');
+        $this->actingAs($admin->fresh());
+        $this->assertTrue(CommentModerationRecordResource::canViewAny());
+
+        // ordinary user: no.
+        $this->actingAs(User::factory()->create());
+        $this->assertFalse(CommentModerationRecordResource::canViewAny());
     }
 
     public function test_panel_access_is_granted_to_admins_and_circle_admins_only(): void

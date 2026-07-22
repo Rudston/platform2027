@@ -82,6 +82,13 @@
                         class="text-red-600 hover:underline">{{ __('forums.response.delete') }}</button>
             @endif
 
+            {{-- Hide: moderation — circle manager only (never the author). --}}
+            @if ($this->canManageThread)
+                <button type="button" wire:click="hideComment({{ $comment->id }})"
+                        wire:confirm="{{ __('forums.response.hide_confirm') }}"
+                        class="text-muted hover:text-main">{{ __('forums.response.hide') }}</button>
+            @endif
+
             {{-- Flag: any participant, on others' comments only. --}}
             @if ($this->canParticipate && ! $isOwn)
                 @if (in_array($comment->id, $this->flaggedByMe, true))

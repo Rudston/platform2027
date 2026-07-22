@@ -10,3 +10,8 @@ Artisan::command('inspire', function () {
 
 // Mark expired pending requests each day.
 Schedule::command('requests:expire')->daily();
+
+// Run unchecked comments through the moderation checker frequently. Cadence is
+// cheap to change; it only starts to matter once a real (paid) AI backend is
+// bound in place of the stub.
+Schedule::command('comments:check-moderation')->everyTenMinutes();

@@ -2,12 +2,14 @@
 
 namespace App\Livewire\Communities\Services\Forums;
 
+use App\Enums\Moderation\ModerationFlagSource;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Comment;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\Like;
+use App\Models\Moderation\CommentModerationRecord;
 use App\Models\User;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Collection;
@@ -388,6 +390,26 @@ class ForumDiscussionPage extends Component
         unset($this->responses, $this->participantCount);
     }
 
+    /** Hide a comment (moderation — circle manager only). Excludes it + replies. */
+    public function hideComment(int $commentId): void
+    {
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        $comment = $this->discussion->comments()->whereKey($commentId)->first();
+
+        if ($actor === null || $comment === null || ! $comment->canModerate($actor)) {
+            return;
+        }
+
+        $comment->hide($actor);
+
+        if ($this->editingCommentId === $commentId) {
+            $this->cancelEditingComment();
+        }
+
+        unset($this->responses, $this->participantCount);
+    }
+
     /**
      * Flag a comment as offensive (any participant, on others' comments).
      * Sets the persisted bool once (idempotent) — invisible to everyone else;
@@ -408,6 +430,10 @@ class ForumDiscussionPage extends Component
         if (! $comment->flagged_as_offensive) {
             $comment->update(['flagged_as_offensive' => true]);
         }
+
+        // Feed the same unified moderation queue the AI checker uses (create or
+        // reuse a pending User-sourced record — no duplicate per comment).
+        CommentModerationRecord::open($comment, ModerationFlagSource::User);
 
         if (! in_array($commentId, $this->flaggedByMe, true)) {
             $this->flaggedByMe[] = $commentId;

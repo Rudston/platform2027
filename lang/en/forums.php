@@ -110,6 +110,8 @@ return [
         'save'           => 'Save',
         'delete'         => 'Delete',
         'delete_confirm' => 'Delete this comment?',
+        'hide'           => 'Hide',
+        'hide_confirm'   => 'Hide this comment (and its replies) from the thread?',
         'deleted'        => '[deleted]',
         'deleted_author' => 'Deleted user',
         'flag'           => 'Flag',

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Contracts\Moderation\CommentModerationCheckerContract;
+use App\Services\Moderation\StubModerationChecker;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\ServiceProvider;
@@ -13,7 +15,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The ONLY place to change when real AI (OpenAI / a local LLM) replaces
+        // the deterministic stub — all callers resolve the contract, never the
+        // concrete class.
+        $this->app->bind(CommentModerationCheckerContract::class, StubModerationChecker::class);
     }
 
     /**

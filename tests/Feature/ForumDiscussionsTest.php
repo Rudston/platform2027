@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\Moderation\ModerationAction;
+use App\Enums\Moderation\ModerationFlagSource;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionModal;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
 use App\Livewire\Communities\Services\Forums\ForumGroupPage;
@@ -10,6 +12,7 @@ use App\Models\Circles\CircleMembership;
 use App\Models\Comment;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
+use App\Models\Moderation\CommentModerationRecord;
 use App\Models\User;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +52,8 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_21_000001_add_content_edited_at_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000002_create_comments_table.php'))->up();
         (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
+        (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
+        (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
@@ -541,14 +546,74 @@ class ForumDiscussionsTest extends TestCase
         $page->flag($comment->id);
         $this->assertTrue($comment->fresh()->flagged_as_offensive);
         $this->assertContains($comment->id, $page->flaggedByMe);
+        // A user flag also opens a pending User-sourced moderation record.
+        $this->assertSame(1, $comment->moderationRecords()->where('flagged_by', 'user')->count());
 
-        $page->flag($comment->id); // idempotent, no error
+        $page->flag($comment->id); // idempotent — bool stays set, no duplicate record
         $this->assertTrue($comment->fresh()->flagged_as_offensive);
+        $this->assertSame(1, $comment->moderationRecords()->where('flagged_by', 'user')->count());
 
-        // Flagging your own comment is a no-op.
+        // Flagging your own comment is a no-op (no bool, no record).
         $own = $d->comments()->create(['user_id' => $flagger->id, 'content' => 'mine']);
         $page->flag($own->id);
         $this->assertFalse($own->fresh()->flagged_as_offensive);
+        $this->assertSame(0, $own->moderationRecords()->count());
+    }
+
+    public function test_manager_can_hide_a_comment_and_author_cannot(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $author = $this->member($circle);
+        $comment = $d->comments()->create(['user_id' => $author->id, 'content' => 'visible text']);
+
+        // The author is not a moderator — hiding their own comment is a no-op.
+        $this->actingAs($author->fresh());
+        $this->pageFor($circle, $group, $d)->hideComment($comment->id);
+        $this->assertFalse($comment->fresh()->hidden);
+
+        // A circle manager can hide it.
+        $manager = $this->makeManager($circle);
+        $this->actingAs($manager->fresh());
+        $page = $this->pageFor($circle, $group, $d);
+        $page->hideComment($comment->id);
+
+        $comment->refresh();
+        $this->assertTrue($comment->hidden);
+        $this->assertNotNull($comment->hidden_at);
+        $this->assertSame($manager->id, $comment->hidden_by_user_id);
+
+        // Hidden comment is excluded from the rendered thread.
+        $this->assertNotContains('visible text', $page->responses()['roots']->pluck('content')->all());
+    }
+
+    public function test_moderation_record_resolutions_act_on_the_comment(): void
+    {
+        $circle = $this->makeCircle();
+        $group = $this->makeGroup($circle);
+        $d = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'T']);
+        $manager = $this->makeManager($circle);
+
+        // Hide resolution.
+        $c1 = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'hide me']);
+        $r1 = CommentModerationRecord::open($c1, ModerationFlagSource::User);
+        $r1->resolveHidden($manager);
+        $this->assertTrue($c1->fresh()->hidden);
+        $r1->refresh();
+        $this->assertTrue($r1->moderated);
+        $this->assertSame(ModerationAction::Hidden, $r1->moderation_action);
+        $this->assertSame($manager->id, $r1->moderated_by_user_id);
+
+        // Delete resolution on a comment WITH a reply → tombstone; record survives.
+        $c2 = $d->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'delete me']);
+        $d->comments()->create(['user_id' => $this->member($circle)->id, 'parent_id' => $c2->id, 'content' => 'reply']);
+        $r2 = CommentModerationRecord::open($c2, ModerationFlagSource::Ai, 'bad');
+        $r2->resolveDeleted($manager);
+        $this->assertTrue($c2->fresh()->is_deleted);
+        $r2->refresh();
+        $this->assertTrue($r2->moderated);
+        $this->assertSame(ModerationAction::Deleted, $r2->moderation_action);
     }
 
     public function test_participant_count_excludes_deleted_authors(): void

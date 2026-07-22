@@ -8,6 +8,7 @@ use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
 use App\Models\Communication\Request;
 use App\Models\Communities\ThemeCommunity;
+use App\Models\Concerns\HasTags;
 use App\Models\Forums\ForumGroup;
 use App\Models\User;
 use App\Services\Communication\EmailServiceHandler;
@@ -19,8 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use App\Models\Concerns\HasTags;
 use Spatie\Translatable\HasTranslations;
 
 class Circle extends Model
@@ -252,7 +253,7 @@ class Circle extends Model
      * Whether $user may join this circle, and — if at the per-type cap — which
      * of their existing memberships are old enough to swap out.
      *
-     * @return array{allowed: bool, reason: ?string, available_at: ?\Illuminate\Support\Carbon, swappable: \Illuminate\Support\Collection}
+     * @return array{allowed: bool, reason: ?string, available_at: ?Carbon, swappable: \Illuminate\Support\Collection}
      */
     public function canUserJoin(User $user): array
     {
@@ -417,7 +418,7 @@ class Circle extends Model
             if ($circle->parent_id && $parent = static::find($circle->parent_id)) {
                 $circle->depth = $parent->depth + 1;
             }
-            if (!$circle->name && $circle->circleable) {
+            if (! $circle->name && $circle->circleable) {
                 $circle->name = $circle->circleable->getCircleName();
                 $circle->description = $circle->circleable->getCircleDescription();
             }
@@ -511,6 +512,21 @@ class Circle extends Model
             return new Collection;
         }
 
+        return static::query()
+            ->whereIn('id', static::administeredCircleIdsSubquery($user))
+            ->get();
+    }
+
+    /**
+     * The ONE place the "is a circle_admin of this circle" rule is expressed: a
+     * subquery selecting the circle ids on which $user holds the `circle_admin`
+     * role. Reused by administeredBy() (single-record) and scopeManageableBy()
+     * (query scope) so the authorization rule never diverges. Spatie teams mode
+     * scopes the roles() relationship to the *current* team, so we read
+     * model_has_roles directly.
+     */
+    protected static function administeredCircleIdsSubquery(User $user): \Closure
+    {
         $tables = (array) config('permission.table_names');
         $columns = (array) config('permission.column_names');
 
@@ -519,26 +535,27 @@ class Circle extends Model
         $modelKey = $columns['model_morph_key'] ?? 'model_id';
         $teamKey = $columns['team_foreign_key'] ?? 'circle_id';
 
-        return static::query()
-            ->whereIn(
-                'id',
-                fn ($query) => $query
-                    ->select("{$modelHasRoles}.{$teamKey}")
-                    ->from($modelHasRoles)
-                    ->join($rolesTable, "{$rolesTable}.id", '=', "{$modelHasRoles}.role_id")
-                    ->where("{$rolesTable}.name", 'circle_admin')
-                    ->where("{$modelHasRoles}.model_type", $user->getMorphClass())
-                    ->where("{$modelHasRoles}.{$modelKey}", $user->getKey())
-                    ->whereNotNull("{$modelHasRoles}.{$teamKey}"),
-            )
-            ->get();
+        return fn ($query) => $query
+            ->select("{$modelHasRoles}.{$teamKey}")
+            ->from($modelHasRoles)
+            ->join($rolesTable, "{$rolesTable}.id", '=', "{$modelHasRoles}.role_id")
+            ->where("{$rolesTable}.name", 'circle_admin')
+            ->where("{$modelHasRoles}.model_type", $user->getMorphClass())
+            ->where("{$modelHasRoles}.{$modelKey}", $user->getKey())
+            ->whereNotNull("{$modelHasRoles}.{$teamKey}");
+    }
+
+    /** A global manage role (admin/superadmin) — bypasses per-circle scoping. */
+    protected static function isPrivilegedManager(?User $user): bool
+    {
+        return $user !== null && $user->hasAnyRole(['admin', 'superadmin']);
     }
 
     /**
      * Whether $user may MANAGE this circle: a global admin/superadmin, or a
-     * circle_admin of THIS circle. Composes the existing administeredBy()
-     * primitive — the single authorization check reused by both Filament and
-     * public-facing components (e.g. the Forums tab).
+     * circle_admin of THIS circle. The single-record authorization check reused
+     * by both Filament and public-facing components (e.g. the Forums tab); its
+     * query counterpart is scopeManageableBy().
      */
     public function isManageableBy(?User $user): bool
     {
@@ -546,11 +563,26 @@ class Circle extends Model
             return false;
         }
 
-        if ($user->hasAnyRole(['admin', 'superadmin'])) {
-            return true;
+        return static::isPrivilegedManager($user) || $this->isAdministeredBy($user);
+    }
+
+    /**
+     * Constrain a Circle query to those $user may MANAGE — everything for a
+     * global admin/superadmin, else only circles they are a circle_admin of
+     * (none for a guest). The query counterpart to isManageableBy(), sharing the
+     * same underlying rule (administeredCircleIdsSubquery / isPrivilegedManager).
+     */
+    public function scopeManageableBy(Builder $query, ?User $user): Builder
+    {
+        if ($user === null) {
+            return $query->whereRaw('1 = 0');
         }
 
-        return static::administeredBy($user)->contains(fn (Circle $c) => $c->id === $this->id);
+        if (static::isPrivilegedManager($user)) {
+            return $query;
+        }
+
+        return $query->whereIn('id', static::administeredCircleIdsSubquery($user));
     }
 
     /** Tagging rights mirror manage rights (uniform hook used by the tag picker). */

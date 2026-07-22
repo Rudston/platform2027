@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Moderation\CommentModerationRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,6 +31,8 @@ class Comment extends Model
         'is_deleted' => 'boolean',
         'deleted_at' => 'datetime',
         'edited_at' => 'datetime',
+        'ai_checked_at' => 'datetime',
+        'hidden_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -87,6 +90,12 @@ class Comment extends Model
         return $this->morphMany(Like::class, 'likeable');
     }
 
+    /** Moderation-queue entries for this comment (AI- and/or user-sourced). */
+    public function moderationRecords(): HasMany
+    {
+        return $this->hasMany(CommentModerationRecord::class);
+    }
+
     /** True for a top-level comment (no parent). */
     public function isRoot(): bool
     {
@@ -106,9 +115,23 @@ class Comment extends Model
     */
 
     /**
-     * May $actor delete this comment? The author always may; otherwise a manager
-     * of the owning circle (reached via the commentable → group → circle chain)
-     * may, as an admin override. Mirrors ForumGroup::canCreateDiscussion.
+     * May $actor MODERATE this comment (hide / admin-delete)? A manager of the
+     * owning circle, reached via the commentable → group → circle chain. The
+     * single owning-circle authorization check; canDelete() layers authorship on
+     * top of it.
+     */
+    public function canModerate(?User $actor): bool
+    {
+        if ($actor === null) {
+            return false;
+        }
+
+        return $this->commentable?->group?->circle?->isManageableBy($actor) ?? false;
+    }
+
+    /**
+     * May $actor delete this comment? The author always may; otherwise a
+     * moderator (owning-circle manager) may, as an admin override.
      */
     public function canDelete(?User $actor): bool
     {
@@ -116,11 +139,7 @@ class Comment extends Model
             return false;
         }
 
-        if ($this->user_id === $actor->getKey()) {
-            return true;
-        }
-
-        return $this->commentable?->group?->circle?->isManageableBy($actor) ?? false;
+        return $this->user_id === $actor->getKey() || $this->canModerate($actor);
     }
 
     /**
@@ -166,6 +185,12 @@ class Comment extends Model
     /**
      * Author edits the content. Stamps edited_at ONLY when the content actually
      * changes (a no-op save leaves "(Edited)" off). Re-checks authorization.
+     *
+     * A real content change also: (a) nulls ai_checked_at so the checker
+     * re-evaluates the new text, and (b) marks any still-pending moderation
+     * record (any source) as fixed_by_author, capturing the new content in
+     * moderated_content for the admin to compare against the original snapshot.
+     * It does NOT auto-resolve those records — an admin still decides.
      */
     public function editBy(User $actor, string $content): void
     {
@@ -173,6 +198,37 @@ class Comment extends Model
             return;
         }
 
-        $this->update(['content' => $content, 'edited_at' => now()]);
+        $this->update([
+            'content' => $content,
+            'edited_at' => now(),
+            'ai_checked_at' => null,
+        ]);
+
+        $this->moderationRecords()
+            ->where('moderated', false)
+            ->update([
+                'fixed_by_author' => true,
+                'moderated_content' => $content,
+            ]);
+    }
+
+    /**
+     * Hide this comment (moderation). Manager-only — NOT the author (self-hiding
+     * is meaningless; an author removes their own post via delete). Unlike
+     * delete there's no tombstone: a hidden comment and its replies are simply
+     * excluded from the thread (the list query filters `hidden`, so a hidden
+     * parent's descendants stop rendering with it). A no-op if unauthorized.
+     */
+    public function hide(User $actor): void
+    {
+        if (! $this->canModerate($actor)) {
+            return;
+        }
+
+        $this->update([
+            'hidden' => true,
+            'hidden_at' => now(),
+            'hidden_by_user_id' => $actor->getKey(),
+        ]);
     }
 }
