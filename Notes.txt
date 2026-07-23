@@ -42,3 +42,4 @@ Schema::create('circle_user', function (Blueprint $table) {
 });
 
 ===== first Claude chat -> https://claude.ai/chat/c64ce6a0-4b91-44e6-ba22-27bf165575ed
+===== FEDUSa video https://covidcommsadmin-my.sharepoint.com/:v:/g/personal/nikki_mobilize_org_za/IQCrpL5jXX_bQpzbTnp8mld_AcX3RA6afiAj_0vWstkUncM?e=S9ewq6&nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJTdHJlYW1XZWJBcHAiLCJyZWZlcnJhbE1vZGUiOiJtaXMiLCJyZWZlcnJhbFZpZXciOiJwb3N0cm9sbC1jb3B5bGluayIsInJlZmVycmFsUGxheWJhY2tTZXNzaW9uSWQiOiJkMzYzM2Y3YS04MDdmLTQ3YjAtYjA0MS1iMWJhODYwZTY4ZDIifX0%3D
