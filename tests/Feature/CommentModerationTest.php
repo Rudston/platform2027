@@ -10,6 +10,7 @@ use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\Moderation\CommentModerationRecord;
 use App\Models\User;
+use App\Support\Moderation\CommentableTypeLabeler;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -39,6 +40,7 @@ class CommentModerationTest extends TestCase
         (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
+        (include database_path('migrations/2026_07_23_000001_add_snapshot_columns_to_comment_moderation_records_table.php'))->up();
 
         config()->set('moderation.trigger_words', ['moderationtestflag']);
     }
@@ -57,6 +59,89 @@ class CommentModerationTest extends TestCase
             'user_id' => ($user ?? User::factory()->create())->id,
             'content' => 'hello world',
         ], $attrs));
+    }
+
+    public function test_commentable_type_labeler(): void
+    {
+        $this->assertSame('Forum Discussion', CommentableTypeLabeler::label(ForumDiscussion::class));
+        $this->assertSame('Comment', CommentableTypeLabeler::label(null));
+        $this->assertSame('Comment', CommentableTypeLabeler::label('App\\Models\\Something'));
+    }
+
+    public function test_open_snapshots_circle_type_label_and_url(): void
+    {
+        $d = $this->makeDiscussion();
+        $record = CommentModerationRecord::open($this->makeComment($d), ModerationFlagSource::Ai, 'x');
+
+        $this->assertSame($d->group->circle_id, $record->circle_id);
+        $this->assertSame('Forum Discussion', $record->commentable_type_label);
+        $this->assertNotNull($record->url_to_parent);
+        $this->assertStringContainsString('/forums/', $record->url_to_parent);
+    }
+
+    public function test_recheck_auto_resolves_after_author_fix(): void
+    {
+        config()->set('moderation.trigger_words', ['moderationtestflag']);
+        $d = $this->makeDiscussion();
+        $author = User::factory()->create();
+        $comment = $this->makeComment($d, $author, ['content' => 'moderationtestflag here']);
+
+        // First check flags it → pending.
+        $this->artisan('comments:check-moderation')->assertSuccessful();
+        $record = $comment->moderationRecords()->first();
+        $this->assertNotNull($record);
+        $this->assertFalse($record->moderated);
+        $this->assertTrue($comment->fresh()->pendingAiReview());
+
+        // Author fixes it (edit sets fixed_by_author + moderated_content, nulls ai_checked_at).
+        $comment->fresh()->editBy($author, 'all clean now');
+        $record->refresh();
+        $this->assertTrue($record->fixed_by_author);
+        $this->assertSame('all clean now', $record->moderated_content);
+        $this->assertNull($comment->fresh()->ai_checked_at);
+
+        // Recheck comes back clean → auto-resolve.
+        $this->artisan('comments:check-moderation')->assertSuccessful();
+        $record->refresh();
+        $this->assertTrue($record->moderated);
+        $this->assertTrue($record->moderated_as_ok);
+        $this->assertSame(ModerationAction::Approved, $record->moderation_action);
+        $this->assertNull($record->moderated_by_user_id);            // system-resolved, not a human
+        $this->assertTrue($record->fixed_by_author);                 // untouched
+        $this->assertSame('all clean now', $record->moderated_content); // untouched
+        $this->assertFalse($comment->fresh()->pendingAiReview());    // renders normally again
+    }
+
+    public function test_recheck_still_offensive_stays_pending_without_duplicate(): void
+    {
+        config()->set('moderation.trigger_words', ['moderationtestflag']);
+        $d = $this->makeDiscussion();
+        $author = User::factory()->create();
+        $comment = $this->makeComment($d, $author, ['content' => 'moderationtestflag one']);
+
+        $this->artisan('comments:check-moderation');
+        $record = $comment->moderationRecords()->first();
+
+        // Author edits but the trigger is still present.
+        $comment->fresh()->editBy($author, 'moderationtestflag still');
+        $this->assertTrue($record->fresh()->fixed_by_author);
+
+        // Recheck still offensive → stays pending, no auto-resolve, no duplicate.
+        $this->artisan('comments:check-moderation');
+        $this->assertSame(1, $comment->moderationRecords()->count());
+        $record->refresh();
+        $this->assertFalse($record->moderated);
+        $this->assertTrue($record->fixed_by_author);
+    }
+
+    public function test_first_time_clean_check_does_nothing(): void
+    {
+        $d = $this->makeDiscussion();
+        $this->makeComment($d, null, ['content' => 'perfectly fine']);
+
+        $this->artisan('comments:check-moderation')->assertSuccessful();
+
+        $this->assertSame(0, CommentModerationRecord::count());
     }
 
     public function test_stub_checker_flags_trigger_words_only(): void

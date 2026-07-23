@@ -18,10 +18,14 @@
     // warning + full content; a moderator sees a badge + full content; everyone
     // else sees a tombstone (replies below still render). Never applies once the
     // comment is deleted (delete tombstone wins).
-    $isPendingAi = ! $comment->is_deleted && in_array($comment->id, $pendingAiReview, true);
+    $isPendingAi = ! $comment->is_deleted && array_key_exists($comment->id, $pendingAiReview);
     $showAuthorWarning = $isPendingAi && $isOwn;
     $showModeratorBadge = $isPendingAi && ! $isOwn && $this->canManageThread;
     $showPendingTombstone = $isPendingAi && ! $isOwn && ! $this->canManageThread;
+    // Deep link the moderator badge to the specific unresolved AI record.
+    $pendingRecordUrl = $showModeratorBadge
+        ? \App\Filament\Resources\CommentModerationRecords\CommentModerationRecordResource::getUrl('view', ['record' => $pendingAiReview[$comment->id]], panel: 'admin')
+        : null;
 @endphp
 <div wire:key="comment-{{ $comment->id }}" @class([
     'mt-3 border-l pl-3',
@@ -42,9 +46,10 @@
         @if (! $comment->is_deleted && $comment->pinned && $comment->parent_id === null)
             <span class="ml-1 rounded-full border border-border-muted px-2 py-0.5 text-xs text-muted">{{ __('forums.badge.pinned') }}</span>
         @endif
-        {{-- Informational badge for someone who can act on the quarantine. --}}
+        {{-- Informational badge for someone who can act — links to the record. --}}
         @if ($showModeratorBadge)
-            <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{{ __('forums.response.pending_badge') }}</span>
+            <a href="{{ $pendingRecordUrl }}" target="_blank"
+               class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200">{{ __('forums.response.pending_badge') }}</a>
         @endif
         {{-- Once nesting is visually flattened (level 4+), keep the context. --}}
         @if ($level >= 4)

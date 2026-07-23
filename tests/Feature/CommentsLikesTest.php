@@ -36,6 +36,7 @@ class CommentsLikesTest extends TestCase
         (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
+        (include database_path('migrations/2026_07_23_000001_add_snapshot_columns_to_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
     }
 

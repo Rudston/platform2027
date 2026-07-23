@@ -172,7 +172,7 @@ class ForumDiscussionPage extends Component
      *  - byParent: [parent_id => children in created_at asc]
      *  - byId: keyed lookup (for the "replying to {author}" label)
      *  - liked: comment ids the current user has liked
-     *  - pendingAiReview: comment ids quarantined pending AI review
+     *  - pendingAiReview: [comment_id => moderation_record_id] for quarantined comments
      *
      * @return array{roots: Collection, byParent: array<int, array>, byId: Collection, liked: array<int, int>, pendingAiReview: array<int, int>}
      */
@@ -208,12 +208,13 @@ class ForumDiscussionPage extends Component
         }
 
         // Quarantine state, batched: ONE query for every comment on the page
-        // (the set form of Comment::pendingAiReview()), never per-row.
+        // (the set form of Comment::pendingAiReview()), never per-row. Keyed
+        // [comment_id => moderation_record_id] so the moderator badge can deep-link
+        // the record (dedupe guarantees at most one pending AI record per comment).
         $pendingAiReview = CommentModerationRecord::query()
             ->pendingAi()
             ->whereIn('comment_id', $all->pluck('id'))
-            ->distinct()
-            ->pluck('comment_id')
+            ->pluck('id', 'comment_id')
             ->all();
 
         return [

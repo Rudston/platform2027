@@ -5,15 +5,19 @@ namespace App\Filament\Resources\CommentModerationRecords;
 use App\Enums\Moderation\ModerationAction;
 use App\Enums\Moderation\ModerationFlagSource;
 use App\Filament\Resources\CommentModerationRecords\Pages\ListCommentModerationRecords;
+use App\Filament\Resources\CommentModerationRecords\Pages\ViewCommentModerationRecord;
 use App\Models\Circles\Circle;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Moderation\CommentModerationRecord;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -22,6 +26,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use UnitEnum;
 
 /**
@@ -58,7 +63,7 @@ class CommentModerationRecordResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['comment.user', 'moderator']);
+        $query = parent::getEloquentQuery()->with(['comment.user', 'moderator', 'circle']);
 
         $user = static::authUser();
 
@@ -86,6 +91,42 @@ class CommentModerationRecordResource extends Resource
         return $user;
     }
 
+    /** Read-only detail (the View page the front-end "Pending Review" badge links to). */
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Placeholder::make('author')
+                ->content(fn (CommentModerationRecord $record): string => $record->comment?->user?->name ?? '—'),
+            Placeholder::make('flagged_by')
+                ->label('Flagged by')
+                ->content(fn (CommentModerationRecord $record): string => $record->flagged_by?->label() ?? '—'),
+            Placeholder::make('circle')
+                ->content(fn (CommentModerationRecord $record): string => $record->circle?->name ?? '—'),
+            Placeholder::make('commentable_type_label')
+                ->label('On')
+                ->content(fn (CommentModerationRecord $record): string => $record->commentable_type_label ?? '—'),
+            Placeholder::make('url_to_parent')
+                ->label('Link')
+                ->content(fn (CommentModerationRecord $record): string|HtmlString => $record->url_to_parent
+                    ? new HtmlString('<a class="text-primary-600 underline" target="_blank" href="'.e($record->url_to_parent).'">'.e($record->url_to_parent).'</a>')
+                    : '—'),
+            Placeholder::make('content')
+                ->label('Content (at flag time)')
+                ->content(fn (CommentModerationRecord $record): string => $record->content),
+            Placeholder::make('moderated_content')
+                ->label("Author's fix")
+                ->content(fn (CommentModerationRecord $record): string => $record->moderated_content ?? '—'),
+            Placeholder::make('ai_message')
+                ->label('AI note')
+                ->content(fn (CommentModerationRecord $record): string => $record->ai_message ?? '—'),
+            Placeholder::make('resolvedBy')
+                ->label('Moderated by')
+                ->content(fn (CommentModerationRecord $record): string => ! $record->moderated
+                    ? 'Pending'
+                    : ($record->moderator?->name ?? 'Auto-approved')),
+        ]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -102,6 +143,19 @@ class CommentModerationRecordResource extends Resource
                     }),
 
                 TextColumn::make('comment.user.name')->label('Author')->placeholder('—'),
+
+                // Snapshot audit fields. Circle falls back gracefully if the
+                // circle was deleted (circle_id nulled).
+                TextColumn::make('circle.name')->label('Circle')->placeholder('—'),
+
+                TextColumn::make('commentable_type_label')->label('On')->placeholder('—'),
+
+                TextColumn::make('url_to_parent')
+                    ->label('Link')
+                    ->placeholder('—')
+                    ->limit(40)
+                    ->url(fn (CommentModerationRecord $record): ?string => $record->url_to_parent, shouldOpenInNewTab: true)
+                    ->color('primary'),
 
                 TextColumn::make('content')
                     ->label('Content (at flag time)')
@@ -136,6 +190,14 @@ class CommentModerationRecordResource extends Resource
                         ModerationAction::Deleted->value => 'danger',
                         default => 'gray',
                     }),
+
+                // Resolver: a human's name, "Auto-approved" for a system-resolved
+                // (moderated_by_user_id NULL) record, or "—" while still pending.
+                TextColumn::make('resolvedBy')
+                    ->label('Moderated by')
+                    ->state(fn (CommentModerationRecord $record): string => ! $record->moderated
+                        ? '—'
+                        : ($record->moderator?->name ?? 'Auto-approved')),
             ])
             ->filters([
                 SelectFilter::make('flagged_by')->options([
@@ -171,6 +233,7 @@ class CommentModerationRecordResource extends Resource
                     }),
             ])
             ->recordActions([
+                ViewAction::make(),
                 static::approveAction(),
                 static::hideAction(),
                 static::deleteRecordAction(),
@@ -242,6 +305,7 @@ class CommentModerationRecordResource extends Resource
     {
         return [
             'index' => ListCommentModerationRecords::route('/'),
+            'view' => ViewCommentModerationRecord::route('/{record}'),
         ];
     }
 }

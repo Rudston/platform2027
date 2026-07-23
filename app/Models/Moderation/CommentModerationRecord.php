@@ -10,6 +10,7 @@ use App\Models\Circles\Circle;
 use App\Models\Comment;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\User;
+use App\Support\Moderation\CommentableTypeLabeler;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,6 +40,12 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
     public function comment(): BelongsTo
     {
         return $this->belongsTo(Comment::class);
+    }
+
+    /** The owning circle at creation time (snapshot; nullable — survives deletion). */
+    public function circle(): BelongsTo
+    {
+        return $this->belongsTo(Circle::class);
     }
 
     /** The admin who resolved this record, if any. */
@@ -81,11 +88,19 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
             return $existing;
         }
 
+        // Snapshot the audit context (circle / kind / link) at creation time —
+        // resolved through the extensible labeler so a new commentable type is a
+        // one-case change, not a hunt through here.
+        $commentable = $comment->commentable;
+
         return static::create([
             'comment_id' => $comment->getKey(),
             'flagged_by' => $source->value,
             'content' => $comment->content,
             'ai_message' => $aiMessage,
+            'circle_id' => CommentableTypeLabeler::circleIdFor($commentable),
+            'commentable_type_label' => CommentableTypeLabeler::label($comment->commentable_type),
+            'url_to_parent' => CommentableTypeLabeler::urlFor($commentable),
         ]);
     }
 
@@ -107,6 +122,22 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
             'moderated_as_ok' => true,
             'moderation_action' => ModerationAction::Approved,
             'moderated_by_user_id' => $admin->getKey(),
+        ]);
+    }
+
+    /**
+     * Auto-approve on a clean recheck (the author fixed a previously-flagged
+     * comment). Same shape as a human Approve, but moderated_by_user_id = NULL is
+     * exactly what marks it system-resolved. Leaves fixed_by_author /
+     * moderated_content as set at edit-time.
+     */
+    public function resolveAutoApproved(): void
+    {
+        $this->update([
+            'moderated' => true,
+            'moderated_as_ok' => true,
+            'moderation_action' => ModerationAction::Approved,
+            'moderated_by_user_id' => null,
         ]);
     }
 

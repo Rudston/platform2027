@@ -55,6 +55,7 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
+        (include database_path('migrations/2026_07_23_000001_add_snapshot_columns_to_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
@@ -700,8 +701,9 @@ class ForumDiscussionsTest extends TestCase
 
         // ONE query for the whole page regardless of comment count (no per-row).
         $this->assertSame(1, $moderationQueries);
-        $this->assertEqualsCanonicalizing($flagged->all(), $resp['pendingAiReview']);
-        $this->assertNotContains($clean->id, $resp['pendingAiReview']);
+        // Keyed [comment_id => record_id] so the badge can deep-link the record.
+        $this->assertEqualsCanonicalizing($flagged->all(), array_keys($resp['pendingAiReview']));
+        $this->assertArrayNotHasKey($clean->id, $resp['pendingAiReview']);
     }
 
     public function test_pending_ai_review_renders_three_ways_by_viewer(): void
