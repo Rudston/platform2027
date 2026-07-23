@@ -439,9 +439,125 @@ mechanism. (RequestResource keeps its own subtree-based inline composition.)
   toggle with count. Compose/reply/like are gated on `ForumGroup::
   canParticipate()` (re-checked server-side) — view-only visitors see the
   thread but no composer. Posting a comment refreshes the participant count.
-- **Deferred (later phases):** pin/lock toggle UI, moderation UI (the `hidden`/
-  `flagged_as_offensive`/`moderated` columns exist, unused), edit/delete
-  comments, real-time push, search.
+- **Comment actions (edit / delete / flag / hide) — BUILT:** on each comment —
+  **Edit** (author-only, `Comment::editBy`; stamps `edited_at` +
+  `last_edited_by_user_id`, nulls `ai_checked_at` to requeue an AI recheck),
+  **Delete** (`Comment::canDelete` = author OR circle manager; `deleteBy()` —
+  hard delete when no replies, else tombstone `is_deleted` so replies keep a
+  valid parent), **Hide** (`Comment::canModerate` = circle manager only;
+  `hide()` sets `hidden` — the comment AND its replies drop out of the thread,
+  no tombstone), **Flag** (any participant, others' comments only — sets
+  `flagged_as_offensive` + opens a User-sourced moderation record; transient
+  toast, no visible effect for anyone else). Tombstones render as `[deleted]`;
+  authorization gates: `canDelete` layers authorship on the shared `canModerate`
+  owning-circle check. `deleteBy`/`editBy` are the method names (Eloquent owns
+  `delete()`); an admin edit uses `applyModeratorEdit()` (see Comment
+  Moderation).
+- **Near-live updates — Tier-0 polling:** `wire:poll.10s="refreshComments"` on
+  the responses block (NOT the root) re-fetches the thread; the polled method
+  no-ops while a reply/edit composer holds unsaved text so a tick never wipes
+  in-progress typing. No websockets.
+- **Pending-AI-review quarantine display — BUILT:** while an unresolved
+  AI-sourced moderation record exists for a comment, it's quarantined three ways
+  by viewer (author warning / moderator badge+link / everyone-else tombstone) —
+  see Comment Moderation below.
+- **Deferred (later phases):** pin/lock toggle UI, discussion-level
+  moderation_status workflow, search.
+
+---
+
+## Comment Moderation & AI review
+
+A unified moderation queue over the generic `comments` table. Both the AI
+checker and users' "Flag" clicks feed ONE queue an admin resolves from Filament.
+
+### Comment model (`app/Models/Comment.php`)
+Generic (one model, one table; "posts" is a cosmetic alias in forum context —
+never fork). Self-nesting via `parent_id`. Key columns/methods:
+- Delete/edit/hide: `deleteBy` / `editBy` / `hide` / `applyModeratorEdit` (see
+  Forum Discussions comment actions). Audit columns: `deleted_at`/
+  `deleted_by_user_id`, `edited_at`/`last_edited_by_user_id`, `hidden_at`/
+  `hidden_by_user_id`, `ai_checked_at`. `last_edited_by_user_id !== user_id`
+  signals "an admin touched the author's words" (same pattern as
+  `deleted_by_user_id`).
+- **`pendingAiReview(): bool`** — derived, NOT a stored column: an unresolved
+  **AI-sourced** record exists (`CommentModerationRecord::scopePendingAi`). Drives
+  the quarantine display. Batch the equivalent lookup for a list (never per-row)
+  — `ForumDiscussionPage::responses()` does ONE query keyed
+  `[comment_id => record_id]`.
+
+### comment_moderation_records + CommentModerationRecord (`app/Models/Moderation/`)
+- Direct `comment_id` FK (cascade). `flagged_by` (`ModerationFlagSource`: ai |
+  user), `content` (snapshot at creation), `ai_message`, `moderated`,
+  `moderated_as_ok`, `moderation_action` (`ModerationAction`: approved | hidden |
+  deleted | edited_and_approved), `moderated_by_user_id` (**null = system/auto,
+  not a human**), `fixed_by_author`, `moderated_content` (what the content became
+  — author fix OR admin edit). Snapshot audit fields: `circle_id` (nullable,
+  nullOnDelete — survives circle deletion), `commentable_type_label`,
+  `url_to_parent` (front-end link, a creation-time snapshot; may go stale).
+- **`open(Comment, ModerationFlagSource, ?aiMessage)`** — create-or-reuse: never
+  duplicates a pending record for the same comment+source (Ai and User coexist).
+  Populates the snapshot fields via `App\Support\Moderation\CommentableTypeLabeler`
+  (`label` / `circleIdFor` / `urlFor` — one match-case per commentable type;
+  "add a case" to support a new type).
+- **Resolutions** (model methods, so testable without Filament):
+  `resolveApproved($admin)`, `resolveEditedAndApproved($admin, $content)` (fixes
+  the wording via `applyModeratorEdit` — does NOT requeue an AI recheck),
+  `resolveHidden($admin)`, `resolveDeleted($admin)`, and
+  `resolveAutoApproved()` (moderated_by_user_id = null).
+
+### AI checker — interface now, stub today, real AI later
+- `App\Contracts\Moderation\CommentModerationCheckerContract::check(string):
+  ModerationCheckResult` (`containsOffensiveContent`, `message`).
+- `StubModerationChecker` (deterministic, matches `config('moderation.trigger_words')`
+  — no external call). **Bound in `AppServiceProvider::register()` — the ONLY
+  place to change for real AI; never reference the concrete class.**
+- **`comments:check-moderation`** (`chunkById`, idempotent; scheduled
+  `everyTenMinutes`): checks `ai_checked_at IS NULL` non-deleted comments, stamps
+  `ai_checked_at`, opens an Ai record for offensive ones. **Auto-resolve:** a
+  clean recheck of a comment that has a pending Ai record (author fixed it)
+  auto-approves it (`resolveAutoApproved`); still-offensive stays pending (no
+  dupe); first-time-clean does nothing. Approve therefore "reverts" quarantine
+  with no unhide step.
+
+### Filament — CommentModerationRecordResource (Governance)
+List + View pages. **Role-scoped** (`getEloquentQuery` via
+`Circle::scopeManageableBy` through comment → forumDiscussion → forumGroup →
+circle; admin/superadmin unscoped, circle_admin only their circles).
+`canViewAny` admits circle_admins. Row actions AND View-page header actions
+(shared `public static` handlers, visible while `moderated = false`): **Approve**,
+**Edit & Approve** (pre-fills current content → `EditedAndApproved`), **Hide**,
+**Delete**. "Moderated by" column reads "Auto-approved" for system-resolved
+(null) records. A circle filter (pre-fillable from the Oversight page). The
+front-end "Pending Review" badge deep-links `getUrl('view', ['record' => …])`.
+
+---
+
+## Circle Stewardship (Oversight)
+
+A layer ABOVE circle_admins for platform admins to watch queue health per circle.
+
+- **`Circle::scopeManageableBy(Builder, ?User)`** — the query counterpart to
+  `isManageableBy()` (single-record). Both share ONE rule:
+  `administeredCircleIdsSubquery()` (the circle_admin check, off `model_has_roles`
+  — Spatie teams mode) + `isPrivilegedManager()` (admin/superadmin bypass). Admin
+  → unfiltered; circle_admin → only their circles; guest → none.
+- **`App\Contracts\Stewardship\CircleStewardshipQueue`** — `queueLabel()`,
+  `pendingCountForCircle()`, `oldestPendingAgeForCircle()`, `filamentUrlForCircle()`.
+  Implemented by **`Request`** ("Pending Requests") and **`CommentModerationRecord`**
+  ("Comment Moderation"). Registry: **`config/stewardship.php`** (a flat FQCN
+  list; add a queue = one line). NB: this makes those models reference their
+  Filament resources for the URL — inherent to the contract.
+- **Oversight page** — `GET /communities/{circle}/oversight`
+  (`CircleOversightPage`, route `communities.oversight`), **platform
+  admin/superadmin ONLY** (403 for everyone else, circle_admins included). One
+  row per registered queue: label, pending count, oldest-pending age, a View
+  link; rows past the neglect threshold get an amber "Overdue" highlight. An
+  amber, admin-only "Oversight" link sits in the community-page header
+  (`CommunityPage::canOverseeCircle`).
+- **Neglect threshold** — `stewardship_neglect_days` (default 7) stored as a
+  **ContentBlock** (the existing admin-configurable-value store; NOT a new
+  settings table), read via `ContentBlock::get('stewardship.neglect_days', '7')`.
 
 ---
 
@@ -704,7 +820,11 @@ AdminPanelProvider (`app/Providers/Filament/AdminPanelProvider.php`).
     redirects them to the Requests index (admins see it normally)
   - `RequestResource`: visible to admins AND circle_admins, but role-scoped —
     see Governance admin below
-- Nav group `Platform` registered for platform-management resources
+  - `CommentModerationRecordResource` (Governance): visible to admins AND
+    circle_admins, role-scoped via `Circle::scopeManageableBy` — see Comment
+    Moderation
+- Nav group `Platform` registered for platform-management resources; `Governance`
+  hosts `RequestResource` + `CommentModerationRecordResource`
 - Auto-discovers Resources/Pages/Widgets under `app/Filament/`
 
 ### Content Blocks (admin-editable copy)
@@ -933,8 +1053,9 @@ superadmin, circle_admin, circle_full_member, circle_visitor
 - LocationCommunitiesSeeder — country → LM/City circles
 - MainPlaceCommunitiesSeeder — ~14,039 MainPlace circles (idempotent)
 - ThemeCommunitiesSeeder — national + WC + Eden DM
-- ContentBlockSeeder — 8 content blocks (4 page-copy + 4 collapsible how-to;
-  idempotent, updateOrCreate by key)
+- ContentBlockSeeder — 9 content blocks (4 page-copy + 4 collapsible how-to +
+  `stewardship.neglect_days` [plain number, default 7]; idempotent,
+  updateOrCreate by key)
 - EmailTemplateSeeder — 12 email templates (welcome/invitation/reset + 4
   organisation-approval incl. the responsible-admin notice + 3
   organisation-member-claim [request/approved/rejected] + 2 theme-suggestion
@@ -963,7 +1084,8 @@ On failure: silent.
 
 - Auth/permission guards on buttons (TODO comments in place)
 - Campaign model fields
-- Filament resources beyond ContentBlock + EmailTemplate + Request
+- Filament resources beyond ContentBlock + EmailTemplate + Request +
+  CommentModerationRecord + ThemeSuggestion + CircleMembership
 - Request types other than organisation_approval — circle_join,
   location_request, circle_association are reserved type strings only
 - Membership approval (circle_join) + internal-direction request flows
@@ -977,6 +1099,11 @@ On failure: silent.
 - User profile pages + saved locale preference
 - CommunityPage type-specific nested components
 - Notification, voting, social media, learning service implementations
+- Real AI moderation backend — `CommentModerationCheckerContract` is bound to a
+  deterministic stub; swap the binding for OpenAI/local LLM (see Comment
+  Moderation). Also deferred: forum pin/lock toggle UI, discussion search,
+  circle_admin scoping is on the moderation queue but NOT yet on the Oversight
+  page (platform-admin only there by design)
 - Payment/subscription system
 - API endpoints
 - In-app notification templates (email templates are built — see
@@ -1042,3 +1169,12 @@ On failure: silent.
 - Running LocationCommunitiesSeeder again (use MainPlaceCommunitiesSeeder
   for MainPlace level — it is idempotent)
 - Using SQRT in CoordinateData::nearest() — squared distance is enough
+- Naming a model method `delete()` — Eloquent owns it; the comment delete is
+  `Comment::deleteBy($actor)`. Author edit is `editBy()`, moderator edit is
+  `applyModeratorEdit()` (the latter deliberately does NOT null `ai_checked_at`)
+- Referencing `StubModerationChecker` directly — always resolve
+  `CommentModerationCheckerContract`; the binding is the only real-AI swap point
+- Checking "pending AI review" per-comment in a loop — batch it (one query);
+  and remember only Ai-sourced unresolved records quarantine, never User-sourced
+- Adding a stored `pending`/moderation boolean on `comments` — that state is
+  derived from `comment_moderation_records` (`Comment::pendingAiReview()`)
