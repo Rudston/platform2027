@@ -126,6 +126,25 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
     }
 
     /**
+     * Edit & Approve: the admin fixes the wording, then approves it in one step.
+     * Distinct action (EditedAndApproved) so the queue can tell "approved as-is"
+     * from "admin had to fix it first". moderated_content records the new text.
+     * (Comment::applyModeratorEdit deliberately does NOT requeue an AI recheck.)
+     */
+    public function resolveEditedAndApproved(User $admin, string $content): void
+    {
+        $this->comment?->applyModeratorEdit($admin, $content);
+
+        $this->update([
+            'moderated' => true,
+            'moderated_as_ok' => true,
+            'moderation_action' => ModerationAction::EditedAndApproved,
+            'moderated_by_user_id' => $admin->getKey(),
+            'moderated_content' => $content,
+        ]);
+    }
+
+    /**
      * Auto-approve on a clean recheck (the author fixed a previously-flagged
      * comment). Same shape as a human Approve, but moderated_by_user_id = NULL is
      * exactly what marks it system-resolved. Leaves fixed_by_author /

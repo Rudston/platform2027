@@ -15,6 +15,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -186,6 +187,7 @@ class CommentModerationRecordResource extends Resource
                     ->formatStateUsing(fn ($state): string => $state instanceof ModerationAction ? $state->label() : (string) $state)
                     ->color(fn ($state): string => match ($state instanceof ModerationAction ? $state->value : (string) $state) {
                         ModerationAction::Approved->value => 'success',
+                        ModerationAction::EditedAndApproved->value => 'success',
                         ModerationAction::Hidden->value => 'warning',
                         ModerationAction::Deleted->value => 'danger',
                         default => 'gray',
@@ -235,6 +237,7 @@ class CommentModerationRecordResource extends Resource
             ->recordActions([
                 ViewAction::make(),
                 static::approveAction(),
+                static::editAndApproveAction(),
                 static::hideAction(),
                 static::deleteRecordAction(),
             ])
@@ -242,7 +245,7 @@ class CommentModerationRecordResource extends Resource
     }
 
     /** Approve — the comment stands; only this record is resolved. */
-    protected static function approveAction(): Action
+    public static function approveAction(): Action
     {
         return Action::make('approve')
             ->label('Approve')
@@ -261,8 +264,40 @@ class CommentModerationRecordResource extends Resource
             });
     }
 
+    /**
+     * Edit & Approve — the admin fixes the wording, then approves. Pre-fills the
+     * comment's CURRENT content (what's there now, not the original snapshot).
+     */
+    public static function editAndApproveAction(): Action
+    {
+        return Action::make('editAndApprove')
+            ->label('Edit & Approve')
+            ->icon('heroicon-o-pencil-square')
+            ->color('success')
+            ->visible(fn (CommentModerationRecord $record): bool => ! $record->moderated)
+            ->fillForm(fn (CommentModerationRecord $record): array => [
+                'content' => $record->comment?->content ?? '',
+            ])
+            ->schema([
+                Textarea::make('content')
+                    ->label('Comment content')
+                    ->required()
+                    ->rows(6),
+            ])
+            ->modalHeading('Edit & approve comment')
+            ->modalDescription('Fix the wording and approve. This replaces the comment text and resolves the record — it is NOT re-checked automatically.')
+            ->modalSubmitActionLabel('Save & approve')
+            ->action(function (CommentModerationRecord $record, array $data): void {
+                /** @var User $admin */
+                $admin = auth()->user();
+                $record->resolveEditedAndApproved($admin, $data['content']);
+
+                Notification::make()->title('Comment edited & approved')->success()->send();
+            });
+    }
+
     /** Hide — remove the comment (and its replies) from the thread. */
-    protected static function hideAction(): Action
+    public static function hideAction(): Action
     {
         return Action::make('hide')
             ->label('Hide')
@@ -282,7 +317,7 @@ class CommentModerationRecordResource extends Resource
     }
 
     /** Delete — remove the comment (tombstone if it has replies). */
-    protected static function deleteRecordAction(): Action
+    public static function deleteRecordAction(): Action
     {
         return Action::make('delete')
             ->label('Delete')

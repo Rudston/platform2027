@@ -213,6 +213,7 @@ class Comment extends Model
             'content' => $content,
             'edited_at' => now(),
             'ai_checked_at' => null,
+            'last_edited_by_user_id' => $actor->getKey(),
         ]);
 
         $this->moderationRecords()
@@ -240,6 +241,25 @@ class Comment extends Model
             'hidden' => true,
             'hidden_at' => now(),
             'hidden_by_user_id' => $actor->getKey(),
+        ]);
+    }
+
+    /**
+     * A moderator directly edits the content (Edit & Approve). Records the
+     * editor in last_edited_by_user_id (a moderator, so != user_id, marking that
+     * an admin touched the author's words).
+     *
+     * NOTE: unlike editBy() (the author path), this deliberately does NOT null
+     * ai_checked_at — a human has just approved this exact wording, so it must
+     * not be requeued for an automated recheck. Do not "fix" this to match
+     * editBy(); it's intentional.
+     */
+    public function applyModeratorEdit(User $moderator, string $content): void
+    {
+        $this->update([
+            'content' => $content,
+            'edited_at' => now(),
+            'last_edited_by_user_id' => $moderator->getKey(),
         ]);
     }
 }

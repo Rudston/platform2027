@@ -11,9 +11,15 @@ enum ModerationAction: string
     case Approved = 'approved';
     case Hidden = 'hidden';
     case Deleted = 'deleted';
+    case EditedAndApproved = 'edited_and_approved';
 
     public function label(): string
     {
-        return ucfirst($this->value);
+        return match ($this) {
+            self::Approved => 'Approved',
+            self::Hidden => 'Hidden',
+            self::Deleted => 'Deleted',
+            self::EditedAndApproved => 'Edited & Approved',
+        };
     }
 }

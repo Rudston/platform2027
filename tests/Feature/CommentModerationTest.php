@@ -38,6 +38,7 @@ class CommentModerationTest extends TestCase
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000002_create_comments_table.php'))->up();
         (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
+        (include database_path('migrations/2026_07_23_000002_add_last_edited_by_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_23_000001_add_snapshot_columns_to_comment_moderation_records_table.php'))->up();
@@ -99,6 +100,8 @@ class CommentModerationTest extends TestCase
         $this->assertTrue($record->fixed_by_author);
         $this->assertSame('all clean now', $record->moderated_content);
         $this->assertNull($comment->fresh()->ai_checked_at);
+        // The author's own edit stamps last_edited_by_user_id = their own id.
+        $this->assertSame($author->id, $comment->fresh()->last_edited_by_user_id);
 
         // Recheck comes back clean → auto-resolve.
         $this->artisan('comments:check-moderation')->assertSuccessful();
@@ -110,6 +113,37 @@ class CommentModerationTest extends TestCase
         $this->assertTrue($record->fixed_by_author);                 // untouched
         $this->assertSame('all clean now', $record->moderated_content); // untouched
         $this->assertFalse($comment->fresh()->pendingAiReview());    // renders normally again
+    }
+
+    public function test_resolve_edited_and_approved_updates_comment_and_record(): void
+    {
+        config()->set('moderation.trigger_words', ['moderationtestflag']);
+        $d = $this->makeDiscussion();
+        $author = User::factory()->create();
+        $admin = User::factory()->create();
+        $comment = $this->makeComment($d, $author, ['content' => 'moderationtestflag bad']);
+
+        $this->artisan('comments:check-moderation');
+        $record = $comment->moderationRecords()->first();
+        $checkedAt = $comment->fresh()->ai_checked_at;
+        $this->assertNotNull($checkedAt);
+
+        $record->resolveEditedAndApproved($admin, 'cleaned by admin');
+
+        $comment->refresh();
+        $this->assertSame('cleaned by admin', $comment->content);
+        $this->assertNotNull($comment->edited_at);
+        $this->assertSame($admin->id, $comment->last_edited_by_user_id);
+        // Deliberately NOT requeued for a recheck — a human approved this wording.
+        $this->assertNotNull($comment->ai_checked_at);
+        $this->assertSame($checkedAt->timestamp, $comment->ai_checked_at->timestamp);
+
+        $record->refresh();
+        $this->assertTrue($record->moderated);
+        $this->assertTrue($record->moderated_as_ok);
+        $this->assertSame(ModerationAction::EditedAndApproved, $record->moderation_action);
+        $this->assertSame($admin->id, $record->moderated_by_user_id);
+        $this->assertSame('cleaned by admin', $record->moderated_content);
     }
 
     public function test_recheck_still_offensive_stays_pending_without_duplicate(): void
