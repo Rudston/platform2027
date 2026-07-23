@@ -800,6 +800,45 @@ unchanged.
 
 ---
 
+## User Dashboard (/dashboard)
+
+Authenticated-only. One bookmarkable route PER section (server-side, NOT
+client-side tab switching), so each is back-button/bookmark friendly.
+
+- **Routing:** `/dashboard` → redirect to `/dashboard/news`; then
+  `dashboard.news|calendar|communities|campaigns|voting`, each a thin Livewire
+  component under `App\Livewire\Dashboard\*` using `#[Layout('layouts.dashboard')]`.
+- **Layout:** `layouts/dashboard.blade.php` (new, additive — `app.blade.php`
+  untouched) — a persistent left vertical nav (active-state per current route via
+  `request()->routeIs`) + a content slot. The app top bar was extracted to
+  `layouts/partials/top-nav.blade.php` and is included by BOTH `layouts.main` and
+  `layouts.dashboard`, so profile / `/admin` / language stay in the TOP bar (one
+  copy), never in the vertical nav.
+- **News / Calendar / Campaigns / Voting:** styled "coming soon" placeholders
+  (shared `livewire.dashboard.placeholder` view). No backend — genuinely empty.
+- **My Communities** (`DashboardCommunities`): the viewer's ACTIVE memberships,
+  eager-loaded, grouped **"Where you're an admin"** (via `Circle::administeredBy`
+  — ONE query for the circle_admin set) vs **"Where you're a member"**, each
+  sorted by the materialised `path` so same-region circles cluster; an empty
+  group's heading is omitted. Bounded by how many circles the user is in — never
+  paginated. Each row: a geographic breadcrumb trail (`Circle::ancestors()` +
+  `<x-circle-breadcrumb>`, matching the Explore breadcrumb's `📍 ›` style, each
+  segment linking to that circle's page) on line 1; circle name (linked) + an
+  `admin`/`member` role badge on line 2.
+- **Recently Visited:** `circle_visits` table (`unique(user_id, circle_id)`,
+  `last_visited_at`) + `CircleVisit::record()` (idempotent upsert). Recorded in
+  `CommunityPage::mount()` for logged-in viewers (after the visibility gate).
+  `DashboardCommunities::recentlyVisited()` = distinct visited circles EXCLUDING
+  ones the user is an active member of (no overlap with My Communities),
+  most-recent-first, capped at 8, filtered to still-visible circles.
+- **`<x-circle-breadcrumb :ancestors>`** (`resources/views/components/`) — the
+  reusable geographic breadcrumb (renders nothing for a top-level circle). NB:
+  the Explore breadcrumb (`App\Livewire\Explore\Breadcrumb`) is `$parent`-coupled
+  to ExploreCommunities and NOT reusable for href links — this component matches
+  its style but uses `wire:navigate` links.
+
+---
+
 ## Filament Admin Panel (/admin)
 
 AdminPanelProvider (`app/Providers/Filament/AdminPanelProvider.php`).
@@ -1033,6 +1072,8 @@ Components: Login, Register, ForgotPassword, ResetPassword
 Controller: LogoutController
 Layouts: guest.blade.php, authenticated.blade.php
 main.blade.php: public pages with nav — used by Explore + CommunityPage
+dashboard.blade.php: authenticated /dashboard sections (top bar + left vertical
+nav); shares the top bar with main via layouts/partials/top-nav.blade.php
 public.blade.php: nav-free layout — used ONLY by the external request
 approval pages (resources/views/requests/*)
 
