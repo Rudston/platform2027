@@ -11,6 +11,11 @@ use App\Livewire\Communities\CircleOversightPage;
 use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
 use App\Livewire\Communities\Services\Forums\ForumGroupPage;
+use App\Livewire\Dashboard\DashboardCalendar;
+use App\Livewire\Dashboard\DashboardCampaigns;
+use App\Livewire\Dashboard\DashboardCommunities;
+use App\Livewire\Dashboard\DashboardNews;
+use App\Livewire\Dashboard\DashboardVoting;
 use App\Livewire\Explore\ExploreCommunities;
 use Illuminate\Support\Facades\Route;
 
@@ -75,9 +80,13 @@ Route::middleware('guest')->group(function () {
 
 // Authenticated routes.
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
+    // Dashboard: one bookmarkable route per section (server-side, not tab JS).
+    Route::redirect('/dashboard', '/dashboard/news')->name('dashboard');
+    Route::get('/dashboard/news', DashboardNews::class)->name('dashboard.news');
+    Route::get('/dashboard/calendar', DashboardCalendar::class)->name('dashboard.calendar');
+    Route::get('/dashboard/communities', DashboardCommunities::class)->name('dashboard.communities');
+    Route::get('/dashboard/campaigns', DashboardCampaigns::class)->name('dashboard.campaigns');
+    Route::get('/dashboard/voting', DashboardVoting::class)->name('dashboard.voting');
 });
 
 // Logout.
