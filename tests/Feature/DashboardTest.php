@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Dashboard\DashboardCommunities;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
+use App\Models\Circles\CircleVisit;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -38,6 +39,7 @@ class DashboardTest extends TestCase
         });
 
         (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
+        (include database_path('migrations/2026_07_23_000003_create_circle_visits_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
     }
@@ -120,6 +122,44 @@ class DashboardTest extends TestCase
         $rows = Livewire::test(DashboardCommunities::class)->instance()->groups();
         $this->assertSame([$adminCircle->id], $rows['admin']->pluck('circle.id')->all());
         $this->assertSame([$memberCircle->id], $rows['member']->pluck('circle.id')->all());
+    }
+
+    public function test_circle_visit_record_is_idempotent_per_user_circle(): void
+    {
+        $user = User::factory()->create();
+        $circle = $this->makeCircle('X', '#', 0);
+
+        CircleVisit::record($user, $circle);
+        CircleVisit::record($user, $circle);
+
+        $this->assertSame(1, CircleVisit::where('user_id', $user->id)->where('circle_id', $circle->id)->count());
+    }
+
+    public function test_recently_visited_excludes_members_orders_by_recency_and_caps_at_8(): void
+    {
+        $user = User::factory()->create();
+
+        $memberCircle = $this->makeCircle('Member Place', '#', 0);
+        $this->joinAsMember($user, $memberCircle);
+
+        // 10 visited non-member circles; higher i = more recent.
+        $visited = [];
+        foreach (range(1, 10) as $i) {
+            $c = $this->makeCircle("Visited {$i}", '#', 0);
+            CircleVisit::create(['user_id' => $user->id, 'circle_id' => $c->id, 'last_visited_at' => now()->subMinutes(60 - $i)]);
+            $visited[$i] = $c;
+        }
+        // Also visited a circle they're a member of — must be excluded from the list.
+        CircleVisit::create(['user_id' => $user->id, 'circle_id' => $memberCircle->id, 'last_visited_at' => now()]);
+
+        $this->actingAs($user->fresh());
+        $rows = Livewire::test(DashboardCommunities::class)->instance()->recentlyVisited();
+
+        $ids = $rows->pluck('circle.id')->all();
+        $this->assertCount(8, $rows);                       // capped at 8
+        $this->assertNotContains($memberCircle->id, $ids);  // members excluded
+        $this->assertSame($visited[10]->id, $ids[0]);       // most recent first
+        $this->assertSame($visited[9]->id, $ids[1]);
     }
 
     public function test_empty_admin_group_heading_is_hidden(): void

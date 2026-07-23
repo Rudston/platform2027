@@ -26,6 +26,6 @@ return [
         'badge_admin' => 'admin',
         'badge_member' => 'member',
         'recent_heading' => 'Recently Visited',
-        'recent_todo' => 'Recently visited communities will appear here soon.',
+        'recent_none' => 'Communities you visit will show up here.',
     ],
 ];

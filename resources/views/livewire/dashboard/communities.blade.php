@@ -35,12 +35,27 @@
         @endforeach
     @endif
 
-    {{-- Recently Visited — the prompt was truncated at the circle_visits table
-         spec, so this is a placeholder pending that detail. --}}
+    {{-- Recently Visited: distinct communities the viewer browsed but hasn't
+         joined (members already appear above), most-recent-first, capped at 8. --}}
+    @php($recent = $this->recentlyVisited)
     <section class="mt-8">
         <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('dashboard.communities.recent_heading') }}</h2>
-        <div class="mt-2 rounded-lg border border-dashed border-border-muted p-6 text-center">
-            <p class="text-sm text-muted">{{ __('dashboard.communities.recent_todo') }}</p>
-        </div>
+        @if ($recent->isEmpty())
+            <div class="mt-2 rounded-lg border border-dashed border-border-muted p-6 text-center">
+                <p class="text-sm text-muted">{{ __('dashboard.communities.recent_none') }}</p>
+            </div>
+        @else
+            <ul class="mt-2 divide-y divide-border-muted rounded-lg border border-border-muted bg-surface">
+                @foreach ($recent as $row)
+                    <li class="p-4" wire:key="rv-{{ $row['circle']->id }}">
+                        <x-circle-breadcrumb :ancestors="$row['ancestors']" />
+                        <div class="mt-1">
+                            <a href="{{ route('communities.show', $row['circle']) }}" wire:navigate
+                               class="font-medium text-indigo-600 hover:underline">{{ $row['circle']->name }}</a>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
     </section>
 </div>

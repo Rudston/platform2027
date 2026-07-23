@@ -4,6 +4,7 @@ namespace App\Livewire\Dashboard;
 
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
+use App\Models\Circles\CircleVisit;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -48,6 +49,42 @@ class DashboardCommunities extends Component
             'admin' => $rows->where('isAdmin', true)->values(),
             'member' => $rows->where('isAdmin', false)->values(),
         ];
+    }
+
+    /**
+     * The viewer's most recently visited communities, EXCLUDING ones they're
+     * already a member of (those show under My Communities). Distinct circles,
+     * most-recent-first, capped at 8. Bounded — never paginated.
+     *
+     * @return Collection<int, array>
+     */
+    #[Computed]
+    public function recentlyVisited(): Collection
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        $memberCircleIds = CircleMembership::query()
+            ->where('user_id', $user->id)
+            ->active()
+            ->pluck('circle_id')
+            ->all();
+
+        return CircleVisit::query()
+            ->where('user_id', $user->id)
+            ->when($memberCircleIds !== [], fn ($q) => $q->whereNotIn('circle_id', $memberCircleIds))
+            ->with('circle')
+            ->orderByDesc('last_visited_at')
+            // Fetch a small surplus so the post-filter (visibility) still yields 8.
+            ->limit(16)
+            ->get()
+            ->filter(fn (CircleVisit $v): bool => $v->circle !== null && $v->circle->isVisibleTo($user))
+            ->take(8)
+            ->map(fn (CircleVisit $v): array => [
+                'circle' => $v->circle,
+                'ancestors' => $v->circle->ancestors(),
+            ])
+            ->values();
     }
 
     public function render()

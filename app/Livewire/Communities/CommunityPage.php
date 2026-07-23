@@ -7,6 +7,7 @@ use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CommunityType;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
+use App\Models\Circles\CircleVisit;
 use App\Models\Circles\Service;
 use App\Models\Communities\OrganisationCommunity;
 use App\Models\Organisation;
@@ -54,6 +55,11 @@ class CommunityPage extends Component
 
         // Route-model-bound circle; eager-load the relations the page renders.
         $this->circle = $circle->load(['circleable', 'locatable', 'services']);
+
+        // Record the visit for the dashboard's "Recently Visited" (authed only).
+        if ($user !== null) {
+            CircleVisit::record($user, $this->circle);
+        }
 
         // Restore the exact Explore view we came from (?from=…); fall back to
         // bare /explore. Only accept an internal /explore path (no open redirects).
