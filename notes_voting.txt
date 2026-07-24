@@ -1,0 +1,136 @@
+RCV - Chat Gpt
+=========
+You're referring to **Ranked Choice Voting (RCV)**, also known in some places as **Preferential Voting** or, depending on the counting method, the **Alternative Vote (AV)**.
+
+Here's how it works.
+
+## Step 1: Voters rank the candidates
+
+Instead of choosing just one candidate, each voter ranks them in order of preference.
+
+For example:
+
+| Rank | Candidate |
+| ---- | --------- |
+| 1    | Alice     |
+| 2    | Bob       |
+| 3    | Carol     |
+| 4    | David     |
+
+The voter is saying:
+
+> "I'd most like Alice to win. If Alice can't win, I'd prefer Bob. If Bob can't win, then Carol..."
+
+## Step 2: Count first-choice votes
+
+Suppose there are 100 voters.
+
+| Candidate | 1st-choice votes |
+| --------- | ---------------: |
+| Alice     |               42 |
+| Bob       |               31 |
+| Carol     |               18 |
+| David     |                9 |
+
+To win, a candidate needs **more than 50%** of the active votes.
+
+Nobody has that yet.
+
+## Step 3: Eliminate the last-place candidate
+
+David has the fewest votes (9), so he's eliminated.
+
+Now look at those 9 ballots.
+
+Perhaps they ranked:
+
+* Bob second on 5 ballots
+* Carol second on 3 ballots
+* Alice second on 1 ballot
+
+Those ballots are transferred.
+
+Now the totals become:
+
+| Candidate | Votes |
+| --------- | ----: |
+| Alice     |    43 |
+| Bob       |    36 |
+| Carol     |    21 |
+
+Still no majority.
+
+## Step 4: Eliminate the next-lowest
+
+Carol is now last.
+
+Transfer Carol's ballots according to the next available preference.
+
+Suppose:
+
+* 15 go to Bob
+* 5 go to Alice
+* 1 has no further preferences
+
+Now:
+
+| Candidate | Votes |
+| --------- | ----: |
+| Alice     |    48 |
+| Bob       |    51 |
+
+Bob now has a majority of the remaining active votes and wins.
+
+---
+
+## Why people like it
+
+Instead of this:
+
+```
+Alice 42%
+Bob   31%
+Carol 18%
+David  9%
+```
+
+Alice would win under a simple plurality system, even though **58% preferred someone else**.
+
+With Ranked Choice Voting, voters can express backup preferences, which often produces a winner with broader overall support.
+
+## Advantages
+
+* Less "vote splitting."
+* Fewer "wasted votes."
+* Encourages more civil campaigning, since candidates benefit from being acceptable as a second or third choice.
+* Can eliminate the need for a separate runoff election.
+
+## Disadvantages
+
+* More complicated to explain and count than "pick one."
+* Ballots can become "exhausted" if voters don't rank enough candidates. For example, if all the candidates a voter ranked are eliminated and they didn't rank anyone else, their ballot no longer counts in later rounds.
+* Some people find the ranking process confusing, especially when there are many candidates.
+
+## Example ballot
+
+```
+□ Alice    (1)
+□ Bob      (2)
+□ Carol    (3)
+□ David    (4)
+```
+
+The numbers indicate the voter's preference order.
+
+## Different names
+
+Depending on the country or context, you may hear:
+
+* **Ranked Choice Voting (RCV)** – the most common term in the United States.
+* **Preferential Voting** – common in Australia and elsewhere.
+* **Alternative Vote (AV)** – specifically refers to the instant-runoff method used for single-winner elections.
+* **Instant Runoff Voting (IRV)** – another name for the same single-winner counting method.
+
+## Could it work in Platform 2027?
+
+For a platform like yours, Ranked Choice Voting could be a strong fit for community decision-making because it helps identify proposals or candidates with the broadest support rather than just the largest plurality. It also tends to reduce strategic voting, allowing participants to rank their genuine preferences without feeling they're "wasting" their vote by supporting a less popular option.
