@@ -41,6 +41,10 @@ class ForumGroupModal extends ModalComponent
         if ($groupId !== null) {
             $group = ForumGroup::findOrFail($groupId);
             abort_unless($group->circle_id === $circleId, 404);
+            // Editing an existing group is group-scoped: a global platform admin
+            // may not edit an Internal group (superadmin / this circle's own
+            // circle_admin still may). Creating a new group stays circle-level.
+            abort_unless($group->isAccessibleByPlatformAdmin(auth()->user()), 403);
 
             $this->name = $group->name;
             $this->slug = (string) $group->slug;
@@ -112,6 +116,9 @@ class ForumGroupModal extends ModalComponent
         if ($this->groupId !== null) {
             $group = ForumGroup::findOrFail($this->groupId);
             abort_unless($group->circle_id === $circle->id, 404);
+            // Group-scoped: block a global platform admin from editing an
+            // Internal group (see mount()).
+            abort_unless($group->isAccessibleByPlatformAdmin($user), 403);
             $service->updateGroup($group, $data);
         } else {
             $service->createGroup($circle, $user, $data);

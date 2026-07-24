@@ -3,6 +3,7 @@
 namespace App\Models\Moderation;
 
 use App\Contracts\Stewardship\CircleStewardshipQueue;
+use App\Enums\Forums\ForumGroupVisibility;
 use App\Enums\Moderation\ModerationAction;
 use App\Enums\Moderation\ModerationFlagSource;
 use App\Filament\Resources\CommentModerationRecords\CommentModerationRecordResource;
@@ -101,6 +102,7 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
             'circle_id' => CommentableTypeLabeler::circleIdFor($commentable),
             'commentable_type_label' => CommentableTypeLabeler::label($comment->commentable_type),
             'url_to_parent' => CommentableTypeLabeler::urlFor($commentable),
+            'forum_group_visibility' => CommentableTypeLabeler::forumGroupVisibilityFor($commentable),
         ]);
     }
 
@@ -200,14 +202,14 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
         return 'Comment Moderation';
     }
 
-    public static function pendingCountForCircle(Circle $circle): int
+    public static function pendingCountForCircle(Circle $circle, User $viewer): int
     {
-        return static::pendingForCircleQuery($circle)->count();
+        return static::pendingForCircleQuery($circle, $viewer)->count();
     }
 
-    public static function oldestPendingAgeForCircle(Circle $circle): ?Carbon
+    public static function oldestPendingAgeForCircle(Circle $circle, User $viewer): ?Carbon
     {
-        return static::pendingForCircleQuery($circle)->oldest()->first()?->created_at;
+        return static::pendingForCircleQuery($circle, $viewer)->oldest()->first()?->created_at;
     }
 
     public static function filamentUrlForCircle(Circle $circle): string
@@ -222,15 +224,34 @@ class CommentModerationRecord extends Model implements CircleStewardshipQueue
     /**
      * Unresolved records whose comment lives in this circle's forums, reached
      * comment → commentable(ForumDiscussion) → group(ForumGroup) → circle_id.
+     *
+     * Viewer-scoped for the Internal divergence: a plain platform admin (global
+     * `admin`, not superadmin, and not THIS circle's own circle_admin) does not
+     * count Internal-group records at all — they are excluded from both the
+     * count and the oldest-pending age, so an oversight row gives no hint an
+     * Internal group has anything pending. Superadmin and this circle's own
+     * circle_admin see the full set. NULL visibility (pre-rule rows) always
+     * counts — only an explicit 'internal' snapshot is excluded.
      */
-    protected static function pendingForCircleQuery(Circle $circle): Builder
+    protected static function pendingForCircleQuery(Circle $circle, User $viewer): Builder
     {
-        return static::query()
+        $query = static::query()
             ->pending()
             ->whereHas('comment', fn (Builder $c) => $c->whereHasMorph(
                 'commentable',
                 [ForumDiscussion::class],
                 fn (Builder $d) => $d->whereHas('group', fn (Builder $g) => $g->where('circle_id', $circle->id)),
             ));
+
+        // Full visibility for superadmin or this circle's own circle_admin.
+        if ($viewer->hasRole('superadmin') || $circle->isAdministeredBy($viewer)) {
+            return $query;
+        }
+
+        // Everyone else reaching here (a plain platform admin) is blind to this
+        // circle's Internal-group records.
+        return $query->where(fn (Builder $q) => $q
+            ->where('forum_group_visibility', '!=', ForumGroupVisibility::Internal->value)
+            ->orWhereNull('forum_group_visibility'));
     }
 }

@@ -98,9 +98,9 @@
                         {{ __('forums.created', ['date' => $group->created_at->format('d M Y')]) }}
                     </div>
 
-                    <div class="mt-1 flex items-center justify-between gap-2">
+                    <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
                         {{-- Status + visibility --}}
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                             @php($status = $group->status)
                             <span @class([
                                 'rounded-full px-2 py-0.5 text-xs font-medium',
@@ -133,7 +133,7 @@
             </div>
         @empty
             <div class="col-span-full rounded-lg border border-dashed border-border-muted p-8 text-center text-sm text-muted">
-                {{ __('forums.no_groups') }}
+                {{ $this->search !== '' ? __('forums.no_groups_found') : __('forums.no_groups') }}
             </div>
         @endforelse
     </div>

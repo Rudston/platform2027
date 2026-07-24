@@ -80,7 +80,49 @@ class ForumGroup extends Model
             return true;
         }
 
-        return $this->circle?->isManageableBy($user) ?? false;
+        return $this->isAccessibleByPlatformAdmin($user);
+    }
+
+    /**
+     * The forum-content manage gate for THIS specific group — a deliberate
+     * divergence from the plain Circle::isManageableBy() used elsewhere. The
+     * three-way split:
+     *   - superadmin              → always (any visibility);
+     *   - this circle's own       → always (any visibility, Internal included);
+     *     circle_admin
+     *   - a global platform admin → only when this group is NOT Internal
+     *     (i.e. someone who manages via the generic admin role, not by being
+     *     this circle's circle_admin, is shut out of Internal groups).
+     * Everyone who is not a manager of the owning circle → false.
+     *
+     * Layer this on TOP of isManageableBy at forum-group/comment-scoped gates;
+     * do NOT fold this restriction into isManageableBy itself (that gate governs
+     * many non-forum, circle-level actions that must stay unrestricted).
+     */
+    public function isAccessibleByPlatformAdmin(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        $circle = $this->circle;
+
+        // Not a manager of the owning circle at all → this gate never grants.
+        // (Checked first: isManageableBy short-circuits on the in-memory
+        // admin/superadmin role check, so a platform admin costs no query here.)
+        if (! ($circle?->isManageableBy($user) ?? false)) {
+            return false;
+        }
+
+        // Non-Internal groups: a manager keeps exactly the access isManageableBy
+        // already grants — no divergence for Public/Private.
+        if ($this->visibility !== ForumGroupVisibility::Internal) {
+            return true;
+        }
+
+        // Internal groups: only superadmin or THIS circle's own circle_admin —
+        // a plain global platform admin is excluded.
+        return $user->hasRole('superadmin') || ($circle?->isAdministeredBy($user) ?? false);
     }
 
     /** Tagging mirrors the group's manage rights: managers of the owning circle. */

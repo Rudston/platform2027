@@ -69,9 +69,12 @@ class ForumDiscussionPage extends Component
         $this->discussion = $forumDiscussion->load('creator');
 
         // Respect group visibility (managers bypass) — no viewing an
-        // internal/private group's discussion by direct URL.
+        // internal/private group's discussion by direct URL. The manager bypass
+        // routes through the group's platform-admin gate, so a global platform
+        // admin is 404'd on an Internal group (superadmin / this circle's own
+        // circle_admin still pass).
         abort_unless(
-            $this->circle->isManageableBy(auth()->user())
+            $forumGroup->isAccessibleByPlatformAdmin(auth()->user())
                 || $forumGroup->canView($this->membership(), $this->isVisitor()),
             404,
         );
@@ -107,7 +110,7 @@ class ForumDiscussionPage extends Component
     #[Computed]
     public function canManageThread(): bool
     {
-        return $this->circle->isManageableBy(auth()->user());
+        return $this->group->isAccessibleByPlatformAdmin(auth()->user());
     }
 
     /** Participants = unique contributors (creator ∪ commenters). */

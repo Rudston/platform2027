@@ -39,6 +39,20 @@ class CommentableTypeLabeler
         };
     }
 
+    /**
+     * The owning forum group's visibility (a ForumGroupVisibility backing value,
+     * e.g. 'internal') for a commentable, or null if not resolvable. Snapshotted
+     * onto a moderation record so a plain platform admin can be excluded from
+     * Internal-group records without a live join.
+     */
+    public static function forumGroupVisibilityFor(?Model $commentable): ?string
+    {
+        return match (true) {
+            $commentable instanceof ForumDiscussion => $commentable->group?->visibility?->value,
+            default => null,
+        };
+    }
+
     private static function forumDiscussionUrl(ForumDiscussion $discussion): ?string
     {
         $group = $discussion->group;

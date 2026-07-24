@@ -180,9 +180,13 @@ class GovernanceAccessTest extends TestCase
         $other = $this->makeCircle(null, null);
         $requester = User::factory()->create();
 
+        // Request has no visibility concept, so the viewer is irrelevant to it —
+        // any user satisfies the interface.
+        $viewer = User::factory()->create();
+
         $this->assertSame('Pending Requests', Request::queueLabel());
-        $this->assertSame(0, Request::pendingCountForCircle($circle));
-        $this->assertNull(Request::oldestPendingAgeForCircle($circle));
+        $this->assertSame(0, Request::pendingCountForCircle($circle, $viewer));
+        $this->assertNull(Request::oldestPendingAgeForCircle($circle, $viewer));
 
         $oldest = $this->makeRequest($circle->id, null, $requester); // pending
         // created_at isn't fillable on Request — forceFill past mass assignment.
@@ -191,10 +195,10 @@ class GovernanceAccessTest extends TestCase
         $this->makeRequest($other->id, null, $requester);            // different circle
         $this->makeRequest($circle->id, null, $requester)->update(['status' => 'approved']); // not pending
 
-        $this->assertSame(2, Request::pendingCountForCircle($circle));
+        $this->assertSame(2, Request::pendingCountForCircle($circle, $viewer));
         $this->assertSame(
             $oldest->created_at->timestamp,
-            Request::oldestPendingAgeForCircle($circle)?->timestamp,
+            Request::oldestPendingAgeForCircle($circle, $viewer)?->timestamp,
         );
 
         // Links to the (registered) Filament index.

@@ -9,6 +9,7 @@ return [
     'search_placeholder' => 'Search groups…',
     'banner_placeholder' => 'Banner',
     'no_groups' => 'No forum groups yet.',
+    'no_groups_found' => 'No forum groups found.',
     'discussions_count' => ':count discussions',
     'created' => 'Created :date',
 

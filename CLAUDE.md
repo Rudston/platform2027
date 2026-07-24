@@ -384,6 +384,36 @@ circle — composes the existing `Circle::administeredBy()` primitive (the same
 one RequestResource uses). Both consumers rest on `administeredBy`; no parallel
 mechanism. (RequestResource keeps its own subtree-based inline composition.)
 
+### Internal groups restrict the PLATFORM ADMIN role — `isAccessibleByPlatformAdmin`
+A deliberate divergence from `isManageableBy` for **forum/comment content only**:
+a global platform `admin` must NOT reach an **Internal**-visibility group's
+content, while superadmin and that circle's own circle_admin still do.
+`ForumGroup::isAccessibleByPlatformAdmin(?User): bool` is the SINGLE source of
+truth — the three-way split:
+- **superadmin** → always (any visibility);
+- **this circle's own circle_admin** (`Circle::isAdministeredBy`) → always,
+  Internal included;
+- **global platform admin** (manages via the generic `admin` role, not by being
+  this circle's circle_admin) → only when the group is **NOT** Internal.
+
+Layer it ON TOP of `isManageableBy` at every forum-group/comment-scoped manager
+gate; NEVER fold this into `isManageableBy` (that gate governs many non-forum,
+circle-level actions — including forum-group CREATION, which stays circle-level).
+It's implemented `isManageableBy → visibility → superadmin/circle_admin` so a
+platform admin costs no extra query on non-Internal groups. Threaded through:
+`ForumGroup::canCreateDiscussion`; `Comment::canModerate` (→ `canDelete`/`hide`,
+via commentable→group); the `ForumGroupPage`/`ForumDiscussionPage` mount 404
+view-gates; `ForumDiscussionPage::canManageThread`; `ForumServiceContainer`'s
+group-list filter (guarded by the memoised `canManage` so non-managers pay no
+per-group query) and `deactivate`; and `ForumGroupModal`'s **edit** branch.
+NOTE: `ForumGroup::canView`/`canParticipate` are membership/participationFloor
+only (no admin bypass), so they're UNCHANGED — a user who is a genuine member
+with an approved internal_role still views an Internal group via `canView`,
+independent of any admin role. The admin-bypass lived at the call sites above,
+which is where the restriction is applied. (`canBeTaggedBy` is intentionally
+left on plain `isManageableBy`: its only entry points sit behind the gated
+view/edit surfaces, so an admin can't reach an Internal group's tag picker.)
+
 ### Forum Discussions (list / detail / create / responses) — BUILT
 - **`forum_discussions` table + `ForumDiscussion` model** (soft deletes):
   `forum_group_id` (FK cascade), `created_by` (nullable, nullOnDelete), `title`,
@@ -494,12 +524,22 @@ never fork). Self-nesting via `parent_id`. Key columns/methods:
   not a human**), `fixed_by_author`, `moderated_content` (what the content became
   — author fix OR admin edit). Snapshot audit fields: `circle_id` (nullable,
   nullOnDelete — survives circle deletion), `commentable_type_label`,
-  `url_to_parent` (front-end link, a creation-time snapshot; may go stale).
+  `url_to_parent` (front-end link, a creation-time snapshot; may go stale),
+  `forum_group_visibility` (nullable string, backing value of the owning group's
+  `ForumGroupVisibility` at flag time — drives the Internal-group exclusion for
+  platform admins; see below).
 - **`open(Comment, ModerationFlagSource, ?aiMessage)`** — create-or-reuse: never
   duplicates a pending record for the same comment+source (Ai and User coexist).
   Populates the snapshot fields via `App\Support\Moderation\CommentableTypeLabeler`
-  (`label` / `circleIdFor` / `urlFor` — one match-case per commentable type;
-  "add a case" to support a new type).
+  (`label` / `circleIdFor` / `urlFor` / `forumGroupVisibilityFor` — one
+  match-case per commentable type; "add a case" to support a new type). Both
+  creation paths (the `comments:check-moderation` command and the user-flag
+  action) flow through `open()`, so the snapshot happens in ONE place.
+- **`forum_group_visibility` is forward-only**: rows created before the column
+  existed are NULL. NULL means "flagged before this rule" — treated as
+  UNRESTRICTED, NEVER as 'internal'. Only an explicit `'internal'` is ever
+  hidden. It's a SNAPSHOT: a later visibility change does not touch old rows. No
+  backfill (`2026_07_24_000001` adds the column only).
 - **Resolutions** (model methods, so testable without Filament):
   `resolveApproved($admin)`, `resolveEditedAndApproved($admin, $content)` (fixes
   the wording via `applyModeratorEdit` — does NOT requeue an AI recheck),
@@ -521,10 +561,15 @@ never fork). Self-nesting via `parent_id`. Key columns/methods:
   with no unhide step.
 
 ### Filament — CommentModerationRecordResource (Governance)
-List + View pages. **Role-scoped** (`getEloquentQuery` via
-`Circle::scopeManageableBy` through comment → forumDiscussion → forumGroup →
-circle; admin/superadmin unscoped, circle_admin only their circles).
-`canViewAny` admits circle_admins. Row actions AND View-page header actions
+List + View pages. **Role-scoped** in `getEloquentQuery` (comment →
+forumDiscussion → forumGroup → circle). The scoping now has THREE branches:
+**superadmin** unscoped (Internal included); **platform admin** (`admin`, not
+superadmin) sees every circle's records EXCEPT those with
+`forum_group_visibility = 'internal'`, UNLESS the record's snapshot `circle_id`
+is one they're circle_admin of — NULL visibility stays visible (only explicit
+`'internal'` is hidden); **pure circle_admin** only their own circles (Internal
+fine there — they ARE the circle's admin). Uses the snapshot columns, no live
+group join. `canViewAny` admits circle_admins. Row actions AND View-page header actions
 (shared `public static` handlers, visible while `moderated = false`): **Approve**,
 **Edit & Approve** (pre-fills current content → `EditedAndApproved`), **Hide**,
 **Delete**. "Moderated by" column reads "Auto-approved" for system-resolved
@@ -543,11 +588,20 @@ A layer ABOVE circle_admins for platform admins to watch queue health per circle
   — Spatie teams mode) + `isPrivilegedManager()` (admin/superadmin bypass). Admin
   → unfiltered; circle_admin → only their circles; guest → none.
 - **`App\Contracts\Stewardship\CircleStewardshipQueue`** — `queueLabel()`,
-  `pendingCountForCircle()`, `oldestPendingAgeForCircle()`, `filamentUrlForCircle()`.
+  `pendingCountForCircle(Circle, User $viewer)`,
+  `oldestPendingAgeForCircle(Circle, User $viewer)`, `filamentUrlForCircle()`.
   Implemented by **`Request`** ("Pending Requests") and **`CommentModerationRecord`**
   ("Comment Moderation"). Registry: **`config/stewardship.php`** (a flat FQCN
   list; add a queue = one line). NB: this makes those models reference their
   Filament resources for the URL — inherent to the contract.
+- **The `$viewer` parameter is for per-viewer visibility narrowing.** `Request`
+  ignores it (no visibility concept). `CommentModerationRecord` uses it: for a
+  plain platform admin (not superadmin, and not THIS circle's own circle_admin)
+  it EXCLUDES `forum_group_visibility = 'internal'` records from BOTH the count
+  and the oldest-pending age — fully invisible, so an oversight row gives no hint
+  an Internal group has anything pending (superadmin / this circle's circle_admin
+  see the full set; NULL visibility always counts). The Oversight page passes
+  `auth()->user()` (non-null — its mount is admin/superadmin-only).
 - **Oversight page** — `GET /communities/{circle}/oversight`
   (`CircleOversightPage`, route `communities.oversight`), **platform
   admin/superadmin ONLY** (403 for everyone else, circle_admins included). One

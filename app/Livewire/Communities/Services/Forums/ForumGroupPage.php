@@ -33,9 +33,12 @@ class ForumGroupPage extends Component
         $this->group = $forumGroup;
 
         // Respect group visibility (managers bypass) — no viewing an
-        // internal/private group by direct URL.
+        // internal/private group by direct URL. The manager bypass routes
+        // through the group's platform-admin gate, so a global platform admin
+        // is 404'd on an Internal group (superadmin / this circle's own
+        // circle_admin still pass).
         abort_unless(
-            $this->circle->isManageableBy(auth()->user())
+            $forumGroup->isAccessibleByPlatformAdmin(auth()->user())
                 || $forumGroup->canView($this->membership(), $this->isVisitor()),
             404,
         );

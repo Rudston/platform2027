@@ -6,6 +6,7 @@ use App\Enums\Moderation\ModerationAction;
 use App\Enums\Moderation\ModerationFlagSource;
 use App\Filament\Resources\CommentModerationRecords\Pages\ListCommentModerationRecords;
 use App\Filament\Resources\CommentModerationRecords\Pages\ViewCommentModerationRecord;
+use App\Enums\Forums\ForumGroupVisibility;
 use App\Models\Circles\Circle;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Moderation\CommentModerationRecord;
@@ -68,17 +69,40 @@ class CommentModerationRecordResource extends Resource
 
         $user = static::authUser();
 
-        // A circle_admin sees only records whose comment lives in a circle they
-        // manage; global admins/superadmins are unscoped.
-        if ($user !== null && ! $user->hasAnyRole(['admin', 'superadmin'])) {
-            $manageableCircleIds = Circle::query()->manageableBy($user)->pluck('id');
-
-            $query->whereHas('comment', fn (Builder $c) => $c->whereHasMorph(
-                'commentable',
-                [ForumDiscussion::class],
-                fn (Builder $d) => $d->whereHas('group', fn (Builder $g) => $g->whereIn('circle_id', $manageableCircleIds)),
-            ));
+        if ($user === null) {
+            return $query;
         }
+
+        // Superadmin: unscoped, sees everything (incl. Internal).
+        if ($user->hasRole('superadmin')) {
+            return $query;
+        }
+
+        // The circles this user is circle_admin of (their own circles).
+        $adminCircleIds = Circle::administeredBy($user)->pluck('id');
+
+        // Global platform admin (not superadmin): sees every circle's records
+        // EXCEPT those snapshotted as Internal — UNLESS the record's circle is
+        // one they are themselves the circle_admin of. NULL visibility (rows
+        // created before this rule) stays visible; only an explicit 'internal'
+        // is hidden. Uses the snapshot columns, not a live group join.
+        if ($user->hasRole('admin')) {
+            $query->where(fn (Builder $q) => $q
+                ->where('forum_group_visibility', '!=', ForumGroupVisibility::Internal->value)
+                ->orWhereNull('forum_group_visibility')
+                ->orWhereIn('circle_id', $adminCircleIds));
+
+            return $query;
+        }
+
+        // Otherwise a pure circle_admin: only records whose comment lives in a
+        // circle they manage (within their own circles, Internal is fine — they
+        // are the circle's admin).
+        $query->whereHas('comment', fn (Builder $c) => $c->whereHasMorph(
+            'commentable',
+            [ForumDiscussion::class],
+            fn (Builder $d) => $d->whereHas('group', fn (Builder $g) => $g->whereIn('circle_id', $adminCircleIds)),
+        ));
 
         return $query;
     }

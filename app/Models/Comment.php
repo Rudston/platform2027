@@ -137,7 +137,11 @@ class Comment extends Model
             return false;
         }
 
-        return $this->commentable?->group?->circle?->isManageableBy($actor) ?? false;
+        // Route through the owning forum group's platform-admin gate (NOT the
+        // bare circle isManageableBy): a global platform admin must not moderate
+        // comments in an Internal group, while superadmin / this circle's own
+        // circle_admin still can.
+        return $this->commentable?->group?->isAccessibleByPlatformAdmin($actor) ?? false;
     }
 
     /**

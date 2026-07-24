@@ -62,12 +62,20 @@ class ForumServiceContainer extends Component
     #[Computed]
     public function viewableGroups(): Collection
     {
+        $user = auth()->user();
+
         return $this->circle->forumGroups()
             ->withCount('discussions')
             ->with('tags')
             ->orderBy('name')
             ->get()
-            ->filter(fn (ForumGroup $g) => $this->canManage || $g->canView($this->membership, $this->isVisitor))
+            // A group shows if the viewer can VIEW it, or is a manager allowed
+            // to see it. The manager path uses the per-group platform-admin gate
+            // (so a global platform admin no longer sees Internal groups), but is
+            // guarded by the memoised $this->canManage so non-managers never pay
+            // the per-group isManageableBy query.
+            ->filter(fn (ForumGroup $g) => $g->canView($this->membership, $this->isVisitor)
+                || ($this->canManage && $g->isAccessibleByPlatformAdmin($user)))
             ->values();
     }
 
@@ -153,16 +161,17 @@ class ForumServiceContainer extends Component
 
     public function deactivate(int $groupId): void
     {
-        if (! $this->canManage) {
+        $group = $this->circle->forumGroups()->whereKey($groupId)->first();
+
+        // Group-scoped mutation → gate on the specific group's platform-admin
+        // access (subsumes the manager check and adds the Internal restriction),
+        // not the circle-wide canManage.
+        if ($group === null || ! $group->isAccessibleByPlatformAdmin(auth()->user())) {
             return;
         }
 
-        $group = $this->circle->forumGroups()->whereKey($groupId)->first();
-
-        if ($group) {
-            $this->service()->deactivateGroup($group);
-            unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions, $this->participantCountsByGroup, $this->totalParticipants);
-        }
+        $this->service()->deactivateGroup($group);
+        unset($this->viewableGroups, $this->groups, $this->totalGroups, $this->totalDiscussions, $this->participantCountsByGroup, $this->totalParticipants);
     }
 
     /** Refresh after a group is created/edited in the modal. */

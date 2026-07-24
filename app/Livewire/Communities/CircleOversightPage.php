@@ -46,6 +46,12 @@ class CircleOversightPage extends Component
     {
         $threshold = now()->subDays($this->neglectDays());
 
+        // Guaranteed non-null (mount() aborts for non-admin/superadmin). Queues
+        // may narrow what they report for this viewer (e.g. Internal-forum
+        // moderation records are hidden from a plain platform admin).
+        /** @var \App\Models\User $viewer */
+        $viewer = auth()->user();
+
         $rows = [];
 
         foreach ((array) config('stewardship', []) as $class) {
@@ -54,11 +60,11 @@ class CircleOversightPage extends Component
                 continue;
             }
 
-            $oldest = $class::oldestPendingAgeForCircle($this->circle);
+            $oldest = $class::oldestPendingAgeForCircle($this->circle, $viewer);
 
             $rows[] = [
                 'label' => $class::queueLabel(),
-                'count' => $class::pendingCountForCircle($this->circle),
+                'count' => $class::pendingCountForCircle($this->circle, $viewer),
                 'oldest' => $oldest,
                 'url' => $class::filamentUrlForCircle($this->circle),
                 'neglected' => $oldest !== null && $oldest->lessThan($threshold),

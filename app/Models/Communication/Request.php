@@ -58,12 +58,14 @@ class Request extends Model implements CircleStewardshipQueue
         return 'Pending Requests';
     }
 
-    public static function pendingCountForCircle(Circle $circle): int
+    // $viewer is unused: a Request has no visibility concept, so every steward
+    // sees the same count. The parameter exists only to satisfy the interface.
+    public static function pendingCountForCircle(Circle $circle, User $viewer): int
     {
         return static::query()->where('circle_id', $circle->id)->pending()->count();
     }
 
-    public static function oldestPendingAgeForCircle(Circle $circle): ?Carbon
+    public static function oldestPendingAgeForCircle(Circle $circle, User $viewer): ?Carbon
     {
         return static::query()
             ->where('circle_id', $circle->id)

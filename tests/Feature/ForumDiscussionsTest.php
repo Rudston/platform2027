@@ -57,6 +57,7 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_23_000001_add_snapshot_columns_to_comment_moderation_records_table.php'))->up();
+        (include database_path('migrations/2026_07_24_000001_add_forum_group_visibility_to_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_21_000003_create_likes_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
@@ -100,6 +101,38 @@ class ForumDiscussionsTest extends TestCase
             'model_id' => $user->id,
             'circle_id' => $circle->id,
         ]);
+
+        return $user;
+    }
+
+    /** A global superadmin — an unrestricted stewardship/oversight viewer. */
+    private function makeSuperadmin(): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->insertGetId(['name' => 'superadmin', 'guard_name' => 'web', 'circle_id' => null]);
+        DB::table('model_has_roles')->insert([
+            'role_id' => $roleId,
+            'model_type' => (new User)->getMorphClass(),
+            'model_id' => $user->id,
+            'circle_id' => null,
+        ]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $user;
+    }
+
+    /** A global platform admin (the `admin` role; NOT superadmin). */
+    private function makeAdmin(): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web', 'circle_id' => null]);
+        DB::table('model_has_roles')->insert([
+            'role_id' => $roleId,
+            'model_type' => (new User)->getMorphClass(),
+            'model_id' => $user->id,
+            'circle_id' => null,
+        ]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return $user;
     }
@@ -635,15 +668,17 @@ class ForumDiscussionsTest extends TestCase
         $recB = CommentModerationRecord::open($cB, ModerationFlagSource::User);
 
         // Per-circle metrics reach through comment → discussion → group → circle.
+        // Viewed as a superadmin (unrestricted).
+        $viewer = $this->makeSuperadmin();
         $this->assertSame('Comment Moderation', CommentModerationRecord::queueLabel());
-        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circleA));
-        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circleB));
-        $this->assertNotNull(CommentModerationRecord::oldestPendingAgeForCircle($circleA));
+        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circleA, $viewer));
+        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circleB, $viewer));
+        $this->assertNotNull(CommentModerationRecord::oldestPendingAgeForCircle($circleA, $viewer));
 
         // Resolved records drop out of the pending metrics.
         $recA->update(['moderated' => true]);
-        $this->assertSame(0, CommentModerationRecord::pendingCountForCircle($circleA));
-        $this->assertNull(CommentModerationRecord::oldestPendingAgeForCircle($circleA));
+        $this->assertSame(0, CommentModerationRecord::pendingCountForCircle($circleA, $viewer));
+        $this->assertNull(CommentModerationRecord::oldestPendingAgeForCircle($circleA, $viewer));
 
         // Resource query: a circle_admin of B sees only B's records.
         $this->actingAs($this->makeManager($circleB)->fresh());
@@ -654,6 +689,69 @@ class ForumDiscussionsTest extends TestCase
 
         // Deep link carries the circle filter.
         $this->assertStringContainsString((string) $circleB->id, CommentModerationRecord::filamentUrlForCircle($circleB));
+    }
+
+    public function test_internal_group_moderation_records_are_hidden_from_a_plain_platform_admin(): void
+    {
+        $circle = $this->makeCircle();
+        $publicGroup = $this->makeGroup($circle, null, 'public');
+        $internalGroup = $this->makeGroup($circle, null, 'internal');
+
+        $dPub = app(ForumService::class)->createDiscussion($publicGroup, User::factory()->create(), ['title' => 'P']);
+        $dInt = app(ForumService::class)->createDiscussion($internalGroup, User::factory()->create(), ['title' => 'I']);
+
+        $cPub = $dPub->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'p']);
+        $cInt = $dInt->comments()->create(['user_id' => $this->member($circle)->id, 'content' => 'i']);
+
+        $recPub = CommentModerationRecord::open($cPub, ModerationFlagSource::User);
+        $recInt = CommentModerationRecord::open($cInt, ModerationFlagSource::User);
+
+        // Visibility is snapshotted at flag time (both creation paths go via open()).
+        $this->assertSame('public', $recPub->fresh()->forum_group_visibility);
+        $this->assertSame('internal', $recInt->fresh()->forum_group_visibility);
+
+        $superadmin = $this->makeSuperadmin();
+        $admin = $this->makeAdmin();
+        $circleAdmin = $this->makeManager($circle);
+
+        // Stewardship count: superadmin + this circle's own circle_admin see both;
+        // a plain platform admin sees only the non-internal record.
+        $this->assertSame(2, CommentModerationRecord::pendingCountForCircle($circle, $superadmin));
+        $this->assertSame(2, CommentModerationRecord::pendingCountForCircle($circle, $circleAdmin));
+        $this->assertSame(1, CommentModerationRecord::pendingCountForCircle($circle, $admin));
+
+        // Oldest-pending age ignores the internal record entirely for the plain
+        // platform admin: make internal OLDER to prove it is not consulted.
+        $recInt->update(['created_at' => now()->subDays(3)]);
+        $recPub->update(['created_at' => now()->subDay()]);
+        $this->assertSame(
+            $recPub->fresh()->created_at->timestamp,
+            CommentModerationRecord::oldestPendingAgeForCircle($circle, $admin)?->timestamp,
+        );
+        $this->assertSame(
+            $recInt->fresh()->created_at->timestamp,
+            CommentModerationRecord::oldestPendingAgeForCircle($circle, $superadmin)?->timestamp,
+        );
+
+        // Filament resource query: plain platform admin sees only the public record.
+        $this->actingAs($admin->fresh());
+        $this->assertSame([$recPub->id], CommentModerationRecordResource::getEloquentQuery()->pluck('id')->all());
+
+        // Superadmin sees both.
+        $this->actingAs($superadmin->fresh());
+        $this->assertEqualsCanonicalizing(
+            [$recPub->id, $recInt->id],
+            CommentModerationRecordResource::getEloquentQuery()->pluck('id')->all(),
+        );
+
+        // Forward-only: a pre-rule row (NULL visibility) stays visible to the
+        // platform admin — NULL is never treated as 'internal'.
+        $recInt->update(['forum_group_visibility' => null]);
+        $this->actingAs($admin->fresh());
+        $this->assertEqualsCanonicalizing(
+            [$recPub->id, $recInt->id],
+            CommentModerationRecordResource::getEloquentQuery()->pluck('id')->all(),
+        );
     }
 
     public function test_only_unresolved_ai_records_trigger_pending_review(): void

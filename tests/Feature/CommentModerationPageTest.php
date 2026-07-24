@@ -48,6 +48,7 @@ class CommentModerationPageTest extends TestCase
         (include database_path('migrations/2026_07_22_000001_add_moderation_columns_to_comments_table.php'))->up();
         (include database_path('migrations/2026_07_22_000002_create_comment_moderation_records_table.php'))->up();
         (include database_path('migrations/2026_07_23_000001_add_snapshot_columns_to_comment_moderation_records_table.php'))->up();
+        (include database_path('migrations/2026_07_24_000001_add_forum_group_visibility_to_comment_moderation_records_table.php'))->up();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
