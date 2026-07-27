@@ -164,6 +164,34 @@ Single entry point for creating any circle type.
 - Signature: create(type, data, parentCircle?, locatableType, locatableId)
 - Circles are created with status Active (DB default) — set
   CircleStatus::Pending after creation for approval-gated types
+- **Two-way parent/locatable derivation** — a caller may supply either and the
+  missing side is inferred, so a new circle is never left dangling:
+  - no `locatableType` + a parent → inherit the parent's locatable (a child sits
+    at its parent's location unless placed elsewhere);
+  - no `parentCircle` → anchor under the LocationCommunity circle for the
+    resolved locatable, via **`locationCircleFor()`** (the ONE place that rule
+    lives — `circles:backfill-root-parents` reuses it).
+  - **LocationCommunity is excluded from parent derivation**: the country circle
+    IS the root and must stay parentless (LocationCommunitiesSeeder creates it
+    through this same method with no parent), and nested location circles always
+    pass an explicit parent. `parent_id IS NULL` therefore means "the root
+    country circle" and nothing else — keep that invariant.
+  - Why it matters: **Explore represents the national level as `selectedCircleId
+    = null`** (breadcrumb `['id' => null, 'name' => 'South Africa']`), NOT as
+    circle 7, and all three add-community dispatch sites pass that value
+    straight through. Without the derivation an organisation added at country
+    level became a SECOND ROOT (locatable Country #191 but parent_id NULL,
+    depth 0, path "<own id>") — no ancestors, so no geographic breadcrumb,
+    `responsibleAdminFor()` skipping the LocationCommunity climb, and invisible
+    to every `path LIKE` subtree query. It still showed in Explore because the
+    bottom section filters on locatable, not parent — which is why it went
+    unnoticed.
+- **`circles:backfill-root-parents`** (`app/Console/Commands/BackfillRootParents.php`)
+  — re-anchors legacy parentless non-location circles under their location
+  circle, recomputing `depth`/`path` and shifting any descendants' paths
+  (`Circle::booted()` maintains depth/path on CREATE only, so an update must set
+  them explicitly). `--dry-run` reports without writing. Idempotent (a fixed
+  circle no longer matches), manual, NOT scheduled.
 
 ### CircleMembershipService
 Membership management (partially built).

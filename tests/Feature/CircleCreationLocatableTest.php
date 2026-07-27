@@ -36,6 +36,15 @@ class CircleCreationLocatableTest extends TestCase
             $table->timestamps();
         });
 
+        // Needed only by the LocationCommunity case (the root country circle).
+        Schema::create('location_communities', function ($table): void {
+            $table->id();
+            $table->string('name')->nullable();
+            $table->text('description')->nullable();
+            $table->softDeletes();
+            $table->timestamps();
+        });
+
         // Empty services table: defaultServices() resolves to no ids, so nothing
         // is attached — but the query still runs, so the table must exist.
         Schema::create('services', function ($table): void {
@@ -100,5 +109,72 @@ class CircleCreationLocatableTest extends TestCase
 
         $this->assertSame(LocatableType::Country->value, $circle->locatable_type);
         $this->assertSame(191, (int) $circle->locatable_id);
+    }
+
+    /**
+     * The Explore flow represents the national level as *no* selected circle, so
+     * a country-level organisation arrives with parentCircle = null. It must
+     * still nest under the country circle rather than become a second root.
+     */
+    public function test_a_parentless_community_nests_under_its_location_circle(): void
+    {
+        $countryCircleId = $this->insertCountryCircle();
+
+        $circle = app(CircleCreationService::class)->create(
+            type: CommunityType::Organisation,
+            data: ['name' => 'National Body'],
+        );
+
+        $this->assertSame($countryCircleId, (int) $circle->parent_id);
+        $this->assertSame(1, $circle->depth);
+        $this->assertSame($countryCircleId.'/'.$circle->id, $circle->path);
+    }
+
+    /**
+     * The country circle is itself created through this service with no parent
+     * (LocationCommunitiesSeeder), so LocationCommunity must never have a parent
+     * derived for it — the root has to stay parentless.
+     */
+    public function test_a_location_community_never_has_a_parent_derived(): void
+    {
+        $this->insertCountryCircle();
+
+        $circle = app(CircleCreationService::class)->create(
+            type: CommunityType::LocationCommunity,
+            data: ['name' => 'National Level Community for South Africa'],
+            locatableType: LocatableType::Country,
+            locatableId: 191,
+        );
+
+        // depth is only assigned in-memory when there IS a parent; parentless
+        // rows take the column default, so read it back from the database.
+        $this->assertNull($circle->parent_id);
+        $this->assertSame(0, $circle->fresh()->depth);
+    }
+
+    /** No location circle for the place → parent stays unset, never guessed. */
+    public function test_it_leaves_the_parent_unset_when_the_location_has_no_circle(): void
+    {
+        $circle = app(CircleCreationService::class)->create(
+            type: CommunityType::Organisation,
+            data: ['name' => 'National Body'],
+        );
+
+        $this->assertNull($circle->parent_id);
+    }
+
+    /** The root LocationCommunity circle for South Africa (Country #191). */
+    private function insertCountryCircle(): int
+    {
+        $id = DB::table('circles')->insertGetId([
+            'circleable_type' => CommunityType::LocationCommunity->value,
+            'locatable_type' => LocatableType::Country->value,
+            'locatable_id' => 191,
+            'depth' => 0,
+        ]);
+
+        DB::table('circles')->where('id', $id)->update(['path' => (string) $id]);
+
+        return $id;
     }
 }

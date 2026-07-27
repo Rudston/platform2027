@@ -60,6 +60,22 @@ class CircleCreationService
             $locatableId = self::DEFAULT_COUNTRY_ID;
         }
 
+        // Mirror of the inheritance above: with no explicit parent, anchor the
+        // new circle under the LocationCommunity circle for its resolved
+        // location. The Explore "Add community" flow represents the national
+        // level as *no* selected circle (breadcrumb id null), so an
+        // organisation added at country level reached here with
+        // $parentCircle = null and became a second root — locatable
+        // Country #191 but parent_id NULL, depth 0, path "<own id>".
+        //
+        // LocationCommunity is excluded on purpose: the country circle IS the
+        // root and must stay parentless (LocationCommunitiesSeeder creates it
+        // through this same method with no parent), and nested location circles
+        // always pass an explicit parent.
+        if ($parentCircle === null && $type !== CommunityType::LocationCommunity) {
+            $parentCircle = $this->locationCircleFor($locatableType, $locatableId);
+        }
+
         // ThemeCommunity names/describes from BOTH its theme and its location.
         // The community model can't self-derive this at creation time, so set it here.
         if ($type === CommunityType::ThemeCommunity) {
@@ -102,5 +118,26 @@ class CircleCreationService
 
             return $circle;
         });
+    }
+
+    /**
+     * The LocationCommunity circle anchored to the given place — the natural
+     * parent for a community created at that location.
+     *
+     * Null when that location has no circle yet, in which case the caller
+     * leaves parent_id unset rather than guessing at a different level.
+     *
+     * Public because `circles:backfill-root-parents` re-anchors legacy
+     * parentless circles with the SAME rule — this is the one place it's
+     * expressed, so the two can never diverge.
+     */
+    public function locationCircleFor(LocatableType $locatableType, int $locatableId): ?Circle
+    {
+        return Circle::query()
+            ->where('circleable_type', CommunityType::LocationCommunity->value)
+            ->where('locatable_type', $locatableType->value)
+            ->where('locatable_id', $locatableId)
+            ->orderBy('id')
+            ->first();
     }
 }
