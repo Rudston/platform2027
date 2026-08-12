@@ -633,15 +633,8 @@ class ExploreCommunities extends Component
 
     private function labelFor(?string $type): string
     {
-        return match ($type) {
-            CommunityType::LocationCommunity->value => __('communities.plural.locations'),
-            CommunityType::Organisation->value      => __('communities.plural.organisations'),
-            CommunityType::Campaign->value          => __('communities.plural.campaigns'),
-            CommunityType::Course->value            => __('communities.plural.courses'),
-            CommunityType::Event->value             => __('communities.plural.events'),
-            CommunityType::ThemeCommunity->value    => __('communities.plural.theme_communities'),
-            default                                 => __('communities.plural.default'),
-        };
+        return CommunityType::tryFrom((string) $type)?->pluralLabel()
+            ?? __('communities.plural.default');
     }
 
     private function singularFor(?string $type): string

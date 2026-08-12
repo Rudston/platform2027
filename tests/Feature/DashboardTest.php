@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\CommunityType;
 use App\Livewire\Dashboard\DashboardCommunities;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Circles\CircleVisit;
 use App\Models\User;
+use App\Support\Circles\ExplorerBreadcrumb;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -34,6 +36,8 @@ class DashboardTest extends TestCase
             $t->string('path')->nullable();
             $t->integer('depth')->default(0);
             $t->string('status')->default('active');
+            $t->string('circleable_type')->nullable();
+            $t->unsignedBigInteger('circleable_id')->nullable();
             $t->softDeletes();
             $t->timestamps();
         });
@@ -44,12 +48,13 @@ class DashboardTest extends TestCase
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
     }
 
-    private function makeCircle(string $name, string $path, int $depth, ?int $parentId = null): Circle
+    private function makeCircle(string $name, string $path, int $depth, ?int $parentId = null, ?string $circleableType = null): Circle
     {
         $id = DB::table('circles')->insertGetId([
             'parent_id' => $parentId,
             'name' => $name,
             'depth' => $depth,
+            'circleable_type' => $circleableType,
         ]);
         DB::table('circles')->where('id', $id)->update(['path' => str_replace('#', (string) $id, $path)]);
 
@@ -122,6 +127,44 @@ class DashboardTest extends TestCase
         $rows = Livewire::test(DashboardCommunities::class)->instance()->groups();
         $this->assertSame([$adminCircle->id], $rows['admin']->pluck('circle.id')->all());
         $this->assertSame([$memberCircle->id], $rows['member']->pluck('circle.id')->all());
+    }
+
+    public function test_my_communities_breadcrumbs_link_into_the_explorer(): void
+    {
+        $national = $this->makeCircle('South Africa', '#', 0, null, CommunityType::LocationCommunity->value);
+        $province = $this->makeCircle('Western Cape', "{$national->id}/#", 1, $national->id, CommunityType::LocationCommunity->value);
+        $place = $this->makeCircle('Cape Metro', "{$national->id}/{$province->id}/#", 2, $province->id, CommunityType::LocationCommunity->value);
+        $org = $this->makeCircle('Habitat SA', "{$national->id}/{$province->id}/{$place->id}/#", 3, $place->id, CommunityType::Organisation->value);
+
+        $user = User::factory()->create();
+        $this->joinAsMember($user, $place);
+        $this->joinAsMember($user, $org);
+
+        $this->actingAs($user->fresh());
+
+        // A location community's trail ends at its PARENT place; a
+        // sub-community's closes with the type crumb. Neither repeats its own
+        // name — the row already shows that as the linked heading below.
+        $this->assertSame([
+            ['name' => 'South Africa', 'url' => route('explore', absolute: false)],
+            ['name' => 'Western Cape', 'url' => route('explore', ['circle' => $province->id], absolute: false)],
+        ], ExplorerBreadcrumb::for($place));
+
+        $this->assertSame([
+            ['name' => 'South Africa', 'url' => route('explore', absolute: false)],
+            ['name' => 'Western Cape', 'url' => route('explore', ['circle' => $province->id], absolute: false)],
+            ['name' => 'Cape Metro', 'url' => route('explore', ['circle' => $place->id], absolute: false)],
+            ['name' => 'Organisations', 'url' => route('explore', ['circle' => $place->id, 'community' => 'Organisation'], absolute: false)],
+        ], ExplorerBreadcrumb::for($org));
+
+        Livewire::test(DashboardCommunities::class)
+            ->assertSeeInOrder(['South Africa', 'Western Cape', 'Cape Metro', 'Organisations', 'Habitat SA'])
+            // Place crumbs open the explorer at that location, not the circle page.
+            ->assertSee('href="'.route('explore', absolute: false).'"', escape: false)
+            ->assertSee('href="'.route('explore', ['circle' => $province->id], absolute: false).'"', escape: false)
+            // The type crumb also selects the explorer's community-type filter.
+            ->assertSee('circle='.$place->id.'&amp;community=Organisation', escape: false)
+            ->assertDontSee('href="'.route('communities.show', $province).'"', escape: false);
     }
 
     public function test_circle_visit_record_is_idempotent_per_user_circle(): void

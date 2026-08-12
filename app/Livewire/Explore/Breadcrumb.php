@@ -21,14 +21,11 @@ class Breadcrumb extends Component
      */
     public function typeLabel(): ?string
     {
-        return match ($this->selectedType) {
-            CommunityType::Organisation->value   => __('communities.plural.organisations'),
-            CommunityType::Campaign->value       => __('communities.plural.campaigns'),
-            CommunityType::Course->value         => __('communities.plural.courses'),
-            CommunityType::Event->value          => __('communities.plural.events'),
-            CommunityType::ThemeCommunity->value => __('communities.plural.theme_communities'),
-            default                              => null,
-        };
+        if ($this->selectedType === null || $this->selectedType === CommunityType::LocationCommunity->value) {
+            return null;
+        }
+
+        return CommunityType::tryFrom($this->selectedType)?->pluralLabel();
     }
 
     public function render()

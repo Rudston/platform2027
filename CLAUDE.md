@@ -903,21 +903,37 @@ client-side tab switching), so each is back-button/bookmark friendly.
   — ONE query for the circle_admin set) vs **"Where you're a member"**, each
   sorted by the materialised `path` so same-region circles cluster; an empty
   group's heading is omitted. Bounded by how many circles the user is in — never
-  paginated. Each row: a geographic breadcrumb trail (`Circle::ancestors()` +
-  `<x-circle-breadcrumb>`, matching the Explore breadcrumb's `📍 ›` style, each
-  segment linking to that circle's page) on line 1; circle name (linked) + an
-  `admin`/`member` role badge on line 2.
+  paginated. Each row: the community's **Explore breadcrumb trail**
+  (`Circle::ancestors()` + `<x-circle-breadcrumb>`) on line 1; circle name
+  (linked) + an `admin`/`member` role badge on line 2.
 - **Recently Visited:** `circle_visits` table (`unique(user_id, circle_id)`,
   `last_visited_at`) + `CircleVisit::record()` (idempotent upsert). Recorded in
   `CommunityPage::mount()` for logged-in viewers (after the visibility gate).
   `DashboardCommunities::recentlyVisited()` = distinct visited circles EXCLUDING
   ones the user is an active member of (no overlap with My Communities),
   most-recent-first, capped at 8, filtered to still-visible circles.
-- **`<x-circle-breadcrumb :ancestors>`** (`resources/views/components/`) — the
-  reusable geographic breadcrumb (renders nothing for a top-level circle). NB:
-  the Explore breadcrumb (`App\Livewire\Explore\Breadcrumb`) is `$parent`-coupled
-  to ExploreCommunities and NOT reusable for href links — this component matches
-  its style but uses `wire:navigate` links.
+- **`<x-circle-breadcrumb :circle :ancestors>`** (`resources/views/components/`)
+  — renders the trail a community shows in the Explore breadcrumb, built by
+  **`App\Support\Circles\ExplorerBreadcrumb::for()`** (the ONE place that rule
+  lives). Pass the already-fetched `ancestors` to avoid a re-query. Crumbs:
+  1. root country place → `/explore` (the explorer's national level is
+     `selectedCircleId = null`, NOT the country circle id — see Explore);
+  2. each ancestor by its SHORT place name (`locatable->name`, "Gauteng", not
+     the verbose circle name) → `/explore?circle=<id>`;
+  3. for a sub-community only, a closing **type crumb**
+     (`CommunityType::pluralLabel()`, e.g. "Organisations") →
+     `/explore?circle=<place>&community=<CaseName>`.
+  The circle's OWN name is deliberately NOT a crumb (a LocationCommunity's trail
+  therefore ends at its parent place) — every surface showing the trail already
+  shows the name, linked, directly beneath it. So EVERY crumb is a link; there
+  is no "current"/unlinked crumb.
+  Crumbs link INTO the explorer (`wire:navigate`), NEVER to the ancestor's
+  community page — clicking a place crumb resumes browsing there, which is the
+  whole point. `CommunityType::pluralLabel()` is shared with
+  `Explore\Breadcrumb::typeLabel()` / `ExploreCommunities::labelFor()`, so the
+  labels cannot drift. NB: the Explore breadcrumb component
+  (`App\Livewire\Explore\Breadcrumb`) is `$parent`-coupled to ExploreCommunities
+  and NOT reusable for href links — hence this separate renderer.
 
 ---
 

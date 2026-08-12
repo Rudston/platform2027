@@ -16,7 +16,7 @@
                         @foreach ($groups[$key] as $row)
                             <li class="p-4" wire:key="mc-{{ $row['circle']->id }}">
                                 {{-- Line 1: geographic breadcrumb trail --}}
-                                <x-circle-breadcrumb :ancestors="$row['ancestors']" />
+                                <x-circle-breadcrumb :circle="$row['circle']" :ancestors="$row['ancestors']" />
                                 {{-- Line 2: circle name + role badge --}}
                                 <div class="mt-1 flex items-center gap-2">
                                     <a href="{{ route('communities.show', $row['circle']) }}" wire:navigate
@@ -48,7 +48,7 @@
             <ul class="mt-2 divide-y divide-border-muted rounded-lg border border-border-muted bg-surface">
                 @foreach ($recent as $row)
                     <li class="p-4" wire:key="rv-{{ $row['circle']->id }}">
-                        <x-circle-breadcrumb :ancestors="$row['ancestors']" />
+                        <x-circle-breadcrumb :circle="$row['circle']" :ancestors="$row['ancestors']" />
                         <div class="mt-1">
                             <a href="{{ route('communities.show', $row['circle']) }}" wire:navigate
                                class="font-medium text-indigo-600 hover:underline">{{ $row['circle']->name }}</a>
