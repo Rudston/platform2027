@@ -212,7 +212,7 @@ class ExploreCommunities extends Component
     #[Computed]
     public function isAtTerminalLevel(): bool
     {
-        return LocatableType::tryFrom((string) $this->selectedCircle?->locatable_type)?->isTerminal() ?? false;
+        return $this->selectedCircle?->isAtTerminalLocationLevel() ?? false;
     }
 
     /**

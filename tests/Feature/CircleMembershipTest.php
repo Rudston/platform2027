@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Enums\CommunityType;
+use App\Enums\LocatableType;
 use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Explore\CommunityCard;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Communities\Campaign;
+use App\Models\Communities\LocationCommunity;
 use App\Models\Communities\OrganisationCommunity;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +41,8 @@ class CircleMembershipTest extends TestCase
             $table->id();
             $table->string('circleable_type')->nullable();
             $table->unsignedBigInteger('circleable_id')->nullable();
+            $table->string('locatable_type')->nullable();
+            $table->unsignedBigInteger('locatable_id')->nullable();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->unsignedTinyInteger('depth')->default(0);
             $table->string('path')->nullable();
@@ -50,7 +54,7 @@ class CircleMembershipTest extends TestCase
             $table->timestamps();
         });
 
-        foreach (['campaigns', 'organisation_communities'] as $t) {
+        foreach (['campaigns', 'organisation_communities', 'location_communities'] as $t) {
             Schema::create($t, function ($table): void {
                 $table->id();
                 $table->unsignedBigInteger('organisation_id')->nullable();
@@ -95,6 +99,23 @@ class CircleMembershipTest extends TestCase
             'circleable_type' => CommunityType::Organisation->value,
             'circleable_id' => $o->id,
             'name' => 'Org',
+        ]);
+    }
+
+    /**
+     * A location-community circle anchored at $locatableType — MainPlace is the
+     * terminal ("lowest") level; anything else is an upper level.
+     */
+    private function makeLocationCircle(LocatableType $locatableType): Circle
+    {
+        $l = LocationCommunity::create(['name' => 'L']);
+
+        return Circle::create([
+            'circleable_type' => CommunityType::LocationCommunity->value,
+            'circleable_id' => $l->id,
+            'locatable_type' => $locatableType->value,
+            'locatable_id' => 1,
+            'name' => $locatableType->name,
         ]);
     }
 
@@ -170,6 +191,94 @@ class CircleMembershipTest extends TestCase
         $this->assertNull($a->activeMembership($user));           // dropped
         $this->assertNotNull($third->activeMembership($user));    // joined
         $this->assertSame(2, CircleMembership::where('user_id', $user->id)->whereNull('left_at')->count());
+    }
+
+    public function test_lowest_level_location_cap_is_separate_from_the_levels_above_it(): void
+    {
+        $user = User::factory()->create();
+
+        // Fill the terminal (lowest-level) bucket: 2 main places.
+        $this->makeLocationCircle(LocatableType::MainPlace)->joinAsMember($user);
+        $this->makeLocationCircle(LocatableType::MainPlace)->joinAsMember($user);
+
+        // A third main place is blocked …
+        $this->assertFalse($this->makeLocationCircle(LocatableType::MainPlace)->canUserJoin($user)['allowed']);
+
+        // … but the upper bucket is untouched, at every level above the lowest.
+        $province = $this->makeLocationCircle(LocatableType::Province);
+        $this->assertTrue($province->canUserJoin($user)['allowed']);
+        $province->joinAsMember($user);
+        $this->makeLocationCircle(LocatableType::LocalMunicipality)->joinAsMember($user);
+
+        // Now the upper bucket is full too — and the two buckets stay independent.
+        $this->assertFalse($this->makeLocationCircle(LocatableType::City)->canUserJoin($user)['allowed']);
+        $this->assertFalse($this->makeLocationCircle(LocatableType::MainPlace)->canUserJoin($user)['allowed']);
+        $this->assertSame(4, CircleMembership::where('user_id', $user->id)->whereNull('left_at')->count());
+    }
+
+    public function test_an_upper_level_membership_cannot_be_swapped_for_a_lowest_level_slot(): void
+    {
+        $user = User::factory()->create();
+
+        // Two recent main places (the terminal bucket, at its cap).
+        $placeA = $this->makeLocationCircle(LocatableType::MainPlace);
+        $placeA->joinAsMember($user);
+        $this->makeLocationCircle(LocatableType::MainPlace)->joinAsMember($user);
+
+        // Two provinces held well past the 3-month hold — swappable, but only
+        // within their OWN bucket.
+        $provinceA = $this->makeLocationCircle(LocatableType::Province);
+        $provinceA->joinAsMember($user);
+        $this->makeLocationCircle(LocatableType::Province)->joinAsMember($user);
+        CircleMembership::where('user_id', $user->id)
+            ->whereIn('circle_id', [$provinceA->id, $provinceA->id + 1])
+            ->update(['joined_at' => now()->subMonths(4)]);
+
+        // A new main place: blocked, and the aged provinces are NOT offered.
+        $state = $this->makeLocationCircle(LocatableType::MainPlace)->canUserJoin($user);
+        $this->assertFalse($state['allowed']);
+        $this->assertTrue($state['swappable']->isEmpty());
+
+        // A new province: allowed by swapping one of the aged provincial ones.
+        $state = $this->makeLocationCircle(LocatableType::Province)->canUserJoin($user);
+        $this->assertTrue($state['allowed']);
+        $this->assertCount(2, $state['swappable']);
+        $this->assertSame(
+            [LocatableType::Province->value, LocatableType::Province->value],
+            $state['swappable']->map(fn (CircleMembership $m) => $m->circle->locatable_type)->all(),
+        );
+    }
+
+    public function test_a_location_circle_with_no_locatable_counts_as_an_upper_level(): void
+    {
+        $user = User::factory()->create();
+        $l = LocationCommunity::create(['name' => 'L']);
+
+        $orphan = Circle::create([
+            'circleable_type' => CommunityType::LocationCommunity->value,
+            'circleable_id' => $l->id,
+            'name' => 'No locatable',
+        ]);
+
+        $this->assertFalse($orphan->isAtTerminalLocationLevel());
+
+        // It fills an UPPER slot, leaving the lowest-level allowance intact.
+        $orphan->joinAsMember($user);
+        $this->makeLocationCircle(LocatableType::Province)->joinAsMember($user);
+
+        $this->assertFalse($this->makeLocationCircle(LocatableType::Province)->canUserJoin($user)['allowed']);
+        $this->assertTrue($this->makeLocationCircle(LocatableType::MainPlace)->canUserJoin($user)['allowed']);
+    }
+
+    public function test_non_bucketed_types_keep_one_type_wide_cap(): void
+    {
+        $user = User::factory()->create();
+
+        // Campaign has no geographic buckets: 2 total, wherever they are anchored.
+        $this->makeCampaignCircle()->joinAsMember($user);
+        $this->makeCampaignCircle()->joinAsMember($user);
+
+        $this->assertFalse($this->makeCampaignCircle()->canUserJoin($user)['allowed']);
     }
 
     public function test_global_admins_bypass_the_cap(): void

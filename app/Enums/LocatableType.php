@@ -49,4 +49,23 @@ enum LocatableType: string
     {
         return $this->locationLevel()->isTerminal();
     }
+
+    /**
+     * Backing values of every TERMINAL locatable type — the "lowest level"
+     * places (MainPlace in SA). Query-side counterpart to isTerminal(), for
+     * `whereIn('locatable_type', …)` filters.
+     *
+     * NEVER identify the lowest level by `circles.depth`: the City branch is a
+     * level shorter than the DistrictMunicipality one, so SA main places sit at
+     * BOTH depth 3 and depth 4 today.
+     *
+     * @return list<string>
+     */
+    public static function terminalValues(): array
+    {
+        return array_values(array_map(
+            fn (self $case): string => $case->value,
+            array_filter(self::cases(), fn (self $case): bool => $case->isTerminal()),
+        ));
+    }
 }

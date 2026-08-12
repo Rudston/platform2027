@@ -252,13 +252,44 @@ Join/leave with per-community-type limits and optional internal roles.
 `2, 3, []`. Every CommunityType model implements it; **OrganisationCommunity**
 overrides `allowedInternalRoles()` → `['organisation_member']`.
 
+**Location communities are capped per GEOGRAPHIC BUCKET, not type-wide.**
+`HasGeographicMembershipBuckets` (`app/Contracts/Communities/`):
+`maxConcurrentTerminalMemberships()` + `maxConcurrentUpperMemberships()` —
+implemented ONLY by `LocationCommunity` (2 and 2). A user may hold 2 memberships
+at the terminal ("lowest") level AND 2 above it; the buckets never consume each
+other's allowance, and the `minMembershipMonthsBeforeSwitch` swap applies WITHIN
+a bucket (an aged provincial membership can't be dropped to free a main-place
+slot). `LocationCommunity::maxConcurrentMemberships()` returns the SUM (4) as an
+informational total — `canUserJoin()` applies the bucket caps, so it is never the
+operative limit for a join.
+
+**"Lowest level" is `LocationLevel::Place`, NEVER `circles.depth`.** The bucket
+comes from the circle's `locatable_type` via **`Circle::isAtTerminalLocationLevel()`**
+(→ `LocatableType::isTerminal()`), with **`LocatableType::terminalValues()`** as
+the query-side list for `whereIn('locatable_type', …)`. Depth is NOT usable: the
+City branch is one level shorter than the DistrictMunicipality one, so SA main
+places sit at depth 3 (649 of them, the metro places) AND depth 4 (13,390) —
+a `depth = 4` rule would silently mis-bucket every metro place. It is also
+country-agnostic for free: a new country's bottom tier maps onto
+`LocationLevel::Place`, so there is nothing to configure per country (do NOT add
+a config entry for it; if a country ever bottoms out at a non-Place level, put
+`lowestLocationLevel()` on the `Country` model, next to the data). A circle with
+NO locatable counts as UPPER (it is not a lowest-level place).
+
 ### Circle methods (domain logic lives on Circle, like administrators())
 - `memberships()` hasMany; `activeMembership(User): ?CircleMembership`.
 - `canUserJoin(User): array{allowed, reason, available_at, swappable}` —
   global `admin`/`superadmin` bypass (NOT circle_admin); else count the user's
-  ACTIVE memberships of the SAME circleable type: under `max` → allowed; at cap
-  → memberships older than `minMonths` are `swappable` (allowed if any), else
-  not allowed with `available_at` = earliest eligible date.
+  ACTIVE memberships of the SAME circleable type — and, for a
+  `HasGeographicMembershipBuckets` type, only those in THIS circle's bucket
+  (terminal vs upper, one `whereIn`/`whereNotIn` on `locatable_type`, no
+  PHP-side filtering): under the applicable `max` → allowed; at cap →
+  memberships older than `minMonths` are `swappable` (allowed if any), else not
+  allowed with `available_at` = earliest eligible date. Because the count is
+  bucket-scoped, `swappable` is too.
+- `isAtTerminalLocationLevel(): bool` — is this circle at the lowest geographic
+  level (`LocationLevel::Place`)? The ONE definition; `ExploreCommunities::
+  isAtTerminalLevel()` delegates to it. Never keys off `depth`.
 - `joinAsMember(User, ?internalRole, ?dropMembership, bool skipChecks=false)` —
   validates the role against `allowedInternalRoles()`, re-checks `canUserJoin()`
   server-side (unless `skipChecks`), closes `dropMembership` on a swap, creates

@@ -3,9 +3,11 @@
 namespace App\Models\Circles;
 
 use App\Contracts\Circles\HasDefaultServices;
+use App\Contracts\Communities\HasGeographicMembershipBuckets;
 use App\Contracts\Communities\HasMembershipRules;
 use App\Enums\CircleStatus;
 use App\Enums\CommunityType;
+use App\Enums\LocatableType;
 use App\Models\Communication\Request;
 use App\Models\Communities\ThemeCommunity;
 use App\Models\Concerns\HasTags;
@@ -240,6 +242,18 @@ class Circle extends Model
         return $this->hasMany(CircleMembership::class);
     }
 
+    /**
+     * Whether this circle sits at the TERMINAL ("lowest") geographic level —
+     * LocationLevel::Place, i.e. a MainPlace in SA. Country-agnostic: a new
+     * country's bottom tier maps onto Place, so nothing is configured per
+     * country. NEVER infer this from `depth` (SA main places sit at depth 3
+     * under a City and depth 4 under a LocalMunicipality).
+     */
+    public function isAtTerminalLocationLevel(): bool
+    {
+        return LocatableType::tryFrom((string) $this->locatable_type)?->isTerminal() ?? false;
+    }
+
     /** The active (not-yet-left) membership for this circle + user, if any. */
     public function activeMembership(User $user): ?CircleMembership
     {
@@ -250,8 +264,13 @@ class Circle extends Model
     }
 
     /**
-     * Whether $user may join this circle, and — if at the per-type cap — which
+     * Whether $user may join this circle, and — if at the applicable cap — which
      * of their existing memberships are old enough to swap out.
+     *
+     * The cap is per community type, EXCEPT for types implementing
+     * HasGeographicMembershipBuckets (location communities), where the terminal
+     * ("lowest") level is capped separately from the levels above it — so both
+     * the count and the swappable set are narrowed to the joined circle's bucket.
      *
      * @return array{allowed: bool, reason: ?string, available_at: ?Carbon, swappable: \Illuminate\Support\Collection}
      */
@@ -270,14 +289,42 @@ class Circle extends Model
             return $ok;
         }
 
-        // Active memberships this user holds of the SAME community type.
+        $bucketed = $owner instanceof HasGeographicMembershipBuckets;
+        $isTerminal = $bucketed && $this->isAtTerminalLocationLevel();
+
+        // Active memberships this user holds of the SAME community type — and,
+        // for bucketed types, at the SAME geographic bucket as this circle.
         $active = CircleMembership::query()
             ->where('user_id', $user->id)
             ->whereNull('left_at')
-            ->whereHas('circle', fn (Builder $q) => $q->where('circleable_type', $this->circleable_type))
+            ->whereHas('circle', function (Builder $q) use ($bucketed, $isTerminal): void {
+                $q->where('circleable_type', $this->circleable_type);
+
+                if (! $bucketed) {
+                    return;
+                }
+
+                $terminalTypes = LocatableType::terminalValues();
+
+                if ($isTerminal) {
+                    $q->whereIn('locatable_type', $terminalTypes);
+
+                    return;
+                }
+
+                // Upper bucket: everything not terminal, including circles with
+                // no locatable at all (they are not a lowest-level place).
+                $q->where(fn (Builder $inner) => $inner
+                    ->whereNotIn('locatable_type', $terminalTypes)
+                    ->orWhereNull('locatable_type'));
+            })
             ->get();
 
-        if ($active->count() < $owner->maxConcurrentMemberships()) {
+        $max = $bucketed
+            ? ($isTerminal ? $owner->maxConcurrentTerminalMemberships() : $owner->maxConcurrentUpperMemberships())
+            : $owner->maxConcurrentMemberships();
+
+        if ($active->count() < $max) {
             return $ok;
         }
 
