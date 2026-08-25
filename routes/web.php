@@ -11,6 +11,8 @@ use App\Livewire\Communities\CircleOversightPage;
 use App\Livewire\Communities\CommunityPage;
 use App\Livewire\Communities\Services\Forums\ForumDiscussionPage;
 use App\Livewire\Communities\Services\Forums\ForumGroupPage;
+use App\Livewire\Communities\Services\Polls\PollGroupPage;
+use App\Livewire\Communities\Services\Polls\PollPage;
 use App\Livewire\Dashboard\DashboardCalendar;
 use App\Livewire\Dashboard\DashboardCampaigns;
 use App\Livewire\Dashboard\DashboardCommunities;
@@ -48,6 +50,18 @@ Route::get('/communities/{circle}/forums/{forumGroup:slug}', ForumGroupPage::cla
 Route::get('/communities/{circle}/forums/{forumGroup:slug}/{forumDiscussion:slug}', ForumDiscussionPage::class)
     ->scopeBindings()
     ->name('communities.forums.discussions.show');
+
+// A poll group's page. scopeBindings() resolves {pollGroup:slug} within
+// {circle} — slugs are unique per circle, not globally.
+Route::get('/communities/{circle}/polls/{pollGroup:slug}', PollGroupPage::class)
+    ->scopeBindings()
+    ->name('communities.polls.show');
+
+// A single poll. Polls have no slug, so {poll} binds by id; scopeBindings()
+// still resolves it within {pollGroup} within {circle}.
+Route::get('/communities/{circle}/polls/{pollGroup:slug}/{poll}', PollPage::class)
+    ->scopeBindings()
+    ->name('communities.polls.poll');
 
 /*
 |--------------------------------------------------------------------------

@@ -12,6 +12,8 @@ use App\Models\Communication\Request;
 use App\Models\Communities\ThemeCommunity;
 use App\Models\Concerns\HasTags;
 use App\Models\Forums\ForumGroup;
+use App\Models\Polls\Poll;
+use App\Models\Polls\PollGroup;
 use App\Models\User;
 use App\Services\Communication\EmailServiceHandler;
 use Illuminate\Database\Eloquent\Builder;
@@ -679,6 +681,18 @@ class Circle extends Model
     public function forumGroups(): HasMany
     {
         return $this->hasMany(ForumGroup::class);
+    }
+
+    /** Poll groups created under this circle's Polls tab. */
+    public function pollGroups(): HasMany
+    {
+        return $this->hasMany(PollGroup::class);
+    }
+
+    /** Polls run by this circle, across all of its poll groups. */
+    public function polls(): HasMany
+    {
+        return $this->hasMany(Poll::class);
     }
 
     /**

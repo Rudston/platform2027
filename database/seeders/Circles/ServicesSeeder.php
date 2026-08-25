@@ -24,7 +24,9 @@ class ServicesSeeder extends Seeder
             ['name' => 'News',  'key' => 'news',  'handler_class' => NewsService::class],
             ['name' => 'Manage Users',  'key' => 'manage_users',        'handler_class' => ManageUsersService::class],
             ['name' => 'Events',       'key' => 'events',       'handler_class' => EventsService::class],
-            ['name' => 'Voting',       'key' => 'voting',       'handler_class' => VotingService::class],
+            // Display name is "Polls"; the KEY stays 'voting' — a stable handle,
+            // like content_blocks.key. Keys do not chase labels.
+            ['name' => 'Polls',        'key' => 'voting',       'handler_class' => VotingService::class],
             ['name' => 'Learning',     'key' => 'learning',     'handler_class' => ManageLearningService::class],
             ['name' => 'Social Media', 'key' => 'social_media', 'handler_class' => ManageSocialMediaService::class],
             ['name' => 'Forums',       'key' => 'forums',       'handler_class' => ForumService::class],

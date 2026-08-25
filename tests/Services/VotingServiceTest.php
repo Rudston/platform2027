@@ -1,0 +1,557 @@
+<?php
+
+namespace Tests\Services;
+
+use App\Enums\CommunityType;
+use App\Enums\Polls\PollEligibility;
+use App\Enums\Polls\PollResponseShape;
+use App\Enums\Polls\PollStatus;
+use App\Enums\Polls\TallyMethod;
+use App\Models\Circles\Circle;
+use App\Models\Polls\Poll;
+use App\Models\Polls\PollGroup;
+use App\Models\Polls\PollRatingScale;
+use App\Models\Polls\PollRatingScalePoint;
+use App\Models\User;
+use App\Services\Circles\VotingService;
+use App\Support\Polls\Mark;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
+use RuntimeException;
+use Spatie\Permission\PermissionRegistrar;
+use Tests\TestCase;
+
+/**
+ * The service seam: every state change a Poll can undergo, driven through
+ * VotingService and asserted through public predicates.
+ */
+class VotingServiceTest extends TestCase
+{
+    private VotingService $service;
+
+    private Circle $circle;
+
+    private PollGroup $group;
+
+    private User $organiser;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Only the tables these tests need — the full migration set cannot run
+        // on sqlite (a demography backfill references a missing `countries`).
+        (include database_path('migrations/0001_01_01_000000_create_users_table.php'))->up();
+        (include database_path('migrations/2026_06_20_132319_create_permission_tables.php'))->up();
+        (include database_path('migrations/2026_06_20_140000_make_circle_id_nullable_on_permission_pivots.php'))->up();
+
+        Schema::create('circles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('circleable_type')->nullable();
+            $table->unsignedBigInteger('circleable_id')->nullable();
+            $table->string('locatable_type')->nullable();
+            $table->unsignedBigInteger('locatable_id')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->string('path')->nullable();
+            $table->integer('depth')->default(0);
+            $table->string('name')->nullable();
+            $table->json('description')->nullable();
+            $table->string('status')->default('active');
+            $table->softDeletes();
+            $table->timestamps();
+        });
+
+        (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
+
+        foreach (glob(database_path('migrations/2026_08_25_*.php')) as $migration) {
+            (include $migration)->up();
+        }
+
+        app(PermissionRegistrar::class)->setPermissionsTeamId(null);
+
+        $this->service = app(VotingService::class);
+
+        // Query-builder insert so Circle::booted() does not fire.
+        $circleId = DB::table('circles')->insertGetId([
+            'circleable_type' => CommunityType::LocationCommunity->value,
+            'name' => 'Ward 7',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->circle = Circle::findOrFail($circleId);
+        $this->organiser = $this->member('Organiser');
+        $this->group = $this->service->createGroup($this->circle, $this->organiser, ['name' => '2027 Budget']);
+    }
+
+    private function member(string $name, ?string $role = null, ?string $approved = null, ?string $joinedAt = null): User
+    {
+        $user = User::forceCreate([
+            'name' => $name,
+            'email' => strtolower($name).'@example.test',
+            'password' => 'secret',
+        ]);
+
+        DB::table('circle_memberships')->insert([
+            'circle_id' => $this->circle->id,
+            'user_id' => $user->id,
+            'internal_role' => $role,
+            'metadata' => $approved ? json_encode(['internal_role_approved' => $approved]) : null,
+            'joined_at' => $joinedAt ?? now()->subYear(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+
+    private function election(array $extra = []): Poll
+    {
+        return $this->service->createPoll($this->group, $this->organiser, array_merge([
+            'title' => 'Choose a steward',
+            'prompt' => 'Select ONE from:',
+            'shape' => PollResponseShape::SingleChoice,
+            'tally_method' => TallyMethod::Plurality,
+            'options' => ['Ada', 'Grace', 'Bo'],
+        ], $extra));
+    }
+
+    private function optionIds(Poll $poll): array
+    {
+        return $poll->question->options()->pluck('id', 'label')->all();
+    }
+
+    // ------------------------------------------------------------- groups
+
+    public function test_it_creates_a_group_with_a_derived_slug_and_archives_without_deleting(): void
+    {
+        $this->assertSame('2027-budget', $this->group->slug);
+        $this->assertTrue($this->service->groupSlugTaken($this->circle, '2027 Budget'));
+        $this->assertFalse($this->group->isArchived());
+
+        $this->service->archiveGroup($this->group);
+        $this->assertTrue($this->group->fresh()->isArchived());
+
+        $this->service->restoreGroup($this->group);
+        $this->assertFalse($this->group->fresh()->isArchived());
+    }
+
+    // -------------------------------------------------------- composition
+
+    public function test_it_refuses_an_illegal_shape_and_tally_pairing(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/not legal/');
+
+        $this->election(['tally_method' => TallyMethod::AverageScore]);
+    }
+
+    public function test_it_refuses_fewer_than_two_options(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->election(['options' => ['Ada']]);
+    }
+
+    public function test_a_rating_poll_needs_a_scale_and_only_a_rating_poll_may_have_one(): void
+    {
+        try {
+            $this->election([
+                'shape' => PollResponseShape::Rating,
+                'tally_method' => TallyMethod::AverageScore,
+            ]);
+            $this->fail('a rating poll without a scale should be refused');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('needs a rating scale', $e->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->election(['rating_scale_id' => 1]);
+    }
+
+    public function test_a_new_poll_is_a_draft_with_one_question_and_ordered_options(): void
+    {
+        $poll = $this->election();
+
+        $this->assertTrue($poll->isDraft());
+        $this->assertSame(1, $poll->questions()->count());
+        $this->assertSame(0, $poll->question->position);
+        $this->assertSame(['Ada', 'Grace', 'Bo'], $poll->question->options()->pluck('label')->all());
+        $this->assertSame(0, $poll->electorateCount(), 'a draft has no electorate yet');
+    }
+
+    // --------------------------------------------------------- publishing
+
+    public function test_publishing_snapshots_the_electorate_and_opens_the_poll(): void
+    {
+        $this->member('Ann');
+        $this->member('Bob');
+
+        $poll = $this->service->publish($this->election());
+
+        $this->assertSame(PollStatus::Published, $poll->status);
+        $this->assertNotNull($poll->opens_at);
+        $this->assertTrue($poll->isOpen());
+        $this->assertSame(3, $poll->electorateCount(), 'organiser + two members');
+    }
+
+    public function test_a_qualifying_date_may_not_be_in_the_future(): void
+    {
+        // The electorate is snapshotted AT publish, so a future cut-off could
+        // never be resolved without a scheduled job.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/may not be in the future/');
+
+        $this->service->publish($this->election(), now()->addDay());
+    }
+
+    public function test_someone_who_joins_after_publication_is_not_enfranchised(): void
+    {
+        $poll = $this->service->publish($this->election());
+
+        $latecomer = $this->member('Latecomer', joinedAt: now()->toDateTimeString());
+
+        $this->assertFalse($poll->fresh()->isInElectorate($latecomer));
+        $this->assertFalse($poll->fresh()->canRespond($latecomer));
+    }
+
+    public function test_internal_eligibility_admits_only_approved_internal_roles(): void
+    {
+        // This is the case that fails if the electorate is ever DERIVED instead
+        // of snapshotted: internal_role_approved is mutated in place and keeps
+        // no history (docs/adr/0002).
+        $approved = $this->member('Approved', 'organisation_member', 'approved');
+        $pending = $this->member('Pending', 'organisation_member', 'pending');
+        $plain = $this->member('Plain');
+
+        $poll = $this->service->publish($this->election(['eligibility' => PollEligibility::Internal]));
+
+        $this->assertTrue($poll->isInElectorate($approved));
+        $this->assertFalse($poll->isInElectorate($pending), 'a claimed but unconfirmed role is not trusted');
+        $this->assertFalse($poll->isInElectorate($plain));
+        $this->assertSame(1, $poll->electorateCount());
+    }
+
+    public function test_a_poll_cannot_be_published_twice(): void
+    {
+        $poll = $this->service->publish($this->election());
+
+        $this->expectException(RuntimeException::class);
+        $this->service->publish($poll);
+    }
+
+    // -------------------------------------------------------- responding
+
+    public function test_it_records_a_response_and_refuses_a_second_one(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $options = $this->optionIds($poll);
+
+        $this->service->respond($poll, $ann, [new Mark($options['Ada'])]);
+        $this->assertSame(1, $poll->fresh()->respondentCount());
+
+        $this->expectException(RuntimeException::class);
+        $this->service->respond($poll->fresh(), $ann, [new Mark($options['Bo'])]);
+    }
+
+    public function test_a_revision_replaces_the_previous_answer_rather_than_adding_to_it(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election(['allow_response_update' => true]));
+        $options = $this->optionIds($poll);
+
+        $this->service->respond($poll, $ann, [new Mark($options['Ada'])]);
+        $this->service->respond($poll->fresh(), $ann, [new Mark($options['Grace'])]);
+
+        $poll = $poll->fresh();
+        $this->assertSame(1, $poll->respondentCount());
+
+        $response = $poll->question->responses()->with('items')->first();
+        $this->assertCount(1, $response->items);
+        $this->assertSame($options['Grace'], (int) $response->items->first()->poll_option_id);
+    }
+
+    public function test_it_refuses_a_non_member_and_an_option_not_on_the_ballot(): void
+    {
+        $poll = $this->service->publish($this->election());
+        $outsider = User::forceCreate(['name' => 'Outsider', 'email' => 'out@example.test', 'password' => 'x']);
+
+        try {
+            $this->service->respond($poll, $outsider, [new Mark($this->optionIds($poll)['Ada'])]);
+            $this->fail('a non-member should be refused');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('may not respond', $e->getMessage());
+        }
+
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->service->respond($poll, $ann, [new Mark(999999)]);
+    }
+
+    public function test_a_single_choice_response_must_mark_exactly_one_option(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $options = $this->optionIds($poll);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->service->respond($poll, $ann, [new Mark($options['Ada']), new Mark($options['Bo'])]);
+    }
+
+    public function test_ranked_responses_must_use_distinct_gapless_ranks(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election([
+            'shape' => PollResponseShape::RankedChoice,
+            'tally_method' => TallyMethod::InstantRunoff,
+        ]));
+        $options = $this->optionIds($poll);
+
+        try {
+            $this->service->respond($poll, $ann, [
+                new Mark($options['Ada'], rank: 1),
+                new Mark($options['Grace'], rank: 1),
+            ]);
+            $this->fail('duplicate ranks should be refused');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('distinct rank', $e->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/1\.\.N/');
+        $this->service->respond($poll, $ann, [
+            new Mark($options['Ada'], rank: 1),
+            new Mark($options['Grace'], rank: 5),
+        ]);
+    }
+
+    public function test_a_poll_requiring_a_full_ranking_refuses_a_partial_one(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election([
+            'shape' => PollResponseShape::RankedChoice,
+            'tally_method' => TallyMethod::InstantRunoff,
+            'require_full_ranking' => true,
+        ]));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/every option to be ranked/');
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'], rank: 1)]);
+    }
+
+    public function test_a_rating_response_stores_the_scale_point_and_tallies_its_value(): void
+    {
+        $scale = PollRatingScale::create(['name' => '5-point agreement']);
+        $points = [];
+
+        foreach ([['Strongly Disagree', 1], ['Neutral', 3], ['Strongly Agree', 5]] as $position => [$label, $value]) {
+            $points[$value] = PollRatingScalePoint::create([
+                'poll_rating_scale_id' => $scale->id,
+                'label' => $label,
+                'value' => $value,
+                'position' => $position,
+            ])->id;
+        }
+
+        $ann = $this->member('Ann');
+        $bob = $this->member('Bob');
+
+        $poll = $this->service->publish($this->service->createPoll($this->group, $this->organiser, [
+            'title' => 'Rate the proposals',
+            'prompt' => 'Score each',
+            'shape' => PollResponseShape::Rating,
+            'tally_method' => TallyMethod::AverageScore,
+            'options' => ['Road', 'Water'],
+            'rating_scale_id' => $scale->id,
+        ]));
+
+        $options = $this->optionIds($poll);
+
+        $this->service->respond($poll, $ann, [
+            Mark::scoredWithPoint($options['Road'], $points[5]),
+            Mark::scoredWithPoint($options['Water'], $points[1]),
+        ]);
+        $this->service->respond($poll->fresh(), $bob, [
+            Mark::scoredWithPoint($options['Road'], $points[3]),
+            Mark::scoredWithPoint($options['Water'], $points[1]),
+        ]);
+
+        // The POINT is stored; its VALUE is what gets averaged.
+        // Road (5+3)/2 = 4 · Water (1+1)/2 = 1
+        $result = $this->service->tally($poll->fresh());
+        $this->assertSame(4.0, $result->totals[$options['Road']]);
+        $this->assertSame(1.0, $result->totals[$options['Water']]);
+        $this->assertSame($options['Road'], $result->winnerOptionId);
+    }
+
+    public function test_a_rating_response_must_score_every_option_with_a_point_from_its_own_scale(): void
+    {
+        $scale = PollRatingScale::create(['name' => 'Two point']);
+        $point = PollRatingScalePoint::create([
+            'poll_rating_scale_id' => $scale->id, 'label' => 'Yes', 'value' => 1, 'position' => 0,
+        ]);
+
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->service->createPoll($this->group, $this->organiser, [
+            'title' => 'Rate', 'prompt' => 'Score each',
+            'shape' => PollResponseShape::Rating, 'tally_method' => TallyMethod::AverageScore,
+            'options' => ['Road', 'Water'], 'rating_scale_id' => $scale->id,
+        ]));
+        $options = $this->optionIds($poll);
+
+        try {
+            $this->service->respond($poll, $ann, [Mark::scoredWithPoint($options['Road'], $point->id)]);
+            $this->fail('a partial scoring should be refused');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('score every option', $e->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->service->respond($poll, $ann, [
+            Mark::scoredWithPoint($options['Road'], 999999),
+            Mark::scoredWithPoint($options['Water'], 999998),
+        ]);
+    }
+
+    // ---------------------------------------------------------- amendment
+
+    public function test_a_poll_with_responses_can_no_longer_be_amended_or_unpublished(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+
+        try {
+            $this->service->updatePoll($poll->fresh(), ['title' => 'Renamed']);
+            $this->fail('amending a poll with responses should be refused');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('can no longer be amended', $e->getMessage());
+        }
+
+        $this->expectException(RuntimeException::class);
+        $this->service->unpublish($poll->fresh());
+    }
+
+    public function test_an_untouched_published_poll_may_return_to_draft_and_loses_its_electorate(): void
+    {
+        $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->assertSame(2, $poll->electorateCount());
+
+        $poll = $this->service->unpublish($poll);
+
+        $this->assertTrue($poll->isDraft());
+        $this->assertSame(0, $poll->electorateCount(), 'a fresh snapshot is taken on the next publish');
+    }
+
+    // ------------------------------------------------------ ending & result
+
+    public function test_concluding_stamps_the_closing_time_and_freezes_the_result(): void
+    {
+        $ann = $this->member('Ann');
+        $bob = $this->member('Bob');
+        $poll = $this->service->publish($this->election());
+        $options = $this->optionIds($poll);
+
+        $this->service->respond($poll, $ann, [new Mark($options['Grace'])]);
+        $this->service->respond($poll->fresh(), $bob, [new Mark($options['Grace'])]);
+
+        $this->assertFalse($poll->fresh()->hasResult(), 'nothing is frozen while the poll is open');
+
+        $poll = $this->service->conclude($poll->fresh());
+
+        $this->assertSame(PollStatus::Concluded, $poll->status);
+        $this->assertNotNull($poll->closes_at, 'ending must stamp the clock so the two never disagree');
+        $this->assertTrue($poll->hasResult());
+        $this->assertSame($options['Grace'], $poll->result['winner_option_id']);
+        $this->assertSame($poll->result['turnout'], array_sum($poll->result['totals']));
+    }
+
+    public function test_freezing_a_result_is_idempotent_and_never_rewrites_the_decision(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+
+        $poll = $this->service->conclude($poll->fresh());
+        $frozenAt = (string) $poll->result_frozen_at;
+
+        $this->service->freezeResult($poll->fresh());
+
+        $this->assertSame($frozenAt, (string) $poll->fresh()->result_frozen_at);
+    }
+
+    public function test_a_poll_that_runs_out_of_time_can_be_frozen_on_read_without_a_scheduled_job(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+
+        $poll->update(['closes_at' => now()->subMinute()]);
+        $poll = $poll->fresh();
+
+        $this->assertTrue($poll->isClosed());
+        $this->assertSame(PollStatus::Published, $poll->status);
+
+        $poll = $this->service->freezeResult($poll);
+        $this->assertTrue($poll->hasResult());
+    }
+
+    public function test_cancelling_voids_the_poll_and_it_never_yields_a_result(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+
+        $poll = $this->service->cancel($poll->fresh());
+
+        $this->assertTrue($poll->isCancelled());
+        $this->assertNotNull($poll->closes_at);
+        $this->assertFalse($poll->hasResult());
+
+        // Even asked directly, a cancelled poll is never tallied into a Result.
+        $this->assertFalse($this->service->freezeResult($poll->fresh())->hasResult());
+
+        $this->expectException(RuntimeException::class);
+        $this->service->cancel($poll->fresh());
+    }
+
+    public function test_instant_runoff_through_the_service_eliminates_and_redistributes(): void
+    {
+        // Five electors: first preferences Ada 2, Grace 2, Bo 1. Nobody has a
+        // majority; Bo goes out alone and his ballot's next preference is
+        // Grace, giving Grace three of five in round two.
+        $ann = $this->member('Ann');
+        $bob = $this->member('Bob');
+        $cat = $this->member('Cat');
+        $dan = $this->member('Dan');
+
+        $poll = $this->service->publish($this->election([
+            'shape' => PollResponseShape::RankedChoice,
+            'tally_method' => TallyMethod::InstantRunoff,
+        ]));
+        $o = $this->optionIds($poll);
+
+        $rank = fn (array $order): array => array_map(
+            fn (int $optionId, int $index): Mark => new Mark($optionId, rank: $index + 1),
+            $order,
+            array_keys($order),
+        );
+
+        $this->service->respond($poll, $this->organiser, $rank([$o['Ada'], $o['Grace'], $o['Bo']]));
+        $this->service->respond($poll->fresh(), $ann, $rank([$o['Ada'], $o['Grace'], $o['Bo']]));
+        $this->service->respond($poll->fresh(), $bob, $rank([$o['Grace'], $o['Bo'], $o['Ada']]));
+        $this->service->respond($poll->fresh(), $cat, $rank([$o['Grace'], $o['Bo'], $o['Ada']]));
+        $this->service->respond($poll->fresh(), $dan, $rank([$o['Bo'], $o['Grace'], $o['Ada']]));
+
+        $result = $this->service->tally($poll->fresh());
+
+        $this->assertSame($o['Grace'], $result->winnerOptionId);
+        $this->assertSame(2, $result->rounds);
+        $this->assertSame([$o['Ada'] => 2, $o['Grace'] => 2, $o['Bo'] => 1], $result->totals);
+    }
+}
