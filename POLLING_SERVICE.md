@@ -363,6 +363,9 @@ action ever needs to know that a poll was an election.
   or a completion action that grants a role to a winner.
 - A publicly viewable LIVE poll. Only a closed poll's Result may be published
   outside its circle.
+- Notifications of any kind — see below. Nothing currently tells an eligible
+  member that a poll has opened, is about to close, has a result, or was
+  cancelled.
 
 **Majority runoff tally method (two-round system) is also Explicitly deferred:**
 
@@ -380,3 +383,65 @@ That's a genuinely different shape from "run an algorithm over `poll_response_it
 
 **Borda count tally method is also Explicitly deferred:**
 
+**Notifications are Explicitly deferred — and need more thought than the other
+items here.**
+
+Today a poll is only discovered by visiting its circle. That is the single
+biggest practical threat to turnout, and turnout is what makes a result
+legitimate, so this is deferred as unresolved rather than unwanted.
+
+The four events plausibly worth announcing, in descending order of obligation:
+
+- **Cancelled.** The strongest case, and the least obvious. Someone who cast a
+  vote in good faith is entitled to know it will never be counted. Silence here
+  is the one failure with an ethical edge rather than merely a practical one.
+- **Opened.** A poll nobody hears about is a poll nobody answers.
+- **Closing soon.** The conventional turnout nudge.
+- **Result available.** Closes the loop for people who took part.
+
+The recipient list is the easy part: the Electorate is already a materialised
+table, so "who should hear about this poll" is a ready-made query rather than
+something to derive. Everything else is open.
+
+**Open questions, none of which should be answered by writing code first:**
+
+- **Consent.** There is no notification preference anywhere on `users`, and no
+  opt-out. Emailing every member of a circle because someone published a poll
+  is a decision about unsolicited mail, not a feature toggle — and for a South
+  African civic platform, POPIA makes it a decision worth taking deliberately.
+- **Volume.** A provincial or national LocationCommunity circle has thousands of
+  members, so publishing one poll fans out thousands of messages. That needs
+  queueing (`EmailServiceHandler::queueTemplate` exists), batching and rate
+  limiting. Membership caps compound it: a user may sit in four location circles
+  plus others, so poll traffic multiplies per person.
+- **A reminder needs a scheduled job, and closing deliberately does not.**
+  ADR-0001 keeps the clock authoritative precisely so that no cron is required
+  to close a poll. A "closing soon" reminder reintroduces one. That is
+  acceptable — it would schedule OUTBOUND MESSAGES, never poll STATE — but the
+  distinction must be held, or someone will helpfully make the same job flip a
+  status while it is there.
+- **Idempotency.** A reminder must not fire twice for the same poll. That needs
+  a record of what was sent: `polls.settings`, a notifications table, or the
+  `metadata.email_log` pattern the `requests` table already uses.
+- **Do not target non-respondents.** A "you have not voted yet" notice is
+  technically easy — the Electorate minus the Respondents — but Q3c hides the
+  roster's NAMES while a poll is open, specifically so it cannot be read as a
+  list of who has yet to comply. An automated message to that set is arguably
+  fine, since no human sees the list; an organiser-facing "remind those who
+  haven't voted" button is NOT, because it hands them exactly the list the
+  design withholds. If reminders are built, they go to the whole Electorate.
+- **Freezing interacts with the result notice.** A Result freezes on first read
+  after close. If a "result available" message links to the poll, the first
+  recipient to click triggers the freeze. Harmless — freezing is idempotent —
+  but a notification job should probably freeze it before sending, so the figure
+  in the message and the figure on the page cannot be produced by two different
+  runs.
+- **Channel.** Email templates and `EmailServiceHandler` exist and are the
+  obvious first channel. In-app notifications do not — `NotificationsService` is
+  still a skeleton — so an in-app poll feed is a separate build, not a variant
+  of this one.
+
+A reasonable smallest first step, if one is wanted before the above is settled:
+notify on **cancelled** only, to the people who actually responded. Small
+audience, no scheduling, no consent ambiguity (they acted first), and it
+discharges the one obligation that is genuinely uncomfortable to leave undone.

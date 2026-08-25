@@ -52,6 +52,13 @@ methods, Surveys (multi-question instances, free text, branching), completion
 actions, secret ballots, a publicly-viewable live Poll, and a stored `kind`
 on Poll (Q15 - add it only when something depends on it).
 
+Deferred as UNRESOLVED rather than unwanted: notifications. Nothing announces
+that a poll opened, closes soon, has a result, or was cancelled - which is the
+biggest practical threat to turnout. POLLING_SERVICE.md records the four
+candidate events and the open questions (consent, volume, the reminder job vs
+ADR-0001's no-cron rule, idempotency, not targeting non-respondents, and the
+freeze-before-send interaction). Needs a decision pass before any code.
+
 ## Doc drift
 
 None. `POLLING_SERVICE.md` was reconciled against every decision above.
