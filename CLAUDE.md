@@ -27,7 +27,7 @@ Platform 2027. Read this before touching any file.
 - Filament v5 (filament/filament ^5.6) — admin panel at /admin
 - Spatie Laravel Permission (teams mode, team_foreign_key = circle_id)
 - Spatie Laravel Translatable (circles.description, content_blocks.content,
-  email_templates.subject/body)
+  email_templates.subject/body, services.name)
 - wire-elements/modal
 
 ---
@@ -201,6 +201,16 @@ Services are rows in the `services` table (`key`, `handler_class`,
 `container_component`) with a `CircleServiceContract` handler under
 `App\Services\Circles\`. Registered/seeded by `ServicesSeeder` (9 services;
 `container_component` is read off each handler, the single source of truth).
+
+**`services.name` is TRANSLATABLE** (spatie/laravel-translatable; the `Service`
+model declares `$translatable = ['name']`), so it stores
+`{"en": "...", "pt_BR": "..."}` — not a plain string. Assigning a plain string
+through the model sets the CURRENT locale's value and leaves the others intact,
+which is why `ServicesSeeder` can pass `'name' => 'Polls'` safely. Writing it
+with the QUERY BUILDER would overwrite the whole JSON and destroy every other
+translation. `key` is the stable handle and never changes; the label may.
+(Renaming a label therefore leaves the other locales stale until updated —
+`voting` is `{"en": "Polls", "pt_BR": "Votações"}` today.)
 
 - **CircleServiceContract::containerComponent(): ?string** — FQCN of the
   Livewire component that renders the service's UI, or null (no UI). Handlers
@@ -1321,6 +1331,10 @@ On failure: silent.
   lang array key) instead. See AddCommunityModal::howToKey()
 - Treating email_templates.subject/body as plain strings — translatable
   JSON; send via EmailServiceHandler (never build/send mail ad hoc)
+- Treating services.name as a plain string — it is translatable JSON too
+  (easy to miss: the service KEY is a plain string right beside it). Never
+  write it with the query builder; a plain-string assignment through the
+  model sets only the current locale and preserves the rest
 - Promoting $subject in TemplateMailable — fatal (inherited untyped
   Mailable::$subject); assign it in the constructor body instead
 - Using RefreshDatabase in tests — migrations fail on sqlite (see Testing)
