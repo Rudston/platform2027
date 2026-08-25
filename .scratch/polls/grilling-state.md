@@ -1,6 +1,6 @@
-# Polls — grilling session state
+# Polls — session state
 
-Updated 2026-08-25. Resume by reading this file, `CONTEXT.md`,
+Updated 2026-08-25 (end of build). Resume by reading this file, `CONTEXT.md`,
 the ADRs in `docs/adr/`, and `POLLING_SERVICE.md`.
 
 Method: `/mattpocock-skills:grill-with-docs`. Terms resolve into `CONTEXT.md`
@@ -65,9 +65,44 @@ None. `POLLING_SERVICE.md` was reconciled against every decision above.
 Terminology is governed by `CONTEXT.md`; ADRs 0001-0003 carry the three
 decisions whose reasoning is invisible in the code.
 
-## Next step
+## Where the work stands
 
-Turn `POLLING_SERVICE.md` into a build prompt. Nothing is implemented — there
-are no migrations, models or Livewire components for polls yet; the `voting`
-service is still the placeholder skeleton (`VotingService` +
-`VotingServiceContainer`).
+The design tree is closed and the service is BUILT: migrations, enums, models,
+a pure tally, the VotingService handler, the UI, and 60 tests across the three
+seams. Full suite green (230 tests). Migrations and the rating-scale seeder
+have been run against the dev database.
+
+Commits, oldest first:
+  8377782  glossary + ADRs 0001-0002
+  40f448a  reconcile POLLING_SERVICE.md
+  dd9c198  finish the domain model (+ ADR-0003)
+  3d54349  the spec
+  1d1ee1b  build the Polls service
+  7ff84a1  document translatable services.name
+  ab85b05  seed the rating scales
+  f0f81fa  tag picker on polls
+  933c7a3  community page tag row refresh
+  179e7ca  edit an unanswered poll
+  70bbca2  notifications recorded as deferred-unresolved
+
+## Outstanding — one ticket each in ./issues/
+
+| # | Ticket | Status |
+|---|--------|--------|
+| 01 | Document the Polls service in CLAUDE.md | ready-for-agent |
+| 02 | Decide the notification model | needs-triage |
+| 03 | Portuguese label for the Polls service | ready-for-human |
+| 04 | A result only freezes when someone visits the poll | needs-triage |
+| 05 | No way to reorder poll groups | ready-for-agent |
+
+Suggested order: **01 first** — it is what stops the settled decisions being
+unpicked by a session that has not seen this one. Then **02**, which is a
+decision pass rather than a build and is the largest remaining gap in the
+product. 03/04/05 are small and independent.
+
+## Not outstanding — deferred by decision
+
+Majority-runoff and Borda tally methods, Surveys (multi-question, free text,
+branching), completion actions, secret ballots, a publicly-viewable live Poll,
+and a stored `kind` on Poll. Each is recorded with its reasoning in
+POLLING_SERVICE.md; none needs revisiting unless something new depends on it.
