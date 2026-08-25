@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -117,6 +118,17 @@ class CommunityPage extends Component
     public function canManageTags(): bool
     {
         return $this->circle->canBeTaggedBy(auth()->user());
+    }
+
+    /**
+     * Refresh the read-only tag row when the nested TagPicker attaches or
+     * detaches one. Without this the row above the picker keeps showing the
+     * tags as they were until the page is reloaded.
+     */
+    #[On('tags-changed')]
+    public function onTagsChanged(): void
+    {
+        unset($this->tags);
     }
 
     /** The viewer's active membership of this circle (null for guests/non-members). */

@@ -268,6 +268,41 @@ class ThemeTaggingTest extends TestCase
         $this->assertFalse($page->canManageTags());
     }
 
+    public function test_the_community_page_listens_for_tag_changes_so_its_row_does_not_go_stale(): void
+    {
+        // The row above the picker is a memoised computed, so without this
+        // listener it keeps showing the tags as they were until a reload.
+        // Asserted structurally rather than by rendering the page: a full
+        // CommunityPage render pulls in the service-tab machinery, which has
+        // nothing to do with tagging.
+        $method = new \ReflectionMethod(\App\Livewire\Communities\CommunityPage::class, 'onTagsChanged');
+        $events = array_map(
+            fn (\ReflectionAttribute $a): string => $a->newInstance()->event,
+            $method->getAttributes(\Livewire\Attributes\On::class),
+        );
+
+        $this->assertContains('tags-changed', $events);
+    }
+
+    public function test_the_picker_announces_every_attach_and_detach(): void
+    {
+        $circle = $this->makeCircle();
+        $admin = User::factory()->create();
+        $this->grantGlobalRole($admin, 'admin');
+        $this->actingAs($admin->fresh());
+
+        $theme = Theme::create(['name' => 'Water']);
+
+        Livewire::test(TagPicker::class, [
+            'taggableType' => Circle::class,
+            'taggableId' => $circle->id,
+        ])
+            ->call('attach', $theme->id)
+            ->assertDispatched('tags-changed')
+            ->call('detach', $theme->id)
+            ->assertDispatched('tags-changed');
+    }
+
     public function test_reject_records_note_and_does_not_create_theme(): void
     {
         $suggestion = ThemeSuggestion::create(['name' => 'Spam Tag', 'requested_by' => User::factory()->create()->id]);
