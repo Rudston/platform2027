@@ -88,3 +88,40 @@ Instead:
 
 Stop for review once this is working and the "typing survives a poll"
 check above has actually been verified, not just assumed.
+
+**Majority runoff (two-round system):**
+
+**Round 1** — same ballot shape as plurality: everyone picks one option.
+- If a candidate gets **more than 50%** of valid votes, they win outright — no second round needed.
+- If **nobody** clears 50% (common with 3+ candidates splitting the vote), a **runoff round** is triggered — typically just between the top two finishers from round 1. Everyone votes again, this time choosing only between those two. Whoever gets more votes in round 2 wins (a two-candidate race always produces a majority, barring an exact tie).
+
+Worth flagging clearly: this is **not** the same kind of "tally method" as the other three. Plurality, instant-runoff, Borda, and average-score are all pure computations over responses that already exist — you tally once and you're done. Majority runoff, if no one clears 50% in round 1, requires:
+
+- Determining a reduced candidate set (usually top 2, though some rulesets use a different threshold/count).
+- Creating a **second poll_instance** — a new voting window, re-notifying eligible voters, waiting for new responses.
+- Some policy for what happens if round 2 is *also* a tie.
+
+That's a genuinely different shape from "run an algorithm over `poll_response_items`" — it needs a way to say "this instance is a runoff triggered by that instance" (e.g. a nullable `runoff_of_poll_instance_id` self-reference on `poll_instances`), plus the operational logic to spin one up automatically or prompt an admin to.
+
+Given the "initial simplified spec" framing from earlier — is majority-runoff actually in scope for v1, or should it be moved to the "explicitly deferred" list alongside Surveys/branching-logic/completion-actions, and revisited once the core plurality/instant-runoff/rating cases are working? I'd lean toward deferring it — it's the one tally method that turns "count the votes" into "administer a multi-round process," which is a meaningfully bigger feature than the others.
+
+nstant-runoff (IRV) — yes, this is the standard algorithm people mean when they say "ranked-choice voting":
+
+Count everyone's 1st-choice votes.
+If someone has more than 50%, they win.
+If not, eliminate the candidate with the fewest 1st-choice votes, and redistribute their ballots to whoever those voters ranked next (their 2nd choice, or 3rd if 2nd was also eliminated, etc.).
+Repeat — recount, eliminate the new last-place candidate, redistribute — until someone crosses 50%.
+
+Unlike majority-runoff, this is a single round of voting — everyone submits their full ranking once, and the elimination/redistribution happens computationally over that one dataset. No second poll_instance, no re-notifying voters. This fits cleanly as a pure "algorithm over existing responses" tally method, same shape as plurality — worth keeping in v1, exactly as originally planned.
+
+Borda count is a different family entirely — it's a points-based system, not an elimination system:
+
+Each voter's ranking assigns points to every candidate: with 4 candidates, 1st choice = 3 points, 2nd = 2, 3rd = 1, 4th = 0 (i.e., n − rank for n candidates).
+Sum each candidate's points across all voters.
+Highest total wins.
+
+It uses the exact same ballot data as instant-runoff (a full ranking per voter) — so structurally it costs nothing extra in the schema, it's genuinely just a different TallyMethod case computing a sum instead of running elimination rounds. That's actually a point in favor of including it later without any schema change.
+
+That said, I'd defer it too, for a different reason than majority-runoff: it's not operationally heavier, it's just not what anyone asked for. Borda count has a well-known weakness — it can be gamed by voters ranking a strong rival last to drag down their score (strategic ranking), which is part of why IRV is far more common in real civic elections. Unless there's a specific reason to offer it, I'd leave it out of v1 and only add it if a genuine use case shows up — same "don't build what nothing currently needs" instinct as branching survey logic.
+
+So: IRV stays in the core spec exactly as planned; Borda is a candidate for the deferred list, not because it's hard, but because there's no real requirement pulling for it yet.
