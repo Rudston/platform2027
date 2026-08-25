@@ -5,6 +5,7 @@ namespace App\Livewire\Tags;
 use App\Models\Circles\Circle;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
+use App\Models\Polls\Poll;
 use App\Models\Theme;
 use App\Models\ThemeSuggestion;
 use Illuminate\Database\Eloquent\Collection;
@@ -14,7 +15,7 @@ use Livewire\Component;
 
 /**
  * Reusable tag picker for a taggable entity (Circle / ForumGroup /
- * ForumDiscussion). Attach/detach mirror the entity's manage rights
+ * ForumDiscussion / Poll). Attach/detach mirror the entity's manage rights
  * (canBeTaggedBy); "suggest a tag" is open to any authenticated user and only
  * creates a pending ThemeSuggestion (attaches nothing).
  */
@@ -34,11 +35,16 @@ class TagPicker extends Component
 
     public string $suggestDescription = '';
 
-    /** Only these models are taggable. */
+    /**
+     * Only these models are taggable. The allowlist is a real gate, not
+     * documentation: mount() aborts on anything else, so applying HasTags to a
+     * new model is not enough to reach this picker — add it here too.
+     */
     private const ALLOWED = [
         Circle::class,
         ForumGroup::class,
         ForumDiscussion::class,
+        Poll::class,
     ];
 
     public function mount(string $taggableType, int $taggableId): void
@@ -98,6 +104,10 @@ class TagPicker extends Component
         $taggable->tags()->syncWithoutDetaching([$themeId]);
         $this->search = '';
         unset($this->tags, $this->matches);
+
+        // Let a host page refresh its own read-only tag row. Harmless where
+        // nothing listens (the community page does not, yet).
+        $this->dispatch('tags-changed');
     }
 
     public function detach(int $themeId): void
@@ -107,6 +117,8 @@ class TagPicker extends Component
 
         $taggable->tags()->detach($themeId);
         unset($this->tags, $this->matches);
+
+        $this->dispatch('tags-changed');
     }
 
     /** Any authenticated user may suggest a tag (regardless of manage rights). */

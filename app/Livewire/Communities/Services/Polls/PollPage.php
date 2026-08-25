@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use RuntimeException;
 
@@ -94,6 +95,19 @@ class PollPage extends Component
     public function canManage(): bool
     {
         return $this->poll->isManageableBy(auth()->user());
+    }
+
+    /** Tags on this poll — what it is ABOUT, comparable across circles. */
+    #[Computed]
+    public function tags()
+    {
+        return $this->poll->tags()->orderBy('name')->get();
+    }
+
+    #[Computed]
+    public function canManageTags(): bool
+    {
+        return $this->poll->canBeTaggedBy(auth()->user());
     }
 
     #[Computed]
@@ -269,6 +283,12 @@ class PollPage extends Component
                 $this->scores[(int) $item->poll_option_id] = (int) $item->rating_scale_point_id;
             }
         }
+    }
+
+    #[On('tags-changed')]
+    public function onTagsChanged(): void
+    {
+        unset($this->tags);
     }
 
     private function forgetState(): void

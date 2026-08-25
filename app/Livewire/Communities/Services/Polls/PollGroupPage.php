@@ -67,7 +67,7 @@ class PollGroupPage extends Component
     public function polls(): Collection
     {
         return $this->group->polls()
-            ->with('organiser')
+            ->with(['organiser', 'tags'])
             ->withCount('electorate')
             ->orderByDesc('created_at')
             ->get()

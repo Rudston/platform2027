@@ -12,10 +12,13 @@ use App\Models\Polls\PollGroup;
 use App\Models\Polls\PollOption;
 use App\Models\Polls\PollQuestion;
 use App\Models\Polls\PollResponse;
+use App\Models\Theme;
 use App\Models\User;
+use App\Livewire\Tags\TagPicker;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Livewire;
 use LogicException;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -59,6 +62,16 @@ class PollModelsTest extends TestCase
         });
 
         (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
+
+        // Polls are taggable, so the theme vocabulary and its pivot must exist.
+        Schema::create('themes', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('slug')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->timestamps();
+        });
+        (include database_path('migrations/2026_07_17_000001_create_taggables_table.php'))->up();
 
         foreach (glob(database_path('migrations/2026_08_25_*.php')) as $migration) {
             (include $migration)->up();
@@ -427,6 +440,50 @@ class PollModelsTest extends TestCase
             'result' => ['winner_option_id' => 1],
         ]);
         $this->assertFalse($cancelled->resultIsPublic());
+    }
+
+    // ------------------------------------------------------------- tagging
+
+    public function test_a_poll_is_taggable_and_tagging_follows_the_circle_gate(): void
+    {
+        $admin = $this->user('Admin');
+        $member = $this->user('Member');
+        $this->joinCircle($admin);
+        $this->joinCircle($member);
+        $this->grantCircleAdmin($admin);
+
+        $poll = $this->makePoll();
+
+        $this->assertTrue($poll->canBeTaggedBy($admin));
+        $this->assertFalse($poll->canBeTaggedBy($member));
+        $this->assertFalse($poll->canBeTaggedBy(null));
+
+        $theme = Theme::create(['name' => 'Water', 'slug' => 'water']);
+        $poll->tags()->attach($theme->id);
+
+        $this->assertSame(['Water'], $poll->fresh()->tags->pluck('name')->all());
+
+        // The inverse: a theme knows which polls carry it, the same way it
+        // knows its circles and forum groups.
+        $this->assertTrue($theme->polls->contains($poll));
+    }
+
+    public function test_the_tag_picker_only_accepts_models_on_its_allowlist(): void
+    {
+        // The allowlist is a gate, not documentation — applying HasTags to a
+        // model is not enough to reach the picker.
+        $poll = $this->makePoll();
+
+        $component = Livewire::test(TagPicker::class, [
+            'taggableType' => Poll::class,
+            'taggableId' => $poll->id,
+        ]);
+        $component->assertOk();
+
+        Livewire::test(TagPicker::class, [
+            'taggableType' => User::class,
+            'taggableId' => 1,
+        ])->assertNotFound();
     }
 
     public function test_the_response_shape_decides_which_tally_methods_are_legal(): void

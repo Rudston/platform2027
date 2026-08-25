@@ -6,6 +6,7 @@ use App\Models\Circles\Circle;
 use App\Models\Communities\ThemeCommunity;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
+use App\Models\Polls\Poll;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -76,5 +77,10 @@ class Theme extends Model
     public function forumDiscussions(): MorphToMany
     {
         return $this->morphedByMany(ForumDiscussion::class, 'taggable', 'taggables');
+    }
+
+    public function polls(): MorphToMany
+    {
+        return $this->morphedByMany(Poll::class, 'taggable', 'taggables');
     }
 }

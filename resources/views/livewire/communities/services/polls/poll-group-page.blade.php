@@ -59,6 +59,12 @@
                     </span>
                 </div>
 
+                @if ($poll->tags->isNotEmpty())
+                    <div class="mt-2">
+                        <x-tag-list :tags="$poll->tags" />
+                    </div>
+                @endif
+
                 <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
                     {{-- Turnout: the denominator is fixed at publish, so it never
                          moves once the poll is live (docs/adr/0002). A draft has

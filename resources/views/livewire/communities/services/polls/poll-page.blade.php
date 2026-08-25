@@ -25,6 +25,30 @@
             @if ($poll->description)
                 <p class="mt-2 text-sm text-muted">{{ $poll->description }}</p>
             @endif
+
+            {{-- Tags: what this poll is ABOUT, drawn from the platform-wide
+                 theme vocabulary so "Water" means the same in every circle.
+                 Read-only row; managers get an "Edit tags" toggle. --}}
+            <div x-data="{ editingTags: false }" class="mt-3">
+                @if ($this->tags->isNotEmpty() || $this->canManageTags)
+                    <div class="flex flex-wrap items-center gap-2">
+                        <x-tag-list :tags="$this->tags" />
+                        @if ($this->canManageTags)
+                            <button type="button" x-on:click="editingTags = !editingTags"
+                                    class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"><x-icons.edit class="h-3.5 w-3.5" />{{ __('tags.edit') }}</button>
+                        @endif
+                    </div>
+                @endif
+
+                @if ($this->canManageTags)
+                    <div x-show="editingTags" x-cloak class="mt-2">
+                        <livewire:tags.tag-picker
+                            :taggable-type="\App\Models\Polls\Poll::class"
+                            :taggable-id="$poll->id"
+                            :key="'poll-tags-'.$poll->id" />
+                    </div>
+                @endif
+            </div>
         </div>
         <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs {{ $stateStyles[$state] }}">
             {{ __('polls.state.'.$state) }}
