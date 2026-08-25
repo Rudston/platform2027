@@ -30,54 +30,37 @@ as they settle; decisions that are hard to reverse become ADRs.
 | Q10 | Display name **"Polls"**. `services.key = 'voting'` unchanged (stable handle). |
 | Q12 | Eligibility = snapshot at a **Qualifying Date** (defaults to publish, may be earlier, never later), materialised into a `poll_electorate` table at publish. Casting requires being in the Electorate AND still a member — tested at vote time, never at tally time. |
 | Q4a | Settled by consequence of Q12: **Electorate** = the entitled set, so **Respondent** keeps its has-responded meaning. |
+| Q3b | Attribution hides *what* you chose, never *that* you responded. The **Roster** stays visible. |
+| Q5a | **Result** is computed while Open and frozen at Close; Tally is the verb. Recomputation checks a Result, never replaces it. |
+| Q3c | Roster: live COUNT while Open, NAMES only after Close — verification without a live list of holdouts. |
+| Q5c | A frozen Result holds per-option totals, turnout and the winner. Not IRV elimination rounds (recomputation reproduces them). |
+| Q7 | Rating Scales are **platform vocabulary**, admin-curated and seeded. Circles pick, never mint. |
+| Q11 | **Results-only publishing**: a Poll is member-only while it runs; a flag publishes the Result once it Closes. |
+| Q14 | Polls get BOTH tags (`HasTags`, existing Theme vocabulary) and a `poll_groups` container. Tag = what it is about, travels across Circles; Group = which local effort it belongs to. |
+| Q14a | A Poll Group is organisational only — no visibility, no status, never gates its Polls. |
+| Q14b | Group membership is REQUIRED: every Poll belongs to exactly one Group. |
+| Q14c | Groups are archived, never deleted; archiving leaves the Polls listed. |
+| Q14d | No default/"General" Group. The Poll form picks or creates one inline. |
+| Q15 | **No stored `kind`.** Election stays a description, not data; add the enum only if something real depends on it. Q1 holds. |
 
 ## Open questions
 
-Each has my recommendation. They are answerable in any order except where noted.
+None. The frontier is empty: every branch of the design tree was visited.
 
-**Q3b — Does hiding attribution cover *that* you responded, or only *what* you chose?**
-(a) one flag hides both · (b) roster of who responded always visible, only the
-choice hidden · (c) two independent flags.
-➡️ (b) — an open roster is what lets a member verify a result without learning
-anyone's choice. Load-bearing after Q3a: with no role able to inspect choices,
-this is one of only two audit paths members have.
+Deferred by decision (not open questions): majority-runoff and Borda tally
+methods, Surveys (multi-question instances, free text, branching), completion
+actions, secret ballots, a publicly-viewable live Poll, and a stored `kind`
+on Poll (Q15 - add it only when something depends on it).
 
-**Q5a — Is a Result frozen or recomputed forever?**
-No noun and no table for the output today, so results are implicitly computed
-on read forever — meaning a closed election has no fixed answer.
-(a) always computed · (b) computed while open, frozen at close · (c) store
-every IRV round too.
-➡️ (b), and the noun is **Result** (Tally is the verb). Other audit path after
-Q3a.
+## Doc drift
 
-**Q7 — Is a Rating Scale platform or circle vocabulary?**
-`poll_rating_scales` has no `circle_id`, so scales are global — but nothing
-says who may create one.
-(a) platform vocabulary, admin-curated · (b) circle-owned (`circle_id`) ·
-(c) global and freely creatable.
-➡️ (a) — matches how Themes are handled, and cross-circle comparison only means
-anything if "Strongly Agree" is the same row. `theme_suggestions` is the proven
-pattern if circles need to propose scales.
+None. `POLLING_SERVICE.md` was reconciled against every decision above.
+Terminology is governed by `CONTEXT.md`; ADRs 0001-0003 carry the three
+decisions whose reasoning is invisible in the code.
 
-**Q11 — Is there a "who can see it" axis?**
-Polls have only eligibility (who may respond) and no public state at all, so a
-public consultation or a published outcome is currently impossible.
-(a) one axis, private · (b) two axes mirroring forums · (c) results-only
-publishing.
-➡️ (c) — the valuable half is publishing outcomes, and Q3a makes that
-privacy-free since nothing is attributed.
+## Next step
 
-## Doc drift to fix in POLLING_SERVICE.md
-
-- Column still `anonymous` -> rename (Q3).
-- Comments on `allow_response_update` and `poll_responses` still say
-  "participant" -> **Respondent** (Q4).
-- Status still `draft | open | closed` -> `draft . published . concluded .
-  cancelled` + `archived_at` (Q6, ADR-0001).
-- `allowedTallyMethods()` still returns MajorityRunoff and Borda, contradicting
-  the deferred section. Should be [Plurality] / [InstantRunoff] / [AverageScore].
-- Heading reads "Borda count tally method (two-round system)" - Borda is
-  single-round. Only majority runoff is two-round.
-- `organiser_id` still present in the schema block -> remove (Q13).
-- Tables/enums still named `poll_instances`, `type`, `text` -> `polls`,
-  Response Shape, Prompt (Q8, Q9).
+Turn `POLLING_SERVICE.md` into a build prompt. Nothing is implemented — there
+are no migrations, models or Livewire components for polls yet; the `voting`
+service is still the placeholder skeleton (`VotingService` +
+`VotingServiceContainer`).

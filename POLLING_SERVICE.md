@@ -27,9 +27,29 @@ not a schema-level one.
 ## Schema
 
 ```
+poll_groups
+  id
+  circle_id            FK -> circles.id, cascade
+  name                  string   -- e.g. "2027 Budget Consultation"
+  slug                  string, nullable
+  description           text, nullable
+  position              int      -- display order within the circle
+  archived_at           timestamp, nullable
+  created_by            FK -> users.id, nullOnDelete
+  timestamps
+  -- UNIQUE (circle_id, slug) — slugs are per-circle, as for forum_groups.
+  -- ORGANISATIONAL ONLY: no visibility, no status. A group never gates the
+  -- polls inside it; access is answered by the poll. Never hard-deleted —
+  -- archiving leaves its polls listed and findable, because a concluded
+  -- poll is a record of a community decision. No default "General" group
+  -- is ever created: the poll form names one inline.
+
 polls
   id
   circle_id            FK -> circles.id, cascade
+  poll_group_id        FK -> poll_groups.id, restrictOnDelete
+                        -- REQUIRED: every poll belongs to exactly one
+                        -- group. See ADR-0003.
   title                string
   description          text, nullable
   eligibility           string   -- 'private' | 'internal'
@@ -53,6 +73,20 @@ polls
                         -- organiser, platform admins, superadmins — the
                         -- sole exception being a user viewing their own
                         -- response. NOT a secret ballot; see CONTEXT.md.
+  publish_results        bool, default false
+                        -- once CLOSED, may the Result be seen from outside
+                        -- the circle? The poll itself is never visible
+                        -- externally while it runs. Costs no privacy:
+                        -- nothing in a Result is attributed.
+  result                 json, nullable
+                        -- the frozen Result: per-option totals, turnout,
+                        -- and the winning option. Written once when the
+                        -- poll Closes. Small and always read whole, so a
+                        -- column rather than a table — unlike the
+                        -- electorate, nothing joins to it.
+                        -- NOT stored: detail a recomputation reproduces
+                        -- exactly, e.g. an IRV elimination sequence.
+  result_frozen_at       timestamp, nullable
   opens_at              timestamp, nullable
   closes_at             timestamp, nullable
   status                string   -- draft | published | concluded
@@ -118,6 +152,11 @@ poll_rating_scales
   id
   name                  string   -- e.g. "5-point agreement scale"
   timestamps
+  -- PLATFORM vocabulary, deliberately without a circle_id: curated
+  -- centrally and shared by every circle, so "Strongly Agree" means the
+  -- same thing in two circles' results. Circle admins PICK a scale, never
+  -- mint one. Seeded: 5-point agreement, 1-5 stars, 1-10. If circles need
+  -- to propose their own, copy the theme_suggestions pattern.
 
 poll_rating_scale_points
   id
@@ -269,6 +308,49 @@ requirement — extending eligibility to all members of every location circle
 from a given locatable downward in the hierarchy — is a change in one place,
 not a schema change or a scattered rewrite.
 
+## Results, the roster and what a member can verify
+
+Attribution is withheld from everyone — see `hide_voter_identities` above — so
+the platform owes members another way to trust a Result. Three things provide
+it, and they only work together:
+
+- **The Roster** (derived from `poll_responses`, not a table) is the list of
+  electorate members who have responded. Withholding attribution hides *what*
+  someone chose, never *that* they responded. While the poll is Open only its
+  LENGTH is published, as a live count; the NAMES appear once it Closes — so
+  the roster can never be read as a list of who has yet to comply.
+- **The Result** freezes at Close into `polls.result`: per-option totals,
+  turnout, winner. Recomputing from `poll_response_items` later CHECKS a
+  Result; it never replaces one.
+- **The Electorate** was fixed at publish, so the denominator cannot move.
+
+Together: a member who can see no individual vote can still open a concluded
+election and confirm "47 of 62 responded", find their own name on the roster,
+and add the per-option totals up to 47. A Cancelled poll has no Result and is
+never tallied.
+
+## Organising polls: groups and tags
+
+Two mechanisms, deliberately distinct, and easy to collapse into each other by
+mistake:
+
+- **Tags** — apply the existing `HasTags` trait (the `taggables` polymorphic
+  pivot over `themes`, already used by Circle, ForumGroup, ForumDiscussion).
+  No new table. A tag says what a poll is ABOUT and means the same thing
+  platform-wide, so "Water" is comparable across circles. A poll may carry
+  several, and they render through the existing `<x-tag-list>` component.
+- **Poll groups** — a circle's own named sets. A group says which LOCAL EFFORT
+  a poll belongs to and never leaves its circle.
+
+Rule of thumb: reach for a tag first; a group earns its place only when the
+set itself needs a name and a page.
+
+Note there is deliberately NO stored `kind` on a poll: "election" and
+"proposition" are descriptions people use, not data the platform holds, so
+elections cannot be counted platform-wide. A circle may name a group
+"Elections" — that is one circle's convention. Revisit this if a completion
+action ever needs to know that a poll was an election.
+
 ## Explicitly deferred (not part of this spec)
 
 - Free-text question type and multi-question instances (Surveys).
@@ -276,6 +358,11 @@ not a schema change or a scattered rewrite.
 - Any concrete "completion action" behavior — only the reserved
   `settings` json column exists for now.
 - Extending eligibility beyond the two states above.
+- A stored `kind` on polls (election / proposition / rating). Add it only when
+  something real depends on it — an elections section, a platform-wide count,
+  or a completion action that grants a role to a winner.
+- A publicly viewable LIVE poll. Only a closed poll's Result may be published
+  outside its circle.
 
 **Majority runoff tally method (two-round system) is also Explicitly deferred:**
 
