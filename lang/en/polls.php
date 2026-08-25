@@ -81,6 +81,7 @@ return [
         'qualifying_date' => 'Membership cut-off',
         'qualifying_help' => 'Only members who joined on or before this date may respond. Defaults to the moment you publish; set it earlier so joining after the poll was announced confers no vote.',
         'save' => 'Save Poll',
+        'amendable_note' => 'This poll has no responses yet, so it can still be changed. Once someone answers, the ballot is fixed.',
     ],
 
     'shape' => [
@@ -141,12 +142,14 @@ return [
         'archive' => 'Archive Group',
         'restore' => 'Restore Group',
         // Poll lifecycle actions
+        'edit_poll' => 'Edit poll',
         'publish' => 'Publish',
         'publish_confirm' => 'Publish this poll? Its electorate is fixed at this moment and cannot be changed afterwards.',
         'conclude' => 'End now',
         'conclude_confirm' => 'End this poll now? It will be counted and the result frozen.',
         'cancel_poll' => 'Cancel poll',
         'cancel_confirm' => 'Cancel this poll? Its responses will never be counted and it will have no result.',
+        'not_amendable' => 'Someone has responded, so the ballot can no longer be changed. Cancel this poll and publish a replacement instead.',
     ],
 
     'group' => [

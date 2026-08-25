@@ -110,6 +110,17 @@ class PollPage extends Component
         return $this->poll->canBeTaggedBy(auth()->user());
     }
 
+    /**
+     * May the ballot still be changed? A poll is editable until its FIRST
+     * response — publishing is not the point of no return. Mirrors exactly
+     * what VotingService::updatePoll enforces.
+     */
+    #[Computed]
+    public function canAmend(): bool
+    {
+        return $this->canManage && $this->poll->isAmendable() && ! $this->poll->isCancelled();
+    }
+
     #[Computed]
     public function canEnd(): bool
     {
@@ -285,6 +296,15 @@ class PollPage extends Component
         }
     }
 
+    /** Re-read the poll after the edit modal saves. */
+    #[On('polls-changed')]
+    public function onPollChanged(): void
+    {
+        $this->poll = $this->poll->fresh();
+        $this->forgetState();
+        unset($this->question, $this->options, $this->scalePoints, $this->optionLabels);
+    }
+
     #[On('tags-changed')]
     public function onTagsChanged(): void
     {
@@ -294,7 +314,8 @@ class PollPage extends Component
     private function forgetState(): void
     {
         unset($this->canRespond, $this->hasResponded, $this->blockedReason,
-            $this->respondentCount, $this->result, $this->canEnd, $this->canManage);
+            $this->respondentCount, $this->result, $this->canEnd, $this->canManage,
+            $this->canAmend);
     }
 
     private function resolveBackUrl(mixed $from): string

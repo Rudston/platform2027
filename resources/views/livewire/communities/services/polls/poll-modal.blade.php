@@ -3,7 +3,14 @@
     use App\Enums\Polls\PollResponseShape;
 @endphp
 <div class="p-10">
-    <h2 class="text-lg font-semibold text-main">{{ __('polls.poll.create_title') }}</h2>
+    <h2 class="text-lg font-semibold text-main">
+        {{ $pollId === null ? __('polls.poll.create_title') : __('polls.poll.edit_title') }}
+    </h2>
+
+    @if ($pollId !== null)
+        {{-- A poll stays editable until its FIRST response, published or not. --}}
+        <p class="mt-1 text-xs text-muted">{{ __('polls.poll.amendable_note') }}</p>
+    @endif
 
     <form wire:submit="save" class="mt-6 space-y-6">
         {{-- Basics --}}

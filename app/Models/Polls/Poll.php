@@ -179,6 +179,21 @@ class Poll extends Model
         };
     }
 
+    /**
+     * May this poll still be edited? Only while nobody has answered it:
+     * changing the ballot afterwards would record people as having voted on
+     * something they never saw.
+     *
+     * True for a Draft AND for a published poll nobody has responded to yet —
+     * publishing is not the point of no return, the first response is. The ONE
+     * definition of the rule; VotingService::guardAmendable enforces it on
+     * write and the UI gates the edit affordance on it.
+     */
+    public function isAmendable(): bool
+    {
+        return $this->respondentCount() === 0;
+    }
+
     public function isCancelled(): bool
     {
         return $this->status === PollStatus::Cancelled;

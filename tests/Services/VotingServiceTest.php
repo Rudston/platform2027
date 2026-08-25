@@ -436,6 +436,68 @@ class VotingServiceTest extends TestCase
         $this->service->unpublish($poll->fresh());
     }
 
+    public function test_a_poll_stays_amendable_until_its_first_response_published_or_not(): void
+    {
+        // Publishing is NOT the point of no return — the first response is.
+        $poll = $this->election();
+        $this->assertTrue($poll->isAmendable(), 'a draft is amendable');
+
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($poll);
+        $this->assertTrue($poll->isAmendable(), 'a published poll nobody has answered is still amendable');
+
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+        $this->assertFalse($poll->fresh()->isAmendable());
+    }
+
+    public function test_amending_rewrites_the_prompt_options_and_settings(): void
+    {
+        $poll = $this->service->publish($this->election());
+
+        $poll = $this->service->updatePoll($poll, [
+            'title' => 'Choose two stewards',
+            'prompt' => 'Rank them:',
+            'shape' => PollResponseShape::RankedChoice,
+            'tally_method' => TallyMethod::InstantRunoff,
+            'options' => ['Ada', 'Bo'],
+            'allow_response_update' => true,
+        ]);
+
+        $this->assertSame('Choose two stewards', $poll->title);
+        $this->assertTrue($poll->allow_response_update);
+        $this->assertSame('Rank them:', $poll->question->text);
+        $this->assertSame(PollResponseShape::RankedChoice, $poll->question->type);
+        $this->assertSame(['Ada', 'Bo'], $poll->question->options()->pluck('label')->all());
+    }
+
+    public function test_amending_cannot_leave_an_illegal_shape_tally_or_scale_combination(): void
+    {
+        $poll = $this->service->publish($this->election());
+
+        try {
+            $this->service->updatePoll($poll, ['tally_method' => TallyMethod::AverageScore]);
+            $this->fail('an illegal pairing should be refused on amendment too');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('not legal', $e->getMessage());
+        }
+
+        // createPoll has always guarded this; updatePoll must too, or an
+        // amendment can strand a rating poll with no scale.
+        try {
+            $this->service->updatePoll($poll->fresh(), [
+                'shape' => PollResponseShape::Rating,
+                'tally_method' => TallyMethod::AverageScore,
+            ]);
+            $this->fail('a rating poll with no scale should be refused');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('needs a rating scale', $e->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Only a rating poll/');
+        $this->service->updatePoll($poll->fresh(), ['rating_scale_id' => 1]);
+    }
+
     public function test_an_untouched_published_poll_may_return_to_draft_and_loses_its_electorate(): void
     {
         $this->member('Ann');

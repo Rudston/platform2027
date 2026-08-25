@@ -200,6 +200,17 @@ class VotingService implements CircleServiceContract
             $this->guardPairing($shape, $method);
         }
 
+        // createPoll guards this too; an amendment can just as easily leave a
+        // rating poll with no scale, or hang a scale off a single-choice one.
+        if ($shape !== null) {
+            $this->guardRatingScale(
+                $shape,
+                array_key_exists('rating_scale_id', $data)
+                    ? $data['rating_scale_id']
+                    : $question?->rating_scale_id,
+            );
+        }
+
         if (array_key_exists('options', $data)) {
             $this->guardOptions($data['options']);
         }
@@ -517,10 +528,14 @@ class VotingService implements CircleServiceContract
     |--------------------------------------------------------------------------
     */
 
-    /** A poll may be amended only while no one has answered it. */
+    /**
+     * A poll may be amended only while no one has answered it. The rule itself
+     * lives on Poll::isAmendable() so the UI gates on exactly what this
+     * enforces; this is the write-side guard, not a second definition.
+     */
     protected function guardAmendable(Poll $poll): void
     {
-        if ($poll->respondentCount() > 0) {
+        if (! $poll->isAmendable()) {
             throw new RuntimeException(
                 "Poll [{$poll->getKey()}] already has responses and can no longer be amended: changing "
                 .'the ballot would record people as having voted on something they never saw. Cancel it '

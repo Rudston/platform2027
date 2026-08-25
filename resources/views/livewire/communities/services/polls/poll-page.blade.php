@@ -70,6 +70,19 @@
          circle admin. A circle admin can end a poll they cannot read. --}}
     @if ($this->canManage || $this->canEnd)
         <div class="mt-4 flex flex-wrap gap-2">
+            {{-- Editable until the FIRST response, published or not. Once the
+                 ballot is fixed, say why rather than silently dropping the
+                 button. --}}
+            @if ($this->canAmend)
+                <button type="button"
+                        wire:click="$dispatch('openModal', { component: 'communities.services.polls.poll-modal', arguments: { groupId: {{ $group->id }}, pollId: {{ $poll->id }} } })"
+                        class="inline-flex items-center gap-1 rounded-lg border border-border-muted px-4 py-2 text-sm text-main hover:bg-border-muted">
+                    <x-icons.edit class="h-4 w-4" />{{ __('polls.actions.edit_poll') }}
+                </button>
+            @elseif ($this->canManage && ! $poll->isCancelled() && ! $poll->isDraft())
+                <p class="w-full text-xs text-muted">{{ __('polls.actions.not_amendable') }}</p>
+            @endif
+
             @if ($poll->isDraft() && $this->canManage)
                 <button type="button" wire:click="publish" wire:confirm="{{ __('polls.actions.publish_confirm') }}"
                         class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
@@ -224,4 +237,7 @@
             <p class="mt-2 text-sm text-main">{{ $poll->roster()->pluck('name')->implode(', ') }}</p>
         </div>
     @endif
+
+    {{-- Modal host for the edit dispatch above. --}}
+    <livewire:wire-elements-modal />
 </div>

@@ -5,24 +5,32 @@ namespace App\Livewire\Communities\Services\Polls;
 use App\Enums\Polls\PollEligibility;
 use App\Enums\Polls\PollResponseShape;
 use App\Enums\Polls\TallyMethod;
+use App\Models\Polls\Poll;
 use App\Models\Polls\PollGroup;
 use App\Models\Polls\PollRatingScale;
 use App\Services\Circles\VotingService;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use RuntimeException;
 use Livewire\Attributes\Computed;
 use LivewireUI\Modal\ModalComponent;
 
 /**
- * Compose a Poll as a Draft. Publishing is a separate, deliberate act on the
- * poll's own page — it fixes the Electorate and cannot be undone once anyone
- * responds, so it is not folded into "save".
+ * Compose a Poll as a Draft, or amend one that nobody has answered yet.
+ *
+ * Publishing is a separate, deliberate act on the poll's own page — it fixes
+ * the Electorate — so it is not folded into "save". Publishing is NOT the point
+ * of no return either: a published poll stays editable until its first
+ * response, which is what Poll::isAmendable() answers.
  *
  * Manage-gated in mount() AND save(); the Blade dispatch carries no pre-check.
  */
 class PollModal extends ModalComponent
 {
     public int $groupId;
+
+    /** Null when composing; set when amending an existing poll. */
+    public ?int $pollId = null;
 
     public string $title = '';
 
@@ -55,13 +63,61 @@ class PollModal extends ModalComponent
 
     public string $qualifyingDate = '';
 
-    public function mount(int $groupId): void
+    public function mount(int $groupId, ?int $pollId = null): void
     {
         $group = PollGroup::findOrFail($groupId);
 
         abort_unless($group->isManageableBy(auth()->user()), 403);
 
         $this->groupId = $groupId;
+        $this->pollId = $pollId;
+
+        if ($pollId !== null) {
+            $this->hydrateFrom($this->poll());
+        }
+    }
+
+    /** The poll being amended, re-fetched and re-gated on every use. */
+    protected function poll(): Poll
+    {
+        $poll = Poll::findOrFail($this->pollId);
+
+        abort_unless($poll->poll_group_id === $this->groupId, 404);
+        abort_unless($poll->isManageableBy(auth()->user()), 403);
+
+        // Defence in depth: the affordance is hidden once a poll has responses,
+        // but a stale tab could still dispatch this modal open.
+        abort_unless($poll->isAmendable(), 403);
+
+        return $poll;
+    }
+
+    private function hydrateFrom(Poll $poll): void
+    {
+        $question = $poll->question;
+
+        $this->title = $poll->title;
+        $this->description = (string) $poll->description;
+        $this->eligibility = $poll->eligibility->value;
+        $this->allowResponseUpdate = $poll->allow_response_update;
+        $this->hideVoterIdentities = $poll->hide_voter_identities;
+        $this->publishResults = $poll->publish_results;
+
+        // datetime-local wants exactly this shape; a stored null stays blank.
+        $this->opensAt = $poll->opens_at?->format('Y-m-d\TH:i') ?? '';
+        $this->closesAt = $poll->closes_at?->format('Y-m-d\TH:i') ?? '';
+        $this->qualifyingDate = $poll->qualifying_date?->format('Y-m-d\TH:i') ?? '';
+
+        if ($question === null) {
+            return;
+        }
+
+        $this->prompt = $question->text;
+        $this->shape = $question->type->value;
+        $this->tallyMethod = $question->tally_method->value;
+        $this->requireFullRanking = $question->require_full_ranking;
+        $this->ratingScaleId = $question->rating_scale_id;
+        $this->options = $question->options()->pluck('label')->all();
     }
 
     protected function service(): VotingService
@@ -152,25 +208,34 @@ class PollModal extends ModalComponent
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
+        $data = [
+            'title' => $this->title,
+            'description' => $this->description !== '' ? $this->description : null,
+            'prompt' => $this->prompt,
+            'shape' => PollResponseShape::from($this->shape),
+            'tally_method' => TallyMethod::from($this->tallyMethod),
+            'options' => $labels,
+            'eligibility' => PollEligibility::from($this->eligibility),
+            'require_full_ranking' => $this->requireFullRanking,
+            'rating_scale_id' => $this->ratingScaleId,
+            'allow_response_update' => $this->allowResponseUpdate,
+            'hide_voter_identities' => $this->hideVoterIdentities,
+            'publish_results' => $this->publishResults,
+            'opens_at' => $this->opensAt !== '' ? now()->parse($this->opensAt) : null,
+            'closes_at' => $this->closesAt !== '' ? now()->parse($this->closesAt) : null,
+            'qualifying_date' => $this->qualifyingDate !== '' ? now()->parse($this->qualifyingDate) : null,
+        ];
+
         try {
-            $this->service()->createPoll($group, $user, [
-                'title' => $this->title,
-                'description' => $this->description !== '' ? $this->description : null,
-                'prompt' => $this->prompt,
-                'shape' => PollResponseShape::from($this->shape),
-                'tally_method' => TallyMethod::from($this->tallyMethod),
-                'options' => $labels,
-                'eligibility' => PollEligibility::from($this->eligibility),
-                'require_full_ranking' => $this->requireFullRanking,
-                'rating_scale_id' => $this->ratingScaleId,
-                'allow_response_update' => $this->allowResponseUpdate,
-                'hide_voter_identities' => $this->hideVoterIdentities,
-                'publish_results' => $this->publishResults,
-                'opens_at' => $this->opensAt !== '' ? now()->parse($this->opensAt) : null,
-                'closes_at' => $this->closesAt !== '' ? now()->parse($this->closesAt) : null,
-                'qualifying_date' => $this->qualifyingDate !== '' ? now()->parse($this->qualifyingDate) : null,
-            ]);
-        } catch (InvalidArgumentException $e) {
+            if ($this->pollId === null) {
+                $this->service()->createPoll($group, $user, $data);
+            } else {
+                // guardAmendable inside updatePoll re-checks isAmendable(), so a
+                // response landing between opening this modal and saving it is
+                // refused rather than quietly rewriting the ballot underneath.
+                $this->service()->updatePoll($this->poll(), $data);
+            }
+        } catch (InvalidArgumentException|RuntimeException $e) {
             // The service is the authority on legal combinations; surface its
             // refusal rather than duplicating the rule here.
             $this->addError('title', $e->getMessage());
