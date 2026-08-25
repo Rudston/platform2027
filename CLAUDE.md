@@ -1348,3 +1348,23 @@ On failure: silent.
   and remember only Ai-sourced unresolved records quarantine, never User-sourced
 - Adding a stored `pending`/moderation boolean on `comments` — that state is
   derived from `comment_moderation_records` (`Comment::pendingAiReview()`)
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown files under `.scratch/<feature-slug>/`.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, unchanged (`needs-triage`, `needs-info`,
+`ready-for-agent`, `ready-for-human`, `wontfix`).
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root.
+See `docs/agents/domain.md`.
