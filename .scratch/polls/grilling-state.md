@@ -1,6 +1,6 @@
 # Polls — session state
 
-Updated 2026-08-25 (end of build). Resume by reading this file, `CONTEXT.md`,
+Updated 2026-08-26 (end of the manual-testing pass). Resume by reading this file, `CONTEXT.md`,
 the ADRs in `docs/adr/`, and `POLLING_SERVICE.md`.
 
 Method: `/mattpocock-skills:grill-with-docs`. Terms resolve into `CONTEXT.md`
@@ -96,11 +96,38 @@ Commits, oldest first:
 | 05 | No way to reorder poll groups | **resolved** |
 | 06 | Polls has no Portuguese translation | ready-for-human (placeholder in place) |
 
-01 and 03 are done. 02 turned out to be BLOCKED, not merely undecided: it
-waits on a platform messaging service that is planned but undefined, which will
-own channels and user preferences. Polls must not grow their own delivery path
-in the meantime. 01, 03, 04 and 05 are done. Only 02 (blocked on the messaging service) and
-06 (needs a Portuguese speaker) remain — neither is actionable here.
+Only 02 and 06 remain, and neither is code work: 02 waits on the messaging
+service, 06 wants a Portuguese speaker.
+
+## Found and fixed during manual testing (2026-08-26)
+
+Each was reported from real use rather than caught by a test, which is worth
+remembering when judging where the coverage is thin:
+
+- Times read in the wrong zone. The app is UTC; a datetime-local field carries
+  a wall clock. Added `App\Support\DisplayTime` and `app.display_timezone`, and
+  applied `Carbon::inDisplayZone()` platform-wide — Polls exposed it, but five
+  Blade renders and two emails were wrong too.
+- Cancel did nothing on any poll modal (Alpine `$dispatch` instead of the
+  wire-elements component method).
+- Stale Tailwind bundle from 8 July: much of the Polls UI was unstyled, which
+  looked like layout bugs. Vite dev now running.
+- The Polls tab was lost on the way back from a poll; the same break existed in
+  Forums and was fixed there too.
+- A mistyped window (closes before opens) froze an empty Result that then
+  outlived the poll. Fixed at four levels — validation, propagation, display,
+  and a self-healing sweep.
+
+Also built in this pass, from testing feedback: Borda count (a real election
+produced the requirement the deferral said did not exist), star widgets for the
+1–5 stars scale, the timing panel, and averages rounded for display.
+
+## Next up
+
+`POLLING_SERVICE.md` ends with a "Next items here" section: majority runoff,
+notifications, and choosing election candidates from members via a searchable
+dropdown. The third is new and carries the most design weight — it is the
+prerequisite for the deferred completion action that grants a role to a winner.
 
 ## Not outstanding — deferred by decision
 

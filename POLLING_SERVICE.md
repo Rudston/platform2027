@@ -490,3 +490,46 @@ When the messaging service exists, a reasonable first step: notify on
 **cancelled** only, to the people who actually responded. Small audience, no
 scheduling, least consent ambiguity (they acted first), and it discharges the
 one obligation that is genuinely uncomfortable to leave undone.
+
+---
+
+## Next items here
+
+- **Majority runoff tally method (two-round system).** Still deferred, and
+  still the odd one out: it is not a Tally Method at all, because it cannot be
+  computed over the responses a poll already holds. If nobody clears 50% it
+  needs a reduced candidate set, a SECOND poll with its own window and
+  re-notified voters, a link back to the first (a nullable
+  `runoff_of_poll_id`), and a policy for a tie in round two. See the deferred
+  section above for the full note.
+
+- **Notifications (once messaging is available).** Blocked on the platform-wide
+  messaging service, which will own channels and per-user preferences. What
+  stays poll-specific is already written down above: cancelled is the
+  obligation, no organiser-facing "remind those who haven't voted", a reminder
+  job may send messages but never write poll STATE, and a result notice should
+  freeze the Result before sending.
+
+- **Candidates chosen from members, via a searchable dropdown.** Today a
+  `poll_options.label` is free text, which is right for a proposition but wrong
+  for an election: an organiser retypes a name that already exists, nothing
+  links the option to the person, and two spellings of the same member are two
+  candidates.
+
+  What it implies, worth deciding before building:
+  - a nullable `user_id` on `poll_options` — nullable because propositions and
+    rating options are not people, so the column is the exception rather than
+    the rule;
+  - the label stays. It is what appeared on the ballot, and a frozen Result
+    must remain readable after someone changes their display name or leaves;
+  - the picker's candidate list is a membership question, and the obvious
+    source is the poll's own Electorate — but note the two are not the same
+    thing, since a poll may legitimately elect someone who cannot vote in it;
+  - what happens when a candidate leaves the Circle mid-poll. Existing rules
+    say a member who leaves keeps a vote already cast; a CANDIDATE who leaves
+    is a different question and has no answer yet;
+  - this is the prerequisite for the deferred **completion action** that grants
+    `circle_admin` to a winner. That cannot be built while a winner is a
+    string. It is also the strongest case yet for revisiting Q15 (no stored
+    `kind` on a poll), since such an action has to know the poll was an
+    election.
