@@ -1,6 +1,7 @@
 # Polls has no Portuguese translation
 
 Status: ready-for-human
+Progress: placeholder in place; needs a Portuguese speaker
 Type: task
 
 ## Why
@@ -43,3 +44,31 @@ Settled in CONTEXT.md and issue 03; do not re-decide them in translation:
 
 `lang/pt/polls.php` exists and a Portuguese speaker has read it against the
 constraints above.
+
+## Progress
+
+`lang/pt/polls.php` now exists as a placeholder — a faithful copy of the English
+file, 124 keys, marked `// TODO: translate to Portuguese` in the manner of the
+other seven `pt` files. The terminology constraints above are repeated in its
+header so a translator meets them in the file they are editing rather than
+having to find this ticket.
+
+**No `lang/pt_BR/polls.php`, deliberately.** That layer holds Brazilian
+OVERRIDES only — every key currently in it is genuinely translated (13 of
+communities' 63, 4 of explore's 24). A placeholder there would be English
+strings that permanently outrank the `pt` layer, so a later Portuguese
+translation of `pt/polls.php` would silently never appear. Add a `pt_BR` file
+only for strings where Brazilian genuinely differs from the shared base.
+
+## Still to do
+
+Translate the 124 values in `lang/pt/polls.php`. Nothing is blocked meanwhile:
+the chain resolves pt_BR → pt → en and the placeholder holds English, so the UI
+works exactly as before.
+
+## Known caveat, inherited not introduced
+
+A placeholder copy can serve STALE English: if `en/polls.php` wording is later
+revised, `pt/polls.php` keeps the old wording and wins for pt_BR users. This is
+already true of the seven existing `pt` files and is a property of the
+convention, not of Polls.
