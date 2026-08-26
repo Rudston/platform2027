@@ -11,6 +11,8 @@ use App\Livewire\Communities\Services\Polls\PollPage;
 use App\Services\Circles\VotingService;
 use App\Models\Circles\Circle;
 use App\Models\Polls\PollGroup;
+use App\Models\Polls\PollRatingScale;
+use App\Models\Polls\PollRatingScalePoint;
 use App\Models\User;
 use App\Models\Polls\Poll;
 use Illuminate\Database\Schema\Blueprint;
@@ -290,6 +292,91 @@ class PollModalTest extends TestCase
         ])->assertDontSee(__('polls.timing.qualifying'));
 
         Carbon::setTestNow();
+    }
+
+    public function test_a_rating_poll_renders_its_scale_and_records_a_response(): void
+    {
+        $scale = PollRatingScale::create(['name' => '5-point agreement']);
+        $points = [];
+
+        foreach ([['Strongly disagree', 1], ['Neutral', 3], ['Strongly agree', 5]] as $position => [$label, $value]) {
+            $points[$value] = PollRatingScalePoint::create([
+                'poll_rating_scale_id' => $scale->id,
+                'label' => $label, 'value' => $value, 'position' => $position,
+            ])->id;
+        }
+
+        $group = $this->group('Alpha');
+        $admin = $this->admin();
+        $this->actingAs($admin);
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('shape', PollResponseShape::Rating->value)
+            ->set('ratingScaleId', $scale->id)
+            ->set('title', 'Rate the proposals')
+            ->set('prompt', 'Score each one:')
+            ->set('options', ['Road repairs', 'Water pressure'])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $poll = Poll::query()->latest('id')->firstOrFail();
+        app(VotingService::class)->publish($poll);
+
+        // The admin must be in the electorate to answer their own poll.
+        DB::table('circle_memberships')->insert([
+            'circle_id' => $this->circle->id, 'user_id' => $admin->id,
+            'joined_at' => now()->subYear(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $poll->fresh()->electorate()->syncWithoutDetaching([$admin->id]);
+
+        $options = $poll->question->options()->pluck('id', 'label')->all();
+
+        $page = Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $poll->fresh(),
+        ]);
+
+        // Every scale point must be offered, or the ballot cannot be answered.
+        $page->assertSee('Strongly disagree')->assertSee('Neutral')->assertSee('Strongly agree')
+            ->assertSee('Road repairs')->assertSee('Water pressure');
+
+        // Scoring only one option is refused — a rating response must score all.
+        $page->set('scores', [$options['Road repairs'] => $points[5]])
+            ->call('submit')
+            ->assertHasErrors('response');
+
+        $page->set('scores', [
+            $options['Road repairs'] => $points[5],
+            $options['Water pressure'] => $points[1],
+        ])->call('submit')->assertHasNoErrors('response');
+
+        // The POINT is stored; its VALUE is what a tally averages.
+        $item = $poll->fresh()->question->responses()->firstOrFail()
+            ->items()->where('poll_option_id', $options['Road repairs'])->firstOrFail();
+
+        $this->assertSame($points[5], (int) $item->rating_scale_point_id);
+        $this->assertNull($item->rank);
+        $this->assertSame(5, $item->ratingScalePoint->value);
+
+        // Concluded: the result panel shows MEANS, and says so — points that do
+        // not add up to the turnout look like an error without the note.
+        app(VotingService::class)->conclude($poll->fresh());
+
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $poll->fresh(),
+        ])
+            ->assertSee(__('polls.result.average_note'))
+            ->assertSee('Road repairs')
+            ->assertSee(__('polls.result.winner'));
+
+        // Read through frozenResult(), which is what the page uses: the RAW
+        // column holds what json_encode produced, and 5.0 encodes as `5`.
+        // PollResult::fromArray casts by method, restoring the float.
+        $frozen = app(VotingService::class)->frozenResult($poll->fresh());
+
+        $this->assertSame(5.0, $frozen->totals[$options['Road repairs']]);
+        $this->assertSame(1.0, $frozen->totals[$options['Water pressure']]);
+        $this->assertSame($options['Road repairs'], $frozen->winnerOptionId);
+        $this->assertSame(TallyMethod::AverageScore, $frozen->method);
     }
 
     public function test_a_poll_with_no_closing_time_says_so_rather_than_showing_nothing(): void
