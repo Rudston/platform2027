@@ -143,6 +143,58 @@ class PollServiceContainer extends Component
         $this->forgetGroups();
     }
 
+    public function moveUp(int $groupId): void
+    {
+        $this->move($groupId, -1);
+    }
+
+    public function moveDown(int $groupId): void
+    {
+        $this->move($groupId, 1);
+    }
+
+    /**
+     * Swap a group with its neighbour AS DISPLAYED, then persist the whole
+     * circle's order. Using the displayed list matters: with the archive filter
+     * on, an active group's visible neighbour may not be its neighbour in the
+     * full set, and swapping against a hidden row would look like nothing
+     * happened.
+     */
+    private function move(int $groupId, int $delta): void
+    {
+        if (! $this->canManage) {
+            return;
+        }
+
+        $visible = $this->groups();
+        $index = $visible->search(fn (PollGroup $g): bool => $g->getKey() === $groupId);
+
+        if ($index === false) {
+            return;
+        }
+
+        $target = $index + $delta;
+
+        if ($target < 0 || $target >= $visible->count()) {
+            return;
+        }
+
+        // Flip the two in the circle's canonical order and hand the whole
+        // sequence to the service, which owns the write.
+        $ordered = $this->allGroups()->pluck('id')->all();
+        $a = array_search($groupId, $ordered, true);
+        $b = array_search($visible[$target]->getKey(), $ordered, true);
+
+        if ($a === false || $b === false) {
+            return;
+        }
+
+        [$ordered[$a], $ordered[$b]] = [$ordered[$b], $ordered[$a]];
+
+        $this->service()->reorderGroups($this->circle, $ordered);
+        $this->forgetGroups();
+    }
+
     #[On('poll-groups-changed')]
     public function onGroupsChanged(): void
     {

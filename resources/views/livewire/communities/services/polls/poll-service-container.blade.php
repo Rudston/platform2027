@@ -54,6 +54,24 @@
                     </a>
 
                     @if ($this->canManage)
+                        {{-- Reordering acts on the list AS DISPLAYED, so it is
+                             hidden while searching: the neighbours you would be
+                             swapping are not the ones you can see. --}}
+                        @if ($this->search === '')
+                            <div class="flex shrink-0 flex-col leading-none">
+                                <button type="button" wire:click="moveUp({{ $group->id }})"
+                                        @disabled($loop->first)
+                                        aria-label="{{ __('polls.actions.move_up') }}"
+                                        title="{{ __('polls.actions.move_up') }}"
+                                        class="px-1 text-xs text-muted hover:text-main disabled:opacity-30">▲</button>
+                                <button type="button" wire:click="moveDown({{ $group->id }})"
+                                        @disabled($loop->last)
+                                        aria-label="{{ __('polls.actions.move_down') }}"
+                                        title="{{ __('polls.actions.move_down') }}"
+                                        class="px-1 text-xs text-muted hover:text-main disabled:opacity-30">▼</button>
+                            </div>
+                        @endif
+
                         <div x-data="{ open: false }" class="relative shrink-0">
                             <button type="button" x-on:click="open = !open"
                                     class="rounded px-2 py-0.5 text-muted hover:text-main" aria-label="Actions">⋯</button>

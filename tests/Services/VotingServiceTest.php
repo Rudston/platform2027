@@ -138,6 +138,49 @@ class VotingServiceTest extends TestCase
         $this->assertFalse($this->group->fresh()->isArchived());
     }
 
+    public function test_reordering_rewrites_positions_as_a_clean_sequence(): void
+    {
+        // Every group starts at position 0, so a scheme that only swapped
+        // stored values would do nothing on the first move.
+        $second = $this->service->createGroup($this->circle, $this->organiser, ['name' => 'Roads']);
+        $third = $this->service->createGroup($this->circle, $this->organiser, ['name' => 'Water']);
+
+        $this->assertSame([0, 0, 0], [$this->group->position, $second->position, $third->position]);
+
+        $this->service->reorderGroups($this->circle, [$third->id, $this->group->id, $second->id]);
+
+        $this->assertSame([0, 1, 2], [
+            $third->fresh()->position,
+            $this->group->fresh()->position,
+            $second->fresh()->position,
+        ]);
+    }
+
+    public function test_reordering_ignores_foreign_ids_and_keeps_omitted_groups_at_the_end(): void
+    {
+        $second = $this->service->createGroup($this->circle, $this->organiser, ['name' => 'Roads']);
+        $third = $this->service->createGroup($this->circle, $this->organiser, ['name' => 'Water']);
+
+        // A group from another circle must not be reordered into this one, and
+        // omitting a group must not lose it.
+        $otherCircleId = DB::table('circles')->insertGetId([
+            'circleable_type' => CommunityType::LocationCommunity->value,
+            'name' => 'Ward 8', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $foreign = PollGroup::create(['circle_id' => $otherCircleId, 'name' => 'Elsewhere', 'position' => 7]);
+
+        $this->service->reorderGroups($this->circle, [$third->id, $foreign->id]);
+
+        $this->assertSame(0, $third->fresh()->position, 'the named group leads');
+        $this->assertSame(7, $foreign->fresh()->position, 'a foreign group is untouched');
+
+        // The two omitted groups keep their relative order after it.
+        $this->assertSame(
+            [$third->id, $this->group->id, $second->id],
+            $this->circle->pollGroups()->orderBy('position')->pluck('id')->all(),
+        );
+    }
+
     // -------------------------------------------------------- composition
 
     public function test_it_refuses_an_illegal_shape_and_tally_pairing(): void

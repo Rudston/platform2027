@@ -110,6 +110,41 @@ class VotingService implements CircleServiceContract
         return $group;
     }
 
+    /**
+     * Write a circle's group order, given every group id in the order wanted.
+     *
+     * Positions are rewritten as a clean 0..N sequence rather than nudged,
+     * because they all start at 0 — a scheme that only swapped values would do
+     * nothing until something else had already spread them out. Ids not
+     * belonging to this circle are ignored, and any group the caller omitted
+     * keeps its relative place at the end.
+     *
+     * @param  list<int>  $orderedIds
+     */
+    public function reorderGroups(Circle $circle, array $orderedIds): void
+    {
+        $existing = $circle->pollGroups()
+            ->orderBy('position')
+            ->orderBy('name')
+            ->pluck('id')
+            ->all();
+
+        $wanted = array_values(array_filter(
+            array_unique(array_map('intval', $orderedIds)),
+            fn (int $id): bool => in_array($id, $existing, true),
+        ));
+
+        // Anything the caller did not mention keeps its current relative order,
+        // appended after what they did.
+        $final = array_merge($wanted, array_values(array_diff($existing, $wanted)));
+
+        DB::transaction(function () use ($circle, $final): void {
+            foreach ($final as $position => $id) {
+                $circle->pollGroups()->whereKey($id)->update(['position' => $position]);
+            }
+        });
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Composing a poll

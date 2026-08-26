@@ -139,6 +139,8 @@ return [
         // Group actions
         'edit' => 'Edit',
         'polls' => 'Polls',
+        'move_up' => 'Move up',
+        'move_down' => 'Move down',
         'archive' => 'Archive Group',
         'restore' => 'Restore Group',
         // Poll lifecycle actions
