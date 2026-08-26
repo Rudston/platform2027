@@ -226,6 +226,49 @@ class VotingServiceTest extends TestCase
         $this->assertSame(0, $poll->electorateCount(), 'a draft has no electorate yet');
     }
 
+    public function test_a_poll_cannot_close_before_it_opens(): void
+    {
+        // The real cause of the stale-result report: a mistyped pair makes a
+        // poll Closed the moment it is published, which then freezes an empty
+        // Result. Refuse the pair rather than clean up after it.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/cannot close before it opens/');
+
+        $this->election([
+            'opens_at' => now()->addDay(),
+            'closes_at' => now()->addHour(),
+        ]);
+    }
+
+    public function test_an_amendment_is_checked_against_the_effective_window(): void
+    {
+        // Moving ONE end must be validated against the other as it already
+        // stands, not only against a pair supplied together.
+        $poll = $this->election([
+            'opens_at' => now()->addDay(),
+            'closes_at' => now()->addDays(2),
+        ]);
+
+        try {
+            $this->service->updatePoll($poll, ['closes_at' => now()->addHours(2)]);
+            $this->fail('pulling the close before the existing open should be refused');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('cannot close before it opens', $e->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->service->updatePoll($poll->fresh(), ['opens_at' => now()->addDays(3)]);
+    }
+
+    public function test_an_identical_opening_and_closing_time_is_refused(): void
+    {
+        // A zero-length window is never what anyone meant.
+        $at = now()->addDay();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->election(['opens_at' => $at, 'closes_at' => $at]);
+    }
+
     // --------------------------------------------------------- publishing
 
     public function test_publishing_snapshots_the_electorate_and_opens_the_poll(): void
@@ -657,6 +700,37 @@ class VotingServiceTest extends TestCase
         $this->assertFalse($draft->fresh()->hasResult(), 'a draft never gets one either');
     }
 
+    public function test_the_freeze_command_clears_a_stale_result_from_an_open_poll(): void
+    {
+        // Self-healing for rows written before updatePoll/unpublish learned to
+        // discard a stale Result. Left in place it would outlive the poll: the
+        // page shows the stale count while votes are cast, and it is still
+        // there when the poll closes, becoming the record of a vote it never saw.
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election(['closes_at' => now()->addDay()]));
+        $poll->electorate()->syncWithoutDetaching([$ann->id]);
+        $this->service->respond($poll->fresh(), $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+
+        // Plant the figure the bug produced.
+        $poll->fresh()->update([
+            'result' => ['method' => 'plurality', 'totals' => [], 'turnout' => 0,
+                'winner_option_id' => null, 'tied_option_ids' => [], 'rounds' => null],
+            'result_frozen_at' => now(),
+        ]);
+        $this->assertTrue($poll->fresh()->hasResult());
+
+        $this->artisan('polls:freeze-results')->assertSuccessful();
+
+        $this->assertFalse($poll->fresh()->hasResult(), 'an open poll must not hold a frozen Result');
+        $this->assertNull($poll->fresh()->result_frozen_at);
+
+        // And once it genuinely closes, it freezes the REAL count.
+        $poll->fresh()->update(['closes_at' => now()->subMinute()]);
+        $this->artisan('polls:freeze-results')->assertSuccessful();
+
+        $this->assertSame(1, $poll->fresh()->result['turnout']);
+    }
+
     public function test_the_freeze_command_never_rewrites_an_existing_result(): void
     {
         $ann = $this->member('Ann');
@@ -700,6 +774,47 @@ class VotingServiceTest extends TestCase
         $this->assertSame($before, $snapshot($after));
         $this->assertSame(PollStatus::Published, $after->status, 'still published — it merely ran out of time');
         $this->assertTrue($after->hasResult());
+    }
+
+    public function test_amending_a_poll_discards_a_result_frozen_while_it_was_closed(): void
+    {
+        // The reported bug. A poll whose closing time had already passed got an
+        // EMPTY Result frozen, was then edited back into life (allowed — no
+        // responses yet), and the stale zero outlived it: freezeResult never
+        // overwrites, so every later view showed "Nobody responded" while
+        // votes were being cast.
+        $poll = $this->service->publish($this->election(['closes_at' => now()->subMinute()]));
+
+        $this->assertTrue($poll->isClosed());
+        $poll = $this->service->freezeResult($poll);
+        $this->assertTrue($poll->hasResult());
+        $this->assertSame(0, $poll->result['turnout']);
+
+        $poll = $this->service->updatePoll($poll->fresh(), ['closes_at' => now()->addDay()]);
+
+        $this->assertTrue($poll->isOpen());
+        $this->assertFalse($poll->hasResult(), 'the stale Result must not survive the amendment');
+        $this->assertNull($poll->result_frozen_at);
+
+        // And it freezes correctly once it really does close.
+        $ann = $this->member('Ann');
+        $poll->electorate()->syncWithoutDetaching([$ann->id]);
+        $this->service->respond($poll->fresh(), $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+
+        $poll = $this->service->conclude($poll->fresh());
+        $this->assertSame(1, $poll->result['turnout']);
+    }
+
+    public function test_returning_a_poll_to_draft_discards_a_frozen_result(): void
+    {
+        $poll = $this->service->publish($this->election(['closes_at' => now()->subMinute()]));
+        $this->service->freezeResult($poll);
+
+        $poll = $this->service->unpublish($poll->fresh());
+
+        $this->assertTrue($poll->isDraft());
+        $this->assertFalse($poll->hasResult());
+        $this->assertNull($poll->result_frozen_at);
     }
 
     public function test_instant_runoff_through_the_service_eliminates_and_redistributes(): void

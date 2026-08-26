@@ -207,6 +207,17 @@ class PollModal extends ModalComponent
             return;
         }
 
+        $opensAt = DisplayTime::fromInput($this->opensAt);
+        $closesAt = DisplayTime::fromInput($this->closesAt);
+
+        // Checked here as well as in the service so the message lands ON the
+        // offending field rather than as a general form error.
+        if ($opensAt !== null && $closesAt !== null && $closesAt->lessThanOrEqualTo($opensAt)) {
+            $this->addError('closesAt', __('polls.poll.closes_before_opens'));
+
+            return;
+        }
+
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
@@ -226,8 +237,8 @@ class PollModal extends ModalComponent
             // A datetime-local field carries a WALL CLOCK with no zone. Read it
             // in the display timezone, not the app's — parsing "12:21" as UTC
             // when the organiser meant 12:21 SAST opened polls two hours late.
-            'opens_at' => DisplayTime::fromInput($this->opensAt),
-            'closes_at' => DisplayTime::fromInput($this->closesAt),
+            'opens_at' => $opensAt,
+            'closes_at' => $closesAt,
             'qualifying_date' => DisplayTime::fromInput($this->qualifyingDate),
         ];
 

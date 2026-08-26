@@ -181,6 +181,7 @@ class VotingService implements CircleServiceContract
         $this->guardPairing($shape, $method);
         $this->guardRatingScale($shape, $data['rating_scale_id'] ?? null);
         $this->guardOptions($data['options'] ?? []);
+        $this->guardWindow($data['opens_at'] ?? null, $data['closes_at'] ?? null);
 
         return DB::transaction(function () use ($group, $organiser, $data, $shape, $method): Poll {
             /** @var Poll $poll */
@@ -250,6 +251,13 @@ class VotingService implements CircleServiceContract
             $this->guardOptions($data['options']);
         }
 
+        // Against the EFFECTIVE window: an amendment may move either end, or
+        // only one of them.
+        $this->guardWindow(
+            array_key_exists('opens_at', $data) ? $data['opens_at'] : $poll->opens_at,
+            array_key_exists('closes_at', $data) ? $data['closes_at'] : $poll->closes_at,
+        );
+
         return DB::transaction(function () use ($poll, $question, $data, $shape, $method): Poll {
             // Only touch what the caller actually supplied — array_key_exists,
             // not ??, so `false` and an explicit null both come through.
@@ -266,9 +274,15 @@ class VotingService implements CircleServiceContract
                 $changes['eligibility'] = $data['eligibility']->value;
             }
 
-            if ($changes !== []) {
-                $poll->update($changes);
-            }
+            // A frozen Result describes a particular window and set of options.
+            // Amending either makes it describe a poll that no longer exists,
+            // and freezeResult() never overwrites — so a stale figure would win
+            // forever. Safe to discard: amendment requires zero responses, so
+            // no real decision is being thrown away.
+            $changes['result'] = null;
+            $changes['result_frozen_at'] = null;
+
+            $poll->update($changes);
 
             if ($question !== null) {
                 $question->update([
@@ -343,7 +357,14 @@ class VotingService implements CircleServiceContract
 
         return DB::transaction(function () use ($poll): Poll {
             $poll->electorate()->detach();
-            $poll->update(['status' => PollStatus::Draft->value]);
+
+            // Same reasoning as updatePoll: returning to Draft invalidates any
+            // Result frozen while the poll was briefly closed.
+            $poll->update([
+                'status' => PollStatus::Draft->value,
+                'result' => null,
+                'result_frozen_at' => null,
+            ]);
 
             return $poll->fresh();
         });
@@ -575,6 +596,24 @@ class VotingService implements CircleServiceContract
                 "Poll [{$poll->getKey()}] already has responses and can no longer be amended: changing "
                 .'the ballot would record people as having voted on something they never saw. Cancel it '
                 .'and publish a replacement instead.'
+            );
+        }
+    }
+
+    /**
+     * A poll must not close before it opens.
+     *
+     * Without this a mistyped pair produces a poll that is Closed the moment it
+     * is published — which then freezes an empty Result, and the poll looks
+     * broken in a way that has nothing to do with the times the organiser was
+     * actually looking at.
+     */
+    protected function guardWindow(?Carbon $opensAt, ?Carbon $closesAt): void
+    {
+        if ($opensAt !== null && $closesAt !== null && $closesAt->lessThanOrEqualTo($opensAt)) {
+            throw new InvalidArgumentException(
+                'A poll cannot close before it opens: '
+                ."closing {$closesAt->toDateTimeString()} is not after opening {$opensAt->toDateTimeString()}."
             );
         }
     }

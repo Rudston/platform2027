@@ -452,6 +452,67 @@ class PollModalTest extends TestCase
         $this->assertFalse($scale->fresh()->rendersAsStars());
     }
 
+    public function test_an_open_poll_shows_the_running_count_never_a_stale_frozen_result(): void
+    {
+        // Belt and braces for the reported bug: even if a stale Result somehow
+        // survives on an OPEN poll, the page must not present it as the
+        // outcome of a poll people are still voting in.
+        $group = $this->group('Alpha');
+        $admin = $this->admin();
+        $this->actingAs($admin);
+        DB::table('circle_memberships')->insert([
+            'circle_id' => $this->circle->id, 'user_id' => $admin->id,
+            'joined_at' => now()->subYear(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->call('save');
+
+        $poll = Poll::query()->latest('id')->firstOrFail();
+        $service = app(VotingService::class);
+        $service->publish($poll);
+        $poll = $poll->fresh();
+        $poll->electorate()->syncWithoutDetaching([$admin->id]);
+
+        $options = $poll->question->options()->pluck('id', 'label')->all();
+        $service->respond($poll->fresh(), $admin, [new \App\Support\Polls\Mark($options['Ada'])]);
+
+        // Forcibly plant the stale figure the bug produced.
+        $poll->fresh()->update([
+            'result' => ['method' => 'plurality', 'totals' => [], 'turnout' => 0,
+                'winner_option_id' => null, 'tied_option_ids' => [], 'rounds' => null],
+            'result_frozen_at' => now(),
+        ]);
+
+        $page = Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $poll->fresh(),
+        ]);
+
+        $this->assertSame(1, $page->instance()->result()->turnout, 'the live count, not the frozen zero');
+        $page->assertDontSee(__('polls.result.no_responses'));
+    }
+
+    public function test_the_form_rejects_a_closing_time_before_the_opening(): void
+    {
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->set('opensAt', '2026-09-01T10:00')
+            ->set('closesAt', '2026-08-31T10:00')
+            ->call('save')
+            // On the offending FIELD, not as a general form error on the title.
+            ->assertHasErrors('closesAt');
+
+        $this->assertSame(0, Poll::query()->count(), 'nothing should have been created');
+    }
+
     public function test_a_poll_with_no_closing_time_says_so_rather_than_showing_nothing(): void
     {
         $group = $this->group('Alpha');

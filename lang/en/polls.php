@@ -95,6 +95,7 @@ return [
         'qualifying_date' => 'Membership cut-off',
         'qualifying_help' => 'Only members who joined on or before this date may respond. Defaults to the moment you publish; set it earlier so joining after the poll was announced confers no vote.',
         'save' => 'Save Poll',
+        'closes_before_opens' => 'The closing time must be after the opening time.',
         'amendable_note' => 'This poll has no responses yet, so it can still be changed. Once someone answers, the ballot is fixed.',
     ],
 

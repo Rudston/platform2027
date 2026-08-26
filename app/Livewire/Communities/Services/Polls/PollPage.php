@@ -178,12 +178,16 @@ class PollPage extends Component
     #[Computed]
     public function result(): ?PollResult
     {
-        if ($this->poll->hasResult()) {
-            return $this->service()->frozenResult($this->poll);
+        // An OPEN poll's frozen Result can only be stale — frozen during an
+        // earlier close, before the poll was amended back into life. Prefer the
+        // running count, so a leftover figure can never masquerade as the
+        // outcome of a poll still being voted in.
+        if ($this->poll->isOpen()) {
+            return $this->canManage ? $this->service()->tally($this->poll) : null;
         }
 
-        if ($this->poll->isOpen() && $this->canManage) {
-            return $this->service()->tally($this->poll);
+        if ($this->poll->hasResult()) {
+            return $this->service()->frozenResult($this->poll);
         }
 
         return null;

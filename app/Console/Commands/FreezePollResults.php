@@ -39,6 +39,8 @@ class FreezePollResults extends Command
 
     public function handle(VotingService $service): int
     {
+        $cleared = $this->clearResultsOnOpenPolls();
+
         $frozen = 0;
         $skipped = 0;
 
@@ -67,8 +69,42 @@ class FreezePollResults extends Command
                 }
             });
 
-        $this->info("Froze {$frozen} poll result(s)".($skipped > 0 ? ", skipped {$skipped}." : '.'));
+        $this->info("Froze {$frozen} poll result(s)".($skipped > 0 ? ", skipped {$skipped}." : '.')
+            .($cleared > 0 ? " Cleared {$cleared} stale result(s) on open polls." : ''));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * A poll that is currently OPEN must not carry a frozen Result — the
+     * figure can only have been frozen during an earlier close, before the
+     * poll was amended back into life, and freezeResult() never overwrites.
+     * Left alone it would outlive the poll: every view would show the stale
+     * count while votes were being cast, and it would still be there when the
+     * poll finally closed, becoming the permanent record of a vote it never saw.
+     *
+     * The cause is fixed at source (updatePoll and unpublish both discard it),
+     * so this only heals rows written before that. Cheap: the WHERE matches
+     * nothing on a healthy database.
+     */
+    protected function clearResultsOnOpenPolls(): int
+    {
+        $cleared = 0;
+
+        Poll::query()
+            ->where('status', PollStatus::Published->value)
+            ->whereNotNull('result')
+            ->chunkById(100, function (Collection $polls) use (&$cleared): void {
+                foreach ($polls as $poll) {
+                    if (! $poll->isOpen()) {
+                        continue;
+                    }
+
+                    $poll->update(['result' => null, 'result_frozen_at' => null]);
+                    $cleared++;
+                }
+            });
+
+        return $cleared;
     }
 }
