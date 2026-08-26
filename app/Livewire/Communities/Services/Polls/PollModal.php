@@ -9,6 +9,7 @@ use App\Models\Polls\Poll;
 use App\Models\Polls\PollGroup;
 use App\Models\Polls\PollRatingScale;
 use App\Services\Circles\VotingService;
+use App\Support\DisplayTime;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use RuntimeException;
@@ -103,10 +104,11 @@ class PollModal extends ModalComponent
         $this->hideVoterIdentities = $poll->hide_voter_identities;
         $this->publishResults = $poll->publish_results;
 
-        // datetime-local wants exactly this shape; a stored null stays blank.
-        $this->opensAt = $poll->opens_at?->format('Y-m-d\TH:i') ?? '';
-        $this->closesAt = $poll->closes_at?->format('Y-m-d\TH:i') ?? '';
-        $this->qualifyingDate = $poll->qualifying_date?->format('Y-m-d\TH:i') ?? '';
+        // Rendered in the DISPLAY timezone, so reopening the form shows the
+        // wall clock the organiser typed rather than its UTC equivalent.
+        $this->opensAt = DisplayTime::toInput($poll->opens_at);
+        $this->closesAt = DisplayTime::toInput($poll->closes_at);
+        $this->qualifyingDate = DisplayTime::toInput($poll->qualifying_date);
 
         if ($question === null) {
             return;
@@ -221,9 +223,12 @@ class PollModal extends ModalComponent
             'allow_response_update' => $this->allowResponseUpdate,
             'hide_voter_identities' => $this->hideVoterIdentities,
             'publish_results' => $this->publishResults,
-            'opens_at' => $this->opensAt !== '' ? now()->parse($this->opensAt) : null,
-            'closes_at' => $this->closesAt !== '' ? now()->parse($this->closesAt) : null,
-            'qualifying_date' => $this->qualifyingDate !== '' ? now()->parse($this->qualifyingDate) : null,
+            // A datetime-local field carries a WALL CLOCK with no zone. Read it
+            // in the display timezone, not the app's — parsing "12:21" as UTC
+            // when the organiser meant 12:21 SAST opened polls two hours late.
+            'opens_at' => DisplayTime::fromInput($this->opensAt),
+            'closes_at' => DisplayTime::fromInput($this->closesAt),
+            'qualifying_date' => DisplayTime::fromInput($this->qualifyingDate),
         ];
 
         try {

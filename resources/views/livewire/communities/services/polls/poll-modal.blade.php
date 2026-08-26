@@ -157,7 +157,9 @@
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
-            <button type="button" x-on:click="$dispatch('closeModal')"
+            {{-- wire:click, NOT Alpine's $dispatch: wire-elements listens for the
+                     component method, and an Alpine DOM event never reaches it. --}}
+                <button type="button" wire:click="closeModal"
                     class="rounded-lg border border-border-muted px-4 py-2 text-sm text-main hover:bg-border-muted">
                 {{ __('ui.cancel') }}
             </button>

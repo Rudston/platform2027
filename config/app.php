@@ -69,6 +69,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Storage and application time stay UTC (above). This is the wall clock the
+    | INTERFACE speaks: the zone a user is assumed to mean when they type a date
+    | and time, and the zone absolute times are rendered back in.
+    |
+    | Read it through App\Support\DisplayTime rather than directly. When the
+    | platform serves a second country this is the line that changes — or the
+    | point at which a per-user preference replaces it.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Africa/Johannesburg'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
