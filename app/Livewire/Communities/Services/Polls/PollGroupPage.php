@@ -6,6 +6,7 @@ use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Polls\Poll;
 use App\Models\Polls\PollGroup;
+use App\Services\Circles\VotingService;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -99,7 +100,12 @@ class PollGroupPage extends Component
         return (int) ($this->respondentCounts()[$poll->getKey()] ?? 0);
     }
 
-    /** A poll's page, with a ?from= back-link to this group page. */
+    /**
+     * A poll's page, with a ?from= back-link to this group page — which itself
+     * carries OUR back-link, so the whole trail survives. Without the nesting,
+     * returning here from a poll arrives with no ?from= and the next "back"
+     * falls through to the community page's default tab.
+     */
     public function pollUrl(Poll $poll): string
     {
         return route('communities.polls.poll', [
@@ -109,6 +115,7 @@ class PollGroupPage extends Component
             'from' => route('communities.polls.show', [
                 'circle' => $this->circle,
                 'pollGroup' => $this->group->slug,
+                'from' => $this->backUrl,
             ], false),
         ]);
     }
@@ -119,13 +126,24 @@ class PollGroupPage extends Component
         unset($this->polls, $this->respondentCounts);
     }
 
+    /**
+     * Where "back" goes. An explicit ?from= wins, but only an internal
+     * /communities path (no open redirects).
+     *
+     * The FALLBACK carries ?service= so a visitor who arrived without a trail —
+     * a shared link, a bookmark — still lands on the Polls tab rather than
+     * whichever tab happens to be first.
+     */
     private function resolveBackUrl(mixed $from): string
     {
         if (is_string($from) && str_starts_with($from, '/communities')) {
             return $from;
         }
 
-        return route('communities.show', $this->circle);
+        return route('communities.show', [
+            'circle' => $this->circle,
+            'service' => app(VotingService::class)->getKey(),
+        ]);
     }
 
     public function render()

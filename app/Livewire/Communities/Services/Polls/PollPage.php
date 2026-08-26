@@ -331,7 +331,17 @@ class PollPage extends Component
             return $from;
         }
 
-        return route('communities.polls.show', ['circle' => $this->circle, 'pollGroup' => $this->group->slug]);
+        // Fallback for a poll reached without a trail: the group page, itself
+        // pointed back at the Polls tab so the next "back" does not land on
+        // the community page's default tab.
+        return route('communities.polls.show', [
+            'circle' => $this->circle,
+            'pollGroup' => $this->group->slug,
+            'from' => route('communities.show', [
+                'circle' => $this->circle,
+                'service' => $this->service()->getKey(),
+            ], false),
+        ]);
     }
 
     public function render()
