@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Polls;
 
+use App\Enums\Polls\RatingScalePresentation;
 use App\Models\Polls\PollRatingScale;
 use App\Models\Polls\PollRatingScalePoint;
 use Illuminate\Database\Seeder;
@@ -41,6 +42,9 @@ class PollRatingScaleSeeder extends Seeder
             ],
             [
                 'name' => '1–5 stars',
+                // Short, ordered and effectively unlabelled — the one scale
+                // where a star row reads better than a dropdown.
+                'presentation' => RatingScalePresentation::Stars,
                 'points' => [
                     ['label' => '1 star', 'value' => 1],
                     ['label' => '2 stars', 'value' => 2],
@@ -62,7 +66,10 @@ class PollRatingScaleSeeder extends Seeder
 
         foreach ($scales as $scale) {
             /** @var PollRatingScale $model */
-            $model = PollRatingScale::updateOrCreate(['name' => $scale['name']]);
+            $model = PollRatingScale::updateOrCreate(
+                ['name' => $scale['name']],
+                ['presentation' => $scale['presentation'] ?? RatingScalePresentation::Select],
+            );
 
             foreach (array_values($scale['points']) as $position => $point) {
                 PollRatingScalePoint::updateOrCreate(

@@ -146,13 +146,24 @@
                     @foreach ($this->options as $option)
                         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-muted p-3 text-sm text-main">
                             <span>{{ $option->label }}</span>
-                            <select wire:model="scores.{{ $option->id }}"
-                                    class="rounded-lg border border-border-muted bg-surface px-2 py-1 text-sm">
-                                <option value="">{{ __('polls.respond.rank_none') }}</option>
-                                @foreach ($this->scalePoints as $point)
-                                    <option value="{{ $point->id }}">{{ $point->label }}</option>
-                                @endforeach
-                            </select>
+
+                            {{-- The scale says how it is drawn; we never infer
+                                 it from its name or its number of points. --}}
+                            @if ($this->ratingScale?->rendersAsStars())
+                                <x-polls.star-rating
+                                    :points="$this->scalePoints"
+                                    :option-id="$option->id"
+                                    :selected="$scores[$option->id] ?? null"
+                                    :label="$option->label" />
+                            @else
+                                <select wire:model="scores.{{ $option->id }}"
+                                        class="rounded-lg border border-border-muted bg-surface px-2 py-1 text-sm">
+                                    <option value="">{{ __('polls.respond.rank_none') }}</option>
+                                    @foreach ($this->scalePoints as $point)
+                                        <option value="{{ $point->id }}">{{ $point->label }}</option>
+                                    @endforeach
+                                </select>
+                            @endif
                         </div>
                     @endforeach
                 @endif

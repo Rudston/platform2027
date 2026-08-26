@@ -65,7 +65,9 @@ class VotingServiceTest extends TestCase
 
         (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
 
-        foreach (glob(database_path('migrations/2026_08_25_*.php')) as $migration) {
+        // Matched by NAME, not by date: a poll migration added later must
+        // be picked up here too, or the tests run against a stale schema.
+        foreach (glob(database_path('migrations/*_poll*.php')) as $migration) {
             (include $migration)->up();
         }
 

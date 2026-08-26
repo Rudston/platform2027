@@ -85,6 +85,13 @@ class PollPage extends Component
         return $this->question()?->options()->get() ?? new Collection;
     }
 
+    /** The rating scale itself, so the view can ask how it wants to be drawn. */
+    #[Computed]
+    public function ratingScale()
+    {
+        return $this->question()?->ratingScale;
+    }
+
     #[Computed]
     public function scalePoints(): Collection
     {

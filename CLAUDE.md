@@ -759,7 +759,7 @@ Reuses existing primitives; no parallel mechanism.
 - Editing → `Poll::isAmendable()` (no responses yet). Publishing is NOT the
   point of no return; the first response is.
 
-### Rating scales are platform vocabulary
+### Rating scales are platform vocabulary, and declare their own widget
 
 `poll_rating_scales` has no `circle_id` deliberately: scales are curated
 centrally and shared, so "Strongly Agree" means the same thing in two circles'
@@ -767,6 +767,15 @@ results. Circle admins PICK, never mint. Seeded by
 `Database\Seeders\Polls\PollRatingScaleSeeder` (idempotent; matches points on
 `(scale, value)` and NEVER deletes one — a cast response references it and the
 FK is `restrictOnDelete`).
+
+**`poll_rating_scales.presentation`** (`RatingScalePresentation`: `select` |
+`stars`) decides how the respond form draws a scale — a labelled dropdown, or a
+row of stars filled left-to-right by `<x-polls.star-rating>`. A scale CANNOT be
+recognised by its name (admin-curated display text; branching on it is the
+documented mistake) or by its shape: the 5-point agreement scale is also five
+points valued 1..5. Defaults to `select`, so every scale keeps the dropdown
+unless it asks otherwise. Adding a widget = a case on the enum plus a branch in
+the respond form; the scale DATA never changes.
 
 ### Tests — three seams
 

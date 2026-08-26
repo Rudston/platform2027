@@ -2,6 +2,7 @@
 
 namespace App\Models\Polls;
 
+use App\Enums\Polls\RatingScalePresentation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -16,6 +17,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PollRatingScale extends Model
 {
     protected $guarded = [];
+
+    protected $casts = [
+        'presentation' => RatingScalePresentation::class,
+    ];
+
+    /** Should the respond form draw this scale as a row of stars? */
+    public function rendersAsStars(): bool
+    {
+        return $this->presentation === RatingScalePresentation::Stars;
+    }
 
     public function points(): HasMany
     {

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\CommunityType;
 use App\Enums\Polls\PollResponseShape;
+use App\Enums\Polls\RatingScalePresentation;
 use App\Enums\Polls\TallyMethod;
 use App\Livewire\Communities\Services\Polls\PollGroupModal;
 use App\Livewire\Communities\Services\Polls\PollModal;
@@ -70,7 +71,9 @@ class PollModalTest extends TestCase
         });
         (include database_path('migrations/2026_07_17_000001_create_taggables_table.php'))->up();
 
-        foreach (glob(database_path('migrations/2026_08_25_*.php')) as $migration) {
+        // Matched by NAME, not by date: a poll migration added later must
+        // be picked up here too, or the tests run against a stale schema.
+        foreach (glob(database_path('migrations/*_poll*.php')) as $migration) {
             (include $migration)->up();
         }
 
@@ -377,6 +380,76 @@ class PollModalTest extends TestCase
         $this->assertSame(1.0, $frozen->totals[$options['Water pressure']]);
         $this->assertSame($options['Road repairs'], $frozen->winnerOptionId);
         $this->assertSame(TallyMethod::AverageScore, $frozen->method);
+    }
+
+    public function test_a_star_scale_renders_stars_while_other_scales_keep_the_dropdown(): void
+    {
+        // Which widget is used comes from the scale's own declaration, never
+        // from its name (admin-curated) or its shape — the agreement scale here
+        // is also five points, so shape cannot tell them apart.
+        $stars = PollRatingScale::create(['name' => '1–5 stars', 'presentation' => RatingScalePresentation::Stars]);
+        $words = PollRatingScale::create(['name' => '5-point agreement', 'presentation' => RatingScalePresentation::Select]);
+
+        foreach ([$stars, $words] as $scale) {
+            foreach ([1, 2, 3, 4, 5] as $position => $value) {
+                PollRatingScalePoint::create([
+                    'poll_rating_scale_id' => $scale->id,
+                    'label' => $scale->is($stars) ? "{$value} star" : "Level {$value}",
+                    'value' => $value, 'position' => $position,
+                ]);
+            }
+        }
+
+        $group = $this->group('Alpha');
+        $admin = $this->admin();
+        $this->actingAs($admin);
+        DB::table('circle_memberships')->insert([
+            'circle_id' => $this->circle->id, 'user_id' => $admin->id,
+            'joined_at' => now()->subYear(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $make = function (PollRatingScale $scale) use ($group, $admin) {
+            Livewire::test(PollModal::class, ['groupId' => $group->id])
+                ->set('shape', PollResponseShape::Rating->value)
+                ->set('ratingScaleId', $scale->id)
+                ->set('title', 'Rate '.$scale->name)
+                ->set('prompt', 'Score each one:')
+                ->set('options', ['Road repairs', 'Water pressure'])
+                ->call('save');
+
+            $poll = Poll::query()->latest('id')->firstOrFail();
+            app(VotingService::class)->publish($poll);
+            $poll->fresh()->electorate()->syncWithoutDetaching([$admin->id]);
+
+            return $poll->fresh();
+        };
+
+        // Stars: a radiogroup of buttons writing straight to the Livewire
+        // property, no <select> in sight.
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $make($stars),
+        ])
+            ->assertSeeHtml('role="radiogroup"')
+            ->assertSeeHtml('$wire.set(')
+            ->assertDontSeeHtml('<select wire:model="scores.');
+
+        // Words: unchanged, because a five-level agreement scale is unreadable
+        // as five identical stars.
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $make($words),
+        ])
+            ->assertSeeHtml('<select wire:model="scores.')
+            ->assertDontSeeHtml('role="radiogroup"');
+    }
+
+    public function test_a_scale_defaults_to_the_dropdown(): void
+    {
+        // The column defaults to 'select', so every scale that predates this
+        // feature keeps the widget it had.
+        $scale = PollRatingScale::create(['name' => 'Unspecified']);
+
+        $this->assertSame(RatingScalePresentation::Select, $scale->fresh()->presentation);
+        $this->assertFalse($scale->fresh()->rendersAsStars());
     }
 
     public function test_a_poll_with_no_closing_time_says_so_rather_than_showing_nothing(): void
