@@ -5,11 +5,11 @@ namespace Tests\Feature;
 use App\Enums\CommunityType;
 use App\Livewire\Communities\Services\Polls\PollGroupModal;
 use App\Livewire\Communities\Services\Polls\PollModal;
-use App\Support\DisplayTime;
+use App\Livewire\Communities\Services\Polls\PollPage;
+use App\Services\Circles\VotingService;
 use App\Models\Circles\Circle;
 use App\Models\Polls\PollGroup;
 use App\Models\User;
-use App\Services\Circles\VotingService;
 use App\Models\Polls\Poll;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
@@ -54,6 +54,17 @@ class PollModalTest extends TestCase
         });
 
         (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
+
+        // The poll page renders its tag row, so the theme vocabulary and its
+        // pivot must exist even though these tests never tag anything.
+        Schema::create('themes', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('slug')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->timestamps();
+        });
+        (include database_path('migrations/2026_07_17_000001_create_taggables_table.php'))->up();
 
         foreach (glob(database_path('migrations/2026_08_25_*.php')) as $migration) {
             (include $migration)->up();
@@ -159,6 +170,58 @@ class PollModalTest extends TestCase
         $this->assertTrue($poll->opens_at->isPast(), 'an opening time ten minutes ago must be in the past');
 
         Carbon::setTestNow();
+    }
+
+    public function test_the_poll_page_shows_its_timing_in_the_display_wall_clock(): void
+    {
+        config(['app.timezone' => 'UTC', 'app.display_timezone' => 'Africa/Johannesburg']);
+
+        $group = $this->group('Alpha');
+        $admin = $this->admin();
+        $this->actingAs($admin);
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->set('opensAt', '2026-08-26T12:21')
+            ->set('closesAt', '2026-08-27T17:00')
+            ->call('save');
+
+        $poll = Poll::query()->latest('id')->firstOrFail();
+        app(VotingService::class)->publish($poll);
+
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle,
+            'pollGroup' => $group,
+            'poll' => $poll->fresh(),
+        ])
+            // The wall clock that was typed, not its UTC equivalent (10:21).
+            ->assertSee('26 Aug 2026, 12:21')
+            ->assertSee('27 Aug 2026, 17:00')
+            ->assertDontSee('10:21')
+            ->assertSee('SAST');
+    }
+
+    public function test_a_poll_with_no_closing_time_says_so_rather_than_showing_nothing(): void
+    {
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Open-ended')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->call('save');
+
+        $poll = Poll::query()->latest('id')->firstOrFail();
+        app(VotingService::class)->publish($poll);
+
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle,
+            'pollGroup' => $group,
+            'poll' => $poll->fresh(),
+        ])->assertSee(__('polls.timing.no_close'));
     }
 
     public function test_reopening_the_edit_form_shows_the_wall_clock_that_was_typed(): void

@@ -45,6 +45,18 @@ return [
 
     'turnout' => ':responded of :electorate responded',
     'turnout_pending' => ':responded responded so far',
+
+    'timing' => [
+        'heading' => 'Timing',
+        'opens' => 'Poll opens',
+        'opened' => 'Poll opened',
+        'closes' => 'Poll closes',
+        'closed' => 'Poll closed',
+        'no_close' => 'Runs until an organiser ends it',
+        'not_published' => 'Not yet published',
+        'cancelled' => 'Cancelled — these responses are never counted',
+        'zone_note' => 'Times shown in :zone.',
+    ],
     'archived_badge' => 'Archived',
 
     'create_poll' => '+ Create Poll',

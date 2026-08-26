@@ -103,7 +103,7 @@
         </div>
     @endif
 
-    {{-- The Prompt and the ballot --}}
+    {{-- The Prompt, then the ballot beside the poll's timing. --}}
     <div class="mt-6 rounded-lg border border-border-muted bg-surface p-5 shadow-sm">
         <p class="font-medium text-main">{{ $this->question?->text }}</p>
 
@@ -113,6 +113,8 @@
 
         @error('response') <p class="mt-3 text-sm text-red-600">{{ $message }}</p> @enderror
 
+        <div class="mt-4 grid gap-6 sm:grid-cols-3">
+        <div class="sm:col-span-2">
         @if ($this->canRespond)
             <form wire:submit="submit" class="mt-4 space-y-3">
                 @if ($shape === PollResponseShape::SingleChoice)
@@ -171,6 +173,53 @@
                 <p class="mt-3 text-sm text-muted">{{ __('polls.respond.'.$this->blockedReason) }}</p>
             @endif
         @endif
+        </div>
+
+        {{-- Timing. Every instant is rendered through inDisplayZone(): stored
+             UTC, read in the wall clock the interface speaks. The labels switch
+             tense on whether the moment has passed, so a scheduled poll reads
+             "opens" and a running one reads "opened". --}}
+        <aside class="sm:col-span-1">
+            <p class="text-xs font-medium uppercase tracking-wide text-muted">{{ __('polls.timing.heading') }}</p>
+
+            <dl class="mt-2 space-y-3 text-sm">
+                @if ($poll->isDraft())
+                    <p class="text-muted">{{ __('polls.timing.not_published') }}</p>
+                @else
+                    @if ($poll->opens_at)
+                        <div>
+                            <dt class="text-xs text-muted">
+                                {{ $poll->opens_at->isPast() ? __('polls.timing.opened') : __('polls.timing.opens') }}
+                            </dt>
+                            <dd class="text-main">{{ $poll->opens_at->inDisplayZone()->format('d M Y, H:i') }}</dd>
+                        </div>
+                    @endif
+
+                    <div>
+                        @if ($poll->closes_at)
+                            <dt class="text-xs text-muted">
+                                {{ $poll->closes_at->isPast() ? __('polls.timing.closed') : __('polls.timing.closes') }}
+                            </dt>
+                            <dd class="text-main">{{ $poll->closes_at->inDisplayZone()->format('d M Y, H:i') }}</dd>
+                        @else
+                            {{-- No closing time: the poll runs until concluded. --}}
+                            <dd class="text-muted">{{ __('polls.timing.no_close') }}</dd>
+                        @endif
+                    </div>
+
+                    @if ($poll->isCancelled())
+                        <p class="text-red-700">{{ __('polls.timing.cancelled') }}</p>
+                    @endif
+                @endif
+            </dl>
+
+            {{-- Say which clock these are, having just fixed a bug where they
+                 were two hours out with nothing on screen to reveal it. --}}
+            <p class="mt-3 text-xs text-muted">
+                {{ __('polls.timing.zone_note', ['zone' => now()->inDisplayZone()->format('T')]) }}
+            </p>
+        </aside>
+        </div>
     </div>
 
     {{-- Result --}}
