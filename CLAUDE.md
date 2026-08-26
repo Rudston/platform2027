@@ -677,6 +677,12 @@ something a reasonable person would try to "fix".
    stamp `closes_at`, so status annotates the clock rather than competing with
    it. `archived_at` is a separate timestamp, NOT a status case, so archiving
    never erases how a poll ended.
+   A **Result** is frozen on first read after close AND by
+   **`polls:freeze-results`** (hourly), so a poll nobody visits still gets a
+   record — freezing is insurance against the tally code changing under a
+   settled decision, not merely a cache. Both paths are idempotent and never
+   overwrite. That command writes `result`/`result_frozen_at` ONLY: a scheduled
+   job must never write poll state.
 2. **`poll_electorate` is materialised even though `circle_memberships` is an
    append-only log** (ADR-0002), so it looks like redundant denormalisation. It
    is not: `metadata.internal_role_approved` is MUTATED IN PLACE and keeps no

@@ -625,6 +625,81 @@ class VotingServiceTest extends TestCase
         $this->service->cancel($poll->fresh());
     }
 
+    // ------------------------------------------------- polls:freeze-results
+
+    public function test_the_freeze_command_catches_polls_nobody_visited(): void
+    {
+        $ann = $this->member('Ann');
+
+        // Ran out its clock, never opened by anyone.
+        $expired = $this->service->publish($this->election());
+        $this->service->respond($expired, $ann, [new Mark($this->optionIds($expired)['Ada'])]);
+        $expired->update(['closes_at' => now()->subDay()]);
+
+        // Still open — must be left alone.
+        $open = $this->service->publish($this->election(['closes_at' => now()->addDay()]));
+
+        // Cancelled — its responses must never be tallied.
+        $cancelled = $this->service->publish($this->election());
+        $this->service->respond($cancelled, $ann, [new Mark($this->optionIds($cancelled)['Ada'])]);
+        $cancelled = $this->service->cancel($cancelled->fresh());
+
+        // Draft — never ran.
+        $draft = $this->election();
+
+        $this->artisan('polls:freeze-results')->assertSuccessful();
+
+        $this->assertTrue($expired->fresh()->hasResult(), 'a closed poll nobody visited must be frozen');
+        $this->assertFalse($open->fresh()->hasResult(), 'an open poll must not be');
+        $this->assertFalse($cancelled->fresh()->hasResult(), 'a cancelled poll never gets a Result');
+        $this->assertFalse($draft->fresh()->hasResult(), 'a draft never gets one either');
+    }
+
+    public function test_the_freeze_command_never_rewrites_an_existing_result(): void
+    {
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+        $poll = $this->service->conclude($poll->fresh());
+
+        $frozenAt = (string) $poll->result_frozen_at;
+        $result = $poll->result;
+
+        $this->artisan('polls:freeze-results')->assertSuccessful();
+
+        $this->assertSame($frozenAt, (string) $poll->fresh()->result_frozen_at);
+        $this->assertSame($result, $poll->fresh()->result);
+    }
+
+    public function test_the_freeze_command_writes_no_poll_state(): void
+    {
+        // ADR-0001: closing is derived from the clock. A scheduled job may
+        // record a Result but must never touch status, closes_at or
+        // archived_at, or the clock stops being the authority.
+        $ann = $this->member('Ann');
+        $poll = $this->service->publish($this->election());
+        $this->service->respond($poll, $ann, [new Mark($this->optionIds($poll)['Ada'])]);
+        $poll->update(['closes_at' => now()->subDay()]);
+
+        // Compare stringified values: only() hands back Carbon instances, which
+        // compare by object identity rather than by the time they represent.
+        $snapshot = fn (Poll $p): array => [
+            'status' => $p->status->value,
+            'opens_at' => $p->opens_at?->toDateTimeString(),
+            'closes_at' => $p->closes_at?->toDateTimeString(),
+            'archived_at' => $p->archived_at?->toDateTimeString(),
+        ];
+
+        $before = $snapshot($poll->fresh());
+
+        $this->artisan('polls:freeze-results')->assertSuccessful();
+
+        $after = $poll->fresh();
+        $this->assertSame($before, $snapshot($after));
+        $this->assertSame(PollStatus::Published, $after->status, 'still published — it merely ran out of time');
+        $this->assertTrue($after->hasResult());
+    }
+
     public function test_instant_runoff_through_the_service_eliminates_and_redistributes(): void
     {
         // Five electors: first preferences Ada 2, Grace 2, Bo 1. Nobody has a

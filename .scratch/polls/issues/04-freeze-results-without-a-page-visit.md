@@ -1,6 +1,6 @@
 # A result only freezes when someone visits the poll
 
-Status: needs-triage
+Status: resolved
 Type: task
 
 ## Why
@@ -37,3 +37,30 @@ frozen before it sends.
 
 A decision, and either a command plus its test or a note in CLAUDE.md saying
 freezing is read-triggered by design.
+
+## Answer
+
+Option 2, with the read-trigger kept as well — but the reasoning in this
+ticket was too generous and the decision turned on correcting it.
+
+"Harmless, because recomputation is deterministic" holds only while the TALLY
+CODE NEVER CHANGES. A rounding fix, an instant-runoff tiebreak adjustment, or
+adding Borda later would each mean an unfrozen old poll silently adopting the
+new rule the next time anyone opened it. Freezing is therefore insurance
+against code drift under a settled decision, not a cache — and read-triggered
+freezing grants that insurance only to polls someone happened to visit. An
+election's result matters most in the circles nobody is watching closely.
+
+Built:
+- `polls:freeze-results`, scheduled hourly. Closed, unfrozen, non-cancelled
+  polls only; `chunkById`; `isClosed()` re-checked per row because the WHERE
+  clause is a narrowing filter, not the rule.
+- `PollPage` still freezes on first read, so a visitor sees a result
+  immediately rather than waiting for the next tick. Safe together because
+  `freezeResult()` never overwrites.
+- ADR-0001 amended: a scheduled job may record a Result but must NEVER write
+  poll state. The rule was never "no cron" — two commands already ran — and
+  saying so stops someone extending this job to flip statuses.
+- Three tests: it catches unvisited polls while leaving open, cancelled and
+  draft ones alone; it never rewrites an existing Result; and it changes no
+  status, opens_at, closes_at or archived_at.

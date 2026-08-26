@@ -33,6 +33,15 @@ annotates the clock rather than competing with it.
 
 ## Consequences
 
+**A scheduled job may record a Result, but must never write poll STATE.** This
+rule is not "no cron" — the scheduler already runs `requests:expire` and
+`comments:check-moderation`, and `polls:freeze-results` was later added to
+freeze the Result of polls nobody visited (insurance against the tally code
+changing under a settled decision). That job writes `result` and
+`result_frozen_at` and nothing else. Extending it to touch `status`,
+`closes_at` or `archived_at` would make the clock stop being the authority and
+reintroduce exactly the disagreement this decision removes.
+
 A Poll that simply runs out its clock keeps `status = published` forever, so a
 finished election and a live one are indistinguishable by status alone. This
 is deliberate: nothing exceptional happened, so nothing is recorded. Listing

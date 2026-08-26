@@ -92,15 +92,15 @@ Commits, oldest first:
 | 01 | Document the Polls service in CLAUDE.md | **resolved** |
 | 02 | Decide the notification model | needs-info (blocked: messaging service) |
 | 03 | Portuguese label for the Polls service | **resolved** (keep Votações) |
-| 04 | A result only freezes when someone visits the poll | needs-triage |
+| 04 | A result only freezes when someone visits the poll | **resolved** |
 | 05 | No way to reorder poll groups | **resolved** |
 | 06 | Polls has no Portuguese translation | ready-for-human |
 
 01 and 03 are done. 02 turned out to be BLOCKED, not merely undecided: it
 waits on a platform messaging service that is planned but undefined, which will
 own channels and user preferences. Polls must not grow their own delivery path
-in the meantime. 05 is done. 04 remains (a decision, not a build); 06 was opened while
-answering 03: Polls is English-only for pt_BR users and needs a translator.
+in the meantime. 01, 03, 04 and 05 are done. Only 02 (blocked on the messaging service) and
+06 (needs a Portuguese speaker) remain — neither is actionable here.
 
 ## Not outstanding — deferred by decision
 

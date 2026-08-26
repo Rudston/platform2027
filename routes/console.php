@@ -15,3 +15,9 @@ Schedule::command('requests:expire')->daily();
 // cheap to change; it only starts to matter once a real (paid) AI backend is
 // bound in place of the stub.
 Schedule::command('comments:check-moderation')->everyTenMinutes();
+
+// Freeze the Result of any poll that has closed without one. Insurance against
+// the tally code changing under a settled decision — see the command's docblock.
+// It writes `result` only and never poll STATE, which is what keeps it
+// compatible with ADR-0001's "closing is derived from the clock" rule.
+Schedule::command('polls:freeze-results')->hourly();
