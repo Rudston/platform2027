@@ -270,7 +270,9 @@
                 @foreach ($result->totals as $optionId => $total)
                     <li class="flex justify-between gap-4">
                         <span>{{ $this->optionLabels[$optionId] ?? $optionId }}</span>
-                        <span class="font-mono">{{ $total }}</span>
+                        {{-- Formatted by the Result, which knows whether these
+                             are means or counts. --}}
+                        <span class="font-mono">{{ $result->formattedTotal($optionId) }}</span>
                     </li>
                 @endforeach
             </ul>

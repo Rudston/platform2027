@@ -302,6 +302,57 @@ class PollTallyTest extends TestCase
         $this->assertFalse(PollResponseShape::Rating->allows(TallyMethod::Borda));
     }
 
+    // ------------------------------------------------------------ display
+
+    public function test_averages_display_to_one_decimal_while_counts_stay_whole(): void
+    {
+        $means = Tally::run(TallyMethod::AverageScore, [1, 2, 3], [
+            Ballot::scoring([1 => 5, 2 => 4, 3 => 1]),
+            Ballot::scoring([1 => 5, 2 => 5, 3 => 1]),
+            Ballot::scoring([1 => 4, 2 => 4, 3 => 1]),
+        ]);
+
+        // A column reading 4.7 / 4.3 / 1 would look unfinished; a whole-number
+        // mean keeps its decimal so the list is uniform.
+        $this->assertSame('4.7', $means->formattedTotal(1));
+        $this->assertSame('4.3', $means->formattedTotal(2));
+        $this->assertSame('1.0', $means->formattedTotal(3));
+
+        // Rounding is display only — the stored figure keeps its precision, so
+        // a recomputation still matches a frozen Result exactly.
+        $this->assertSame(4.6667, $means->totals[1]);
+
+        $counts = Tally::run(TallyMethod::Plurality, [1, 2], [
+            Ballot::choosing(1), Ballot::choosing(1), Ballot::choosing(2),
+        ]);
+
+        $this->assertSame('2', $counts->formattedTotal(1));
+        $this->assertSame('1', $counts->formattedTotal(2));
+    }
+
+    public function test_a_missing_option_formats_as_zero_rather_than_erroring(): void
+    {
+        $result = Tally::run(TallyMethod::Plurality, [1], [Ballot::choosing(1)]);
+
+        $this->assertSame('0', $result->formattedTotal(999));
+    }
+
+    public function test_rounding_never_decides_the_winner(): void
+    {
+        // Two means that display identically must still be separated: rounding
+        // at tally time would have manufactured a tie here.
+        $result = Tally::run(TallyMethod::AverageScore, [1, 2], [
+            Ballot::scoring([1 => 4, 2 => 4]),
+            Ballot::scoring([1 => 4, 2 => 4]),
+            Ballot::scoring([1 => 5, 2 => 4]),
+        ]);
+
+        $this->assertSame('4.3', $result->formattedTotal(1));
+        $this->assertSame('4.0', $result->formattedTotal(2));
+        $this->assertSame(1, $result->winnerOptionId);
+        $this->assertFalse($result->isTie());
+    }
+
     // ------------------------------------------------------ purity & storage
 
     public function test_the_same_ballots_always_produce_an_identical_result(): void

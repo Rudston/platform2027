@@ -49,6 +49,27 @@ final readonly class PollResult
         return $this->turnout === 0;
     }
 
+    /**
+     * One option's total, formatted for reading.
+     *
+     * Presentation, but it lives here because the rule follows the METHOD —
+     * means read to one decimal, counts are whole — and the method is this
+     * object's own field. Putting the switch in a view would duplicate
+     * knowledge only this class holds.
+     *
+     * Rounding is DISPLAY ONLY. The stored value keeps its full precision:
+     * rounding at tally time would decide winners on rounded numbers and could
+     * manufacture ties between totals that genuinely differ.
+     */
+    public function formattedTotal(int|string $optionId): string
+    {
+        $total = $this->totals[$optionId] ?? 0;
+
+        return $this->method === TallyMethod::AverageScore
+            ? number_format((float) $total, 1)
+            : (string) $total;
+    }
+
     /** The shape stored in polls.result. */
     public function toArray(): array
     {
