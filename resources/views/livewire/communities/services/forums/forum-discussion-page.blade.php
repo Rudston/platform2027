@@ -49,7 +49,7 @@
                     @if ($discussion->isEdited())
                         <span class="italic">{{ __('forums.edited') }}</span>
                     @endif
-                    · {{ $discussion->created_at->format('d M Y, H:i') }}
+                    · {{ $discussion->created_at->inDisplayZone()->format('d M Y, H:i') }}
                 </p>
                 @if ($this->canEditContent && ! $editingContent)
                     <button type="button" wire:click="startEditingContent"

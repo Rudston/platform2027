@@ -379,7 +379,8 @@ class RequestResource extends Resource
                         'organisation_name' => (string) ($record->requestable?->name ?? ''),
                         'requester_name' => (string) ($record->requester?->name ?? ''),
                         'review_url' => route('requests.confirm', $record->token),
-                        'expires_at' => $record->token_expires_at->format('d M Y'),
+                        // Read by an external recipient in their own wall clock, not UTC.
+                        'expires_at' => $record->token_expires_at->inDisplayZone()->format('d M Y'),
                     ],
                 );
 

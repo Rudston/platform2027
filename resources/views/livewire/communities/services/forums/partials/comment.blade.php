@@ -39,7 +39,7 @@
         @else
             <span class="font-medium text-main">{{ $comment->user?->name ?? '—' }}</span>
         @endif
-        · {{ $comment->created_at->format('d M Y, H:i') }}
+        · {{ $comment->created_at->inDisplayZone()->format('d M Y, H:i') }}
         @if (! $comment->is_deleted && $comment->isEdited())
             <span class="italic">{{ __('forums.edited') }}</span>
         @endif

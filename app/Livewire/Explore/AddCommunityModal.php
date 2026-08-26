@@ -147,7 +147,9 @@ class AddCommunityModal extends ModalComponent
                     // Link to the GET landing page where the contact clicks the
                     // real (POST) Approve/Decline actions — email clicks are GET.
                     'review_url' => route('requests.confirm', $request->token),
-                    'expires_at' => $request->token_expires_at->format('d M Y'),
+                    // Goes into an email to the organisation's contact — show the date
+                    // they would read off a calendar, not the UTC one.
+                    'expires_at' => $request->token_expires_at->inDisplayZone()->format('d M Y'),
                 ],
             );
             $request->logEmail('email.organisation_approval_request', $this->contactEmail, 'sent');

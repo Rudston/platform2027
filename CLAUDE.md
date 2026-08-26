@@ -911,6 +911,31 @@ admin top-bar (`resources/views/filament/top-bar.blade.php`), highlighting the
 active locale. Shown to guests too (Explore is public). No `users.locale`
 column yet, so preference is session-scoped.
 
+### Time: stored UTC, displayed in a wall clock
+
+`config('app.timezone')` is UTC and STAYS UTC — storage, `now()`, comparisons.
+`config('app.display_timezone')` (default `Africa/Johannesburg`) is the wall
+clock the INTERFACE speaks. The two are converted only at the boundary, via
+**`App\Support\DisplayTime`**:
+
+- `fromInput()` — a wall-clock string a user typed (a `datetime-local` field)
+  read in the display zone. Never `now()->parse()` such a value: parsing "12:21"
+  as UTC when the user meant 12:21 SAST silently shifts it two hours.
+- `toInput()` — a stored instant rendered back into a `datetime-local` field, so
+  reopening a form shows what was typed.
+- `forDisplay()` / the **`Carbon::inDisplayZone()` macro** — for rendering an
+  absolute date or time. Registered in `AppServiceProvider`; use it at EVERY
+  absolute render: `$date->inDisplayZone()->format('d M Y, H:i')`.
+
+Filament is pointed at the same zone with `FilamentTimezone::set()` in
+`AppServiceProvider`, so its date columns and pickers agree with the front end.
+
+`diffForHumans()` needs no conversion — a difference is the same in any zone —
+which is why this went unnoticed until Polls became the first feature to show
+and accept absolute times. A date-ONLY render is not exempt: 22:40 UTC is
+already the next day in SAST, so an unconverted `format('d M Y')` shows the
+wrong date for two hours every night.
+
 ### Lang file structure
 ```
 lang/en/
@@ -1477,6 +1502,11 @@ On failure: silent.
   lang array key) instead. See AddCommunityModal::howToKey()
 - Treating email_templates.subject/body as plain strings — translatable
   JSON; send via EmailServiceHandler (never build/send mail ad hoc)
+- Rendering an absolute date without `->inDisplayZone()` — storage is UTC and
+  the interface speaks `app.display_timezone`. Date-only renders are affected
+  too: 22:40 UTC is already tomorrow in SAST
+- Parsing a `datetime-local` value with `now()->parse()` — it is a wall clock
+  with no zone; use `DisplayTime::fromInput()` or it lands hours out
 - Treating services.name as a plain string — it is translatable JSON too
   (easy to miss: the service KEY is a plain string right beside it). Never
   write it with the query builder; a plain-string assignment through the

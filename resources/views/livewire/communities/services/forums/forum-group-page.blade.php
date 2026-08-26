@@ -57,7 +57,7 @@
                                class="font-medium text-main hover:underline">{{ $discussion->title }}</a>
                             <p class="mt-0.5 text-xs text-muted">
                                 {{ __('forums.by_author', ['author' => $discussion->creator?->name ?? '—']) }}
-                                · {{ $discussion->created_at->format('d M Y') }}
+                                · {{ $discussion->created_at->inDisplayZone()->format('d M Y') }}
                             </p>
                         </div>
                         <div class="flex shrink-0 items-center gap-1.5">

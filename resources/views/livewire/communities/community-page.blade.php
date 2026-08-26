@@ -216,7 +216,7 @@
                     </button>
                     @if ($this->joinState['available_at'])
                         <span class="text-xs text-muted">
-                            {{ __('communities.page.join_available_at', ['date' => $this->joinState['available_at']->format('d M Y')]) }}
+                            {{ __('communities.page.join_available_at', ['date' => $this->joinState['available_at']->inDisplayZone()->format('d M Y')]) }}
                         </span>
                     @endif
                 @endif

@@ -95,7 +95,7 @@
                     <div class="text-xs text-muted">
                         {{ __('forums.participants') }} {{ $this->participantCountsByGroup[$group->id] ?? 0 }} ·
                         {{ __('forums.discussions_count', ['count' => $group->discussions_count]) }} ·
-                        {{ __('forums.created', ['date' => $group->created_at->format('d M Y')]) }}
+                        {{ __('forums.created', ['date' => $group->created_at->inDisplayZone()->format('d M Y')]) }}
                     </div>
 
                     <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
