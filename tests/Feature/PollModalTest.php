@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Enums\CommunityType;
+use App\Enums\Polls\PollResponseShape;
+use App\Enums\Polls\TallyMethod;
 use App\Livewire\Communities\Services\Polls\PollGroupModal;
 use App\Livewire\Communities\Services\Polls\PollModal;
 use App\Livewire\Communities\Services\Polls\PollPage;
@@ -201,6 +203,48 @@ class PollModalTest extends TestCase
             ->assertSee('27 Aug 2026, 17:00')
             ->assertDontSee('10:21')
             ->assertSee('SAST');
+    }
+
+    public function test_choosing_a_ranked_ballot_offers_both_counting_methods(): void
+    {
+        // A new TallyMethod has to reach the compose form, not just the enum:
+        // the select is driven by PollResponseShape::allowedTallyMethods().
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+
+        $modal = Livewire::test(PollModal::class, ['groupId' => $group->id]);
+
+        // Single choice offers only plurality — Borda must not appear.
+        $modal->assertSet('shape', PollResponseShape::SingleChoice->value)
+            ->assertSee(__('polls.method.plurality'))
+            ->assertDontSee(__('polls.method.borda_count'));
+
+        $modal->set('shape', PollResponseShape::RankedChoice->value)
+            ->assertSee(__('polls.method.instant_runoff'))
+            ->assertSee(__('polls.method.borda_count'))
+            // Switching shape must leave a legal method selected, not the
+            // plurality carried over from before.
+            ->assertSet('tallyMethod', TallyMethod::InstantRunoff->value);
+    }
+
+    public function test_a_borda_poll_can_be_created_and_keeps_its_method(): void
+    {
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('shape', PollResponseShape::RankedChoice->value)
+            ->set('tallyMethod', TallyMethod::Borda->value)
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Rank them in order:')
+            ->set('options', ['Ada', 'Grace', 'Bo'])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $poll = Poll::query()->latest('id')->firstOrFail();
+
+        $this->assertSame(TallyMethod::Borda, $poll->question->tally_method);
+        $this->assertTrue($poll->question->hasLegalTallyMethod());
     }
 
     public function test_a_qualifying_date_is_shown_only_when_it_differs_from_the_opening(): void
