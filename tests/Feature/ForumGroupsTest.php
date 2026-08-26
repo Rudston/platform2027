@@ -6,6 +6,7 @@ use App\Enums\CommunityType;
 use App\Enums\Forums\ForumGroupStatus;
 use App\Enums\Forums\ForumGroupVisibility;
 use App\Livewire\Communities\Services\Forums\ForumGroupModal;
+use App\Livewire\Communities\Services\Forums\ForumGroupPage;
 use App\Livewire\Communities\Services\Forums\ForumServiceContainer;
 use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
@@ -317,6 +318,64 @@ class ForumGroupsTest extends TestCase
         $this->get(route('communities.forums.show', ['circle' => $circle, 'forumGroup' => $group->slug, 'from' => $from]))
             ->assertOk()
             ->assertSee($from, false); // back link href preserves ?service=forums
+    }
+
+    public function test_the_forums_tab_survives_the_trail_out_to_a_discussion_and_back(): void
+    {
+        // The bug: discussionUrl() set the discussion's ?from= to the group
+        // page BARE, discarding the group's own back-link. Returning to the
+        // group then left it with nothing to go back to, and the next "back"
+        // fell through to the community page's default tab.
+        $circle = $this->makeCircle();
+        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
+        $discussion = app(ForumService::class)->createDiscussion($group, User::factory()->create(), ['title' => 'First']);
+
+        $tabUrl = '/communities/'.$circle->id.'?service=forums';
+
+        $page = Livewire::withQueryParams(['from' => $tabUrl])
+            ->test(ForumGroupPage::class, ['circle' => $circle, 'forumGroup' => $group]);
+
+        // The link out to the discussion must carry the tab forward.
+        $discussionUrl = $page->instance()->discussionUrl($discussion);
+        parse_str((string) parse_url($discussionUrl, PHP_URL_QUERY), $query);
+
+        $this->assertStringContainsString('service=forums', urldecode($query['from'] ?? ''),
+            'the discussion must be able to send you back to a group that still knows the tab');
+
+        // And coming back through that link, the group page can still return
+        // to the Forums tab.
+        parse_str((string) parse_url($query['from'], PHP_URL_QUERY), $groupQuery);
+
+        $backToTab = Livewire::withQueryParams(['from' => $groupQuery['from'] ?? null])
+            ->test(ForumGroupPage::class, ['circle' => $circle, 'forumGroup' => $group])
+            ->get('backUrl');
+
+        $this->assertStringContainsString('service=forums', urldecode($backToTab));
+    }
+
+    public function test_a_group_reached_without_a_trail_still_goes_back_to_the_forums_tab(): void
+    {
+        // A shared link or a bookmark carries no ?from= at all.
+        $circle = $this->makeCircle();
+        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
+
+        $backUrl = Livewire::test(ForumGroupPage::class, ['circle' => $circle, 'forumGroup' => $group])
+            ->get('backUrl');
+
+        $this->assertStringContainsString('service=forums', urldecode($backUrl));
+    }
+
+    public function test_an_external_from_is_refused_on_the_group_page(): void
+    {
+        $circle = $this->makeCircle();
+        $group = app(ForumService::class)->createGroup($circle, User::factory()->create(), ['name' => 'Lounge']);
+
+        $backUrl = Livewire::withQueryParams(['from' => 'https://example.com/phish'])
+            ->test(ForumGroupPage::class, ['circle' => $circle, 'forumGroup' => $group])
+            ->get('backUrl');
+
+        $this->assertStringNotContainsString('example.com', $backUrl);
+        $this->assertStringContainsString('service=forums', urldecode($backUrl));
     }
 
     public function test_group_page_resolves_scoped_and_lists_discussions(): void

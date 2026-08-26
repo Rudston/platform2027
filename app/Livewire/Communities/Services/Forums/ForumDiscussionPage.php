@@ -468,7 +468,17 @@ class ForumDiscussionPage extends Component
             return $from;
         }
 
-        return route('communities.forums.show', ['circle' => $this->circle, 'forumGroup' => $this->group->slug]);
+        // Fallback for a discussion reached without a trail: the group page,
+        // itself pointed back at the Forums tab so the next "back" does not
+        // land on the community page's default tab.
+        return route('communities.forums.show', [
+            'circle' => $this->circle,
+            'forumGroup' => $this->group->slug,
+            'from' => route('communities.show', [
+                'circle' => $this->circle,
+                'service' => app(ForumService::class)->getKey(),
+            ], false),
+        ]);
     }
 
     public function render()

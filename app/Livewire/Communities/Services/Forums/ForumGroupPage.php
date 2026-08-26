@@ -6,6 +6,7 @@ use App\Models\Circles\Circle;
 use App\Models\Circles\CircleMembership;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
+use App\Services\Circles\ForumService;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -83,14 +84,24 @@ class ForumGroupPage extends Component
             ->get();
     }
 
-    /** Detail URL for a discussion, with a ?from= back-link to this page. */
+    /**
+     * Detail URL for a discussion, with a ?from= back-link to this page —
+     * which itself carries OUR back-link, so the whole trail survives.
+     * Without the nesting, returning here from a discussion arrives with no
+     * ?from= and the next "back" falls through to the community page's
+     * default tab.
+     */
     public function discussionUrl(ForumDiscussion $discussion): string
     {
         return route('communities.forums.discussions.show', [
             'circle' => $this->circle,
             'forumGroup' => $this->group->slug,
             'forumDiscussion' => $discussion->slug,
-            'from' => route('communities.forums.show', ['circle' => $this->circle, 'forumGroup' => $this->group->slug], false),
+            'from' => route('communities.forums.show', [
+                'circle' => $this->circle,
+                'forumGroup' => $this->group->slug,
+                'from' => $this->backUrl,
+            ], false),
         ]);
     }
 
@@ -100,13 +111,24 @@ class ForumGroupPage extends Component
         unset($this->discussions);
     }
 
+    /**
+     * Where "back" goes. An explicit ?from= wins, but only an internal
+     * /communities path (no open redirects).
+     *
+     * The FALLBACK carries ?service= so a visitor who arrived without a trail —
+     * a shared link, a bookmark, a page opened in a new tab — still lands on
+     * the Forums tab rather than whichever tab happens to be first.
+     */
     private function resolveBackUrl(mixed $from): string
     {
         if (is_string($from) && str_starts_with($from, '/communities')) {
             return $from;
         }
 
-        return route('communities.show', $this->circle);
+        return route('communities.show', [
+            'circle' => $this->circle,
+            'service' => app(ForumService::class)->getKey(),
+        ]);
     }
 
     public function render()
