@@ -30,6 +30,8 @@ A description of a Poll's shape, not a separate kind of thing.
 **Survey**:
 A future, separate service: many questions per instance, free-text answers,
 no forced tally. Explicitly NOT a Poll — do not use the two interchangeably.
+The Portuguese *Sondagem* belongs to this term, not to Poll, and is reserved
+for it: Polls is labelled *Votações* so the distinction survives translation.
 
 **Eligibility**:
 Who may respond to a Poll. The *same underlying concept* as forum
