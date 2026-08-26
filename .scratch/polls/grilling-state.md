@@ -90,13 +90,15 @@ Commits, oldest first:
 | # | Ticket | Status |
 |---|--------|--------|
 | 01 | Document the Polls service in CLAUDE.md | **resolved** |
-| 02 | Decide the notification model | needs-triage |
+| 02 | Decide the notification model | needs-info (blocked: messaging service) |
 | 03 | Portuguese label for the Polls service | ready-for-human |
 | 04 | A result only freezes when someone visits the poll | needs-triage |
 | 05 | No way to reorder poll groups | ready-for-agent |
 
-01 is done. Suggested next: **02**, a decision pass rather than a build, and
-the largest remaining gap in the product. 03/04/05 are small and independent.
+01 is done. 02 turned out to be BLOCKED, not merely undecided: it waits on a
+platform messaging service that is planned but undefined, which will own
+channels and user preferences. Polls must not grow their own delivery path in
+the meantime. 03/04/05 are small and independent.
 
 ## Not outstanding — deferred by decision
 

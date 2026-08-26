@@ -383,12 +383,25 @@ That's a genuinely different shape from "run an algorithm over `poll_response_it
 
 **Borda count tally method is also Explicitly deferred:**
 
-**Notifications are Explicitly deferred — and need more thought than the other
-items here.**
+**Notifications are Explicitly deferred — BLOCKED ON INFRASTRUCTURE THAT DOES
+NOT EXIST YET.**
 
 Today a poll is only discovered by visiting its circle. That is the single
 biggest practical threat to turnout, and turnout is what makes a result
 legitimate, so this is deferred as unresolved rather than unwanted.
+
+**The blocker is not a poll question.** A platform-wide messaging service is
+planned but not yet defined. It will own delivery across channels — email
+according to per-user preferences, plus local/in-app messages — and those
+preferences do not exist either: `users` today has no notification preference of
+any kind, and Laravel's `notifications` table is absent. Polls must NOT grow
+their own private notification mechanism in the meantime; a second, poll-shaped
+delivery path would have to be unpicked the moment the real one lands.
+
+So the decisions below stay open, but they are DOWNSTREAM. Channel choice,
+consent, opt-out and volume all belong to the messaging service. What remains
+genuinely poll-specific — and worth carrying over when the time comes — is the
+short list after the events.
 
 The four events plausibly worth announcing, in descending order of obligation:
 
@@ -403,23 +416,37 @@ The recipient list is the easy part: the Electorate is already a materialised
 table, so "who should hear about this poll" is a ready-made query rather than
 something to derive. Everything else is open.
 
-**Open questions, none of which should be answered by writing code first:**
+**Questions the MESSAGING SERVICE owns, not this spec** — listed so they are not
+re-litigated here when it is designed:
 
 - **Consent.** There is no notification preference anywhere on `users`, and no
-  opt-out. Emailing every member of a circle because someone published a poll
-  is a decision about unsolicited mail, not a feature toggle — and for a South
-  African civic platform, POPIA makes it a decision worth taking deliberately.
+  opt-out. Notifying every member of a circle because someone published a poll
+  is a decision about unsolicited messaging, not a feature toggle — and for a
+  South African civic platform, POPIA makes it one to take deliberately. Note
+  the natural unit of consent is probably the CIRCLE rather than the platform,
+  since membership is capped and deliberate; `circle_memberships.metadata`
+  could hold that without a migration.
 - **Volume.** A provincial or national LocationCommunity circle has thousands of
   members, so publishing one poll fans out thousands of messages. That needs
-  queueing (`EmailServiceHandler::queueTemplate` exists), batching and rate
-  limiting. Membership caps compound it: a user may sit in four location circles
-  plus others, so poll traffic multiplies per person.
+  queueing (`QUEUE_CONNECTION=database` and the `jobs` table are live, and
+  `EmailServiceHandler::queueTemplate` exists), batching and rate limiting.
+  Membership caps compound it: a user may sit in four location circles plus
+  others, so traffic multiplies per person.
+- **Channel.** Email is the only ready path. `users` already carries `mobile`
+  and `country_code`, so SMS is reachable in principle — relevant in South
+  Africa, where it reaches people email does not — but it costs real money per
+  message, which makes volume a budget question rather than a load one.
+
+**Questions that stay POLL-SPECIFIC** — the messaging service will not answer
+these, so carry them over:
+
 - **A reminder needs a scheduled job, and closing deliberately does not.**
   ADR-0001 keeps the clock authoritative precisely so that no cron is required
-  to close a poll. A "closing soon" reminder reintroduces one. That is
-  acceptable — it would schedule OUTBOUND MESSAGES, never poll STATE — but the
-  distinction must be held, or someone will helpfully make the same job flip a
-  status while it is there.
+  to close a poll. The scheduler itself is not the issue — `requests:expire` and
+  `comments:check-moderation` already run — the RULE is narrower: no scheduled
+  job may write poll STATE. A reminder job sends messages and touches nothing
+  else. Hold that distinction, or someone will helpfully make the same job flip
+  a status while it is there.
 - **Idempotency.** A reminder must not fire twice for the same poll. That needs
   a record of what was sent: `polls.settings`, a notifications table, or the
   `metadata.email_log` pattern the `requests` table already uses.
@@ -441,7 +468,7 @@ something to derive. Everything else is open.
   still a skeleton — so an in-app poll feed is a separate build, not a variant
   of this one.
 
-A reasonable smallest first step, if one is wanted before the above is settled:
-notify on **cancelled** only, to the people who actually responded. Small
-audience, no scheduling, no consent ambiguity (they acted first), and it
-discharges the one obligation that is genuinely uncomfortable to leave undone.
+When the messaging service exists, a reasonable first step: notify on
+**cancelled** only, to the people who actually responded. Small audience, no
+scheduling, least consent ambiguity (they acted first), and it discharges the
+one obligation that is genuinely uncomfortable to leave undone.

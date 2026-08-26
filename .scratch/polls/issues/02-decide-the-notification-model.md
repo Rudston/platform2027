@@ -1,6 +1,7 @@
 # Decide the notification model for polls
 
-Status: needs-triage
+Status: needs-info
+Blocked by: a platform messaging service, not yet defined
 Type: grilling
 
 ## Why
@@ -47,3 +48,30 @@ discharges the one obligation that is uncomfortable to leave undone.
 
 The seven questions above have answers, written into CONTEXT.md / an ADR where
 they are decisions rather than preferences. Then it can be specced.
+
+## Update — blocked, not merely undecided
+
+A platform-wide messaging service is planned but undefined. It will own delivery
+across channels: email per user preference (those preferences do not exist yet
+either), plus local/in-app messages.
+
+That reframes this ticket. Consent, opt-out, channel and volume are NOT poll
+questions — they belong to the messaging service, and answering them here would
+produce a second, poll-shaped delivery path to unpick later. **Polls must not
+grow their own notification mechanism in the meantime.**
+
+What stays poll-specific, and should be carried over when the service exists:
+
+- Cancelled is the obligation — someone who voted in good faith is entitled to
+  know their vote will never be counted.
+- No organiser-facing "remind those who haven't voted": it hands them exactly
+  the list Q3c withholds by hiding roster names while a poll is open.
+- A reminder job may send messages but must never write poll STATE (ADR-0001).
+  The scheduler itself is fine — two commands already run.
+- A "result available" notice should freeze the Result before sending, so the
+  figure in the message and the figure on the page cannot come from two
+  different computations.
+- Idempotency: a reminder must not fire twice.
+
+Unblock condition: the messaging service is defined far enough to say who may
+be messaged, through which channel, and how preferences are stored.
