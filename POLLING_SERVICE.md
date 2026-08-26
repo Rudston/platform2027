@@ -381,7 +381,25 @@ Worth flagging clearly: this is **not** the same kind of "tally method" as the o
 
 That's a genuinely different shape from "run an algorithm over `poll_response_items`" — it needs a way to say "this instance is a runoff triggered by that instance" (e.g. a nullable `runoff_of_poll_id` self-reference on `polls`), plus the operational logic to spin one up automatically or prompt an admin to.
 
-**Borda count tally method is also Explicitly deferred:**
+**Borda count tally method — NO LONGER DEFERRED (built).**
+
+It was deferred on the grounds that "there is no real requirement pulling for
+it yet". Real use produced one: a four-candidate ranked election where three
+voters each chose a different first preference and ALL THREE ranked the same
+fourth candidate second. Instant runoff eliminated her first, on zero first
+preferences, before that support could be counted — and then declared a
+three-way tie. Borda elects her, 6 points to 4.
+
+Both methods read the same ballot and can disagree entirely, so the choice is
+the organiser's and sits on the poll: instant runoff asks who can command a
+majority, Borda asks who is most broadly acceptable. Borda's known weakness
+stands and is the reason it is offered rather than made the default — ranking a
+strong rival last drags their score down, so it rewards strategic ranking in a
+way instant runoff does not.
+
+The original note is kept below for the reasoning.
+
+**Borda count, as originally deferred:**
 
 **Notifications are Explicitly deferred — BLOCKED ON INFRASTRUCTURE THAT DOES
 NOT EXIST YET.**

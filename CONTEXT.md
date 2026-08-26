@@ -68,7 +68,9 @@ the arithmetic.
 
 **Tally Method**:
 A pure computation over the responses a Poll already holds, producing its
-Result — plurality, instant-runoff, average score. Several Tally Methods may
+Result — plurality, instant-runoff, Borda count, average score. Two methods may
+read the SAME ballot and disagree about who won; which one applies is the
+Organiser's choice, recorded on the Poll. Several Tally Methods may
 be legal for one Response Shape; the Shape decides which.
 _Not_ a Tally Method: anything requiring a further round of voting. Majority
 runoff spawns a second Poll rather than computing over the first, which is why

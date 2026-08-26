@@ -26,6 +26,7 @@ final class Tally
         return match ($method) {
             TallyMethod::Plurality => self::plurality($optionIds, $ballots),
             TallyMethod::InstantRunoff => self::instantRunoff($optionIds, $ballots),
+            TallyMethod::Borda => self::borda($optionIds, $ballots),
             TallyMethod::AverageScore => self::averageScore($optionIds, $ballots),
         };
     }
@@ -208,6 +209,48 @@ final class Tally
 
             $eliminated = array_merge($eliminated, $trailing);
         }
+    }
+
+    /**
+     * Every place on a ballot scores: with N options a first preference is
+     * worth N-1, a second N-2, and the last 0. Highest total wins.
+     *
+     * Unlike instant-runoff this never eliminates anyone, so a candidate who
+     * is nobody's first choice but everybody's second can win — which is the
+     * point of offering it. Points are scored against the number of options
+     * RANKED ON THAT BALLOT, so a voter who ranks only some options does not
+     * inflate their favourite relative to a voter who ranked them all.
+     *
+     * Totals are points, not votes: they do NOT sum to turnout.
+     *
+     * @param  list<int>  $optionIds
+     * @param  list<Ballot>  $ballots
+     */
+    private static function borda(array $optionIds, array $ballots): PollResult
+    {
+        $totals = array_fill_keys($optionIds, 0);
+        $turnout = 0;
+
+        foreach ($ballots as $ballot) {
+            $order = array_values(array_filter(
+                $ballot->preferenceOrder(),
+                fn (int $id): bool => array_key_exists($id, $totals),
+            ));
+
+            if ($order === []) {
+                continue;
+            }
+
+            $places = count($order);
+
+            foreach ($order as $place => $optionId) {
+                $totals[$optionId] += $places - 1 - $place;
+            }
+
+            $turnout++;
+        }
+
+        return self::decide(TallyMethod::Borda, $totals, $turnout);
     }
 
     /**

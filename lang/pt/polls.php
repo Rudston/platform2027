@@ -126,6 +126,7 @@ return [
     'method' => [
         'plurality' => 'Most votes wins',
         'instant_runoff' => 'Instant runoff',
+        'borda_count' => 'Borda count (points for every place)',
         'average_score' => 'Highest average score',
     ],
 
@@ -162,6 +163,7 @@ return [
         'totals_heading' => 'Totals',
         'irv_note' => 'These are FIRST-PREFERENCE counts, so the winner is not always the highest number. Lower-placed options were eliminated and their ballots passed to the next preference — this took :rounds rounds.',
         'average_note' => 'These are average scores, so they do not add up to the turnout.',
+        'borda_note' => 'These are points, not votes: every place on every ballot scores, so they do not add up to the turnout. A candidate ranked second by everyone can beat one ranked first by a few.',
         'live' => 'Running count',
         'live_note' => 'This poll is still open, so these figures will change.',
         'roster_heading' => 'Who responded',

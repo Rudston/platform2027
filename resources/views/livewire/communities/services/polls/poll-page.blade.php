@@ -279,6 +279,8 @@
                  often not the biggest number. Say so, or it reads as a bug. --}}
             @if ($result->method === TallyMethod::InstantRunoff)
                 <p class="mt-3 text-xs text-muted">{{ __('polls.result.irv_note', ['rounds' => $result->rounds]) }}</p>
+            @elseif ($result->method === TallyMethod::Borda)
+                <p class="mt-3 text-xs text-muted">{{ __('polls.result.borda_note') }}</p>
             @elseif ($result->method === TallyMethod::AverageScore)
                 <p class="mt-3 text-xs text-muted">{{ __('polls.result.average_note') }}</p>
             @endif

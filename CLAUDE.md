@@ -723,7 +723,11 @@ Always gate on `rosterIsVisible()`.
 `poll_rating_scales` / `poll_rating_scale_points`.
 
 - **`App\Enums\Polls`** — `PollStatus`, `PollEligibility`, `PollResponseShape`,
-  `TallyMethod`. `PollResponseShape::allowedTallyMethods()` is the ONE
+  `TallyMethod`. A ranked ballot may be counted by instant runoff OR Borda, and
+  they can disagree entirely — instant runoff eliminates a candidate with no
+  first preferences before their second-place support counts, Borda scores
+  every place — so the choice is the organiser's, per poll.
+  `PollResponseShape::allowedTallyMethods()` is the ONE
   definition of which counting rules a ballot shape permits (the same
   single-source pattern as `allowedInternalRoles()`); the creation UI reads it,
   so no invalid pairing is reachable.
@@ -773,8 +777,8 @@ FK is `restrictOnDelete`).
 
 ### Deferred by decision (not oversight)
 
-Majority-runoff and Borda tally methods (majority-runoff is not a Tally Method
-at all — it spawns a second poll rather than computing over the first),
+Majority-runoff (not a Tally Method at all — it spawns a second poll rather
+than computing over the first),
 Surveys, completion actions, secret ballots, a publicly-viewable LIVE poll, a
 stored `kind` on polls, and NOTIFICATIONS (unresolved — see the end of
 `POLLING_SERVICE.md` and `.scratch/polls/issues/02`).

@@ -29,7 +29,7 @@ enum PollResponseShape: string
     {
         return match ($this) {
             self::SingleChoice => [TallyMethod::Plurality],
-            self::RankedChoice => [TallyMethod::InstantRunoff],
+            self::RankedChoice => [TallyMethod::InstantRunoff, TallyMethod::Borda],
             self::Rating       => [TallyMethod::AverageScore],
         };
     }

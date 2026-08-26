@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Enums\Polls\PollResponseShape;
 use App\Enums\Polls\TallyMethod;
 use App\Support\Polls\Ballot;
 use App\Support\Polls\PollResult;
@@ -226,6 +227,79 @@ class PollTallyTest extends TestCase
             $this->ranked(3, [3, 1, 2]), $this->ranked(3, [1]), $this->ranked(2, [2, 1]), $this->ranked(2, [99]),
         ));
         $this->assertSame(8, $mixed->turnout);
+    }
+
+    // --------------------------------------------------------------- borda
+
+    public function test_borda_elects_the_compromise_candidate_instant_runoff_discards(): void
+    {
+        // From real use: four candidates, three voters, each with a different
+        // first choice — and all three ranking option 10 SECOND.
+        $ballots = [
+            Ballot::ranking([9, 10, 11, 12]),
+            Ballot::ranking([11, 10, 12, 9]),
+            Ballot::ranking([12, 10, 9, 11]),
+        ];
+
+        // Instant runoff eliminates 10 FIRST, on zero first preferences,
+        // before its second-place support can ever be counted — then the
+        // remaining three are level and nobody wins.
+        $irv = Tally::run(TallyMethod::InstantRunoff, [9, 10, 11, 12], $ballots);
+        $this->assertNull($irv->winnerOptionId);
+        $this->assertSame([9, 11, 12], $irv->tiedOptionIds);
+        $this->assertSame(0, $irv->totals[10]);
+
+        // Borda counts every place, so the universally-second candidate wins:
+        // 2 points on each of three ballots against 3+1+0 for each rival.
+        $borda = Tally::run(TallyMethod::Borda, [9, 10, 11, 12], $ballots);
+        $this->assertSame(10, $borda->winnerOptionId);
+        $this->assertSame([9 => 4, 10 => 6, 11 => 4, 12 => 4], $borda->totals);
+    }
+
+    public function test_borda_scores_by_places_ranked_on_that_ballot(): void
+    {
+        // A voter ranking only two of four options must not inflate their
+        // favourite relative to a voter who ranked all four. Here the partial
+        // ballot's top choice earns 1 (of 2 places), not 3 (of 4).
+        $result = Tally::run(TallyMethod::Borda, [1, 2, 3, 4], [Ballot::ranking([1, 2])]);
+
+        $this->assertSame([1 => 1, 2 => 0, 3 => 0, 4 => 0], $result->totals);
+        $this->assertSame(1, $result->turnout);
+    }
+
+    public function test_borda_totals_are_points_and_do_not_sum_to_turnout(): void
+    {
+        $result = Tally::run(TallyMethod::Borda, [1, 2, 3], [
+            Ballot::ranking([1, 2, 3]),
+            Ballot::ranking([1, 2, 3]),
+        ]);
+
+        // 1st=2pts, 2nd=1, 3rd=0, twice over.
+        $this->assertSame([1 => 4, 2 => 2, 3 => 0], $result->totals);
+        $this->assertSame(2, $result->turnout);
+        $this->assertNotSame($result->turnout, array_sum($result->totals));
+        $this->assertSame(1, $result->winnerOptionId);
+    }
+
+    public function test_borda_ties_when_points_are_level_and_handles_no_ballots(): void
+    {
+        $tied = Tally::run(TallyMethod::Borda, [1, 2], [
+            Ballot::ranking([1, 2]),
+            Ballot::ranking([2, 1]),
+        ]);
+        $this->assertTrue($tied->isTie());
+        $this->assertSame([1, 2], $tied->tiedOptionIds);
+
+        $empty = Tally::run(TallyMethod::Borda, [1, 2], []);
+        $this->assertTrue($empty->isEmpty());
+        $this->assertNull($empty->winnerOptionId);
+    }
+
+    public function test_only_ranked_ballots_may_be_tallied_by_borda(): void
+    {
+        $this->assertTrue(PollResponseShape::RankedChoice->allows(TallyMethod::Borda));
+        $this->assertFalse(PollResponseShape::SingleChoice->allows(TallyMethod::Borda));
+        $this->assertFalse(PollResponseShape::Rating->allows(TallyMethod::Borda));
     }
 
     // ------------------------------------------------------ purity & storage
