@@ -1,6 +1,6 @@
 # Document the Polls service in CLAUDE.md
 
-Status: ready-for-agent
+Status: resolved
 Type: task
 
 ## Why
@@ -39,3 +39,22 @@ A section in the same register as the Forums one, covering:
 
 A reader who has never seen this session can work on Polls from CLAUDE.md
 alone without contradicting CONTEXT.md or the ADRs.
+
+## Answer
+
+Done — `CLAUDE.md` gained a "Polls (the `voting` service)" section, placed after
+Comment Moderation so the forum cluster stays intact. It leads with the three
+ADR decisions under the heading "THREE DECISIONS THAT LOOK LIKE BUGS WITHOUT
+THEIR ADR", since those are what a future session would otherwise "fix".
+
+Also updated, beyond what this ticket asked:
+- "Notification, voting, social media, learning service implementations" in
+  What Is NOT Yet Built was stale — voting IS built.
+- Poll notifications added to that list explicitly (issue 02).
+- Seven entries added to Common Mistakes: branching on `polls.status`, deriving
+  the electorate, filtering at tally time, calling `roster()` ungated,
+  confusing `Mark::value` with `ratingScalePointId`, calling a poll
+  "anonymous", and giving `rank` a non-null default.
+
+Every class, method, file path and table named in the section was verified to
+exist rather than written from memory.

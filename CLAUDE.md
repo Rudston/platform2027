@@ -647,6 +647,134 @@ front-end "Pending Review" badge deep-links `getUrl('view', ['record' => …])`.
 
 ---
 
+## Polls (the `voting` service)
+
+Structured collective decisions inside a Circle: elections, propositions and
+rating exercises. BUILT end to end — schema, models, a pure tally, the service
+handler, UI and tests.
+
+**Vocabulary is governed by `CONTEXT.md`**, the project glossary. Three terms
+are already taken by other subsystems and MUST NOT be reused here:
+- a poll answerer is a **Respondent**, never a "Participant" (forums own that
+  word — a contribution-derived count);
+- the sentence above the options is the **Prompt**, never a "Question"
+  (`poll_questions` is structural and never surfaces in the UI);
+- "Anonymous" must never appear — see Attribution below.
+Other defined terms: Poll (the genus — an Election or Proposition is a
+*description*, never stored), Response Shape vs Tally Method, Electorate,
+Qualifying Date, Roster, Result, Organiser, Poll Group.
+
+### THREE DECISIONS THAT LOOK LIKE BUGS WITHOUT THEIR ADR
+
+Read `docs/adr/0001`–`0003` before changing any of this. Each describes
+something a reasonable person would try to "fix".
+
+1. **There is no `closed` status, and a finished poll still says `published`**
+   (ADR-0001). `status` records WHY a poll stopped EARLY — `draft`,
+   `published`, `concluded`, `cancelled` — and never WHETHER it is open.
+   Scheduled/Open/Closed are DERIVED from `opens_at`/`closes_at`, so the two
+   can never disagree and no cron is needed. Concluding and cancelling both
+   stamp `closes_at`, so status annotates the clock rather than competing with
+   it. `archived_at` is a separate timestamp, NOT a status case, so archiving
+   never erases how a poll ended.
+2. **`poll_electorate` is materialised even though `circle_memberships` is an
+   append-only log** (ADR-0002), so it looks like redundant denormalisation. It
+   is not: `metadata.internal_role_approved` is MUTATED IN PLACE and keeps no
+   history, so deriving a past electorate answers with today's approvals — the
+   wrong electorate on exactly the polls whose eligibility is most restrictive.
+   Written once at publish from the membership log as of `qualifying_date`.
+3. **`polls.poll_group_id` is NOT NULL with no default group** (ADR-0003).
+   Every poll belongs to exactly one Poll Group; there is no "General" bucket.
+   Groups are archived, never deleted (`restrictOnDelete`), because a Concluded
+   poll is a record of a community decision.
+
+### Attribution — verifiable without surveillance
+
+`hide_voter_identities` is a DISPLAY rule, not storage: `poll_responses.user_id`
+is always written. It is withheld from EVERYONE — members, the Organiser,
+platform admins and superadmins alike — the sole exception being a user viewing
+their own response. **This is NOT a secret ballot** and must never be described
+as one.
+
+What lets a member trust a result anyway, and why all four parts matter:
+- the **Electorate** is fixed at publish, so the denominator cannot move;
+- the **Roster** publishes a live COUNT while the poll runs and the NAMES only
+  once it Closes — a live list of who responded is a list of who has yet to
+  comply;
+- the **Result** freezes at Close (per-option totals, turnout, winner), so
+  later recomputation CHECKS it rather than replacing it;
+- totals sum to turnout, so the arithmetic is checkable by hand.
+
+`Poll::roster()` THROWS when `rosterIsVisible()` is false rather than returning
+an empty collection — an empty roster is indistinguishable from "nobody
+responded", so a caller who forgot to check would render a plausible falsehood.
+Always gate on `rosterIsVisible()`.
+
+### Tables and where the code lives
+
+`poll_groups`, `polls`, `poll_electorate`, `poll_questions`, `poll_options`,
+`poll_responses`, `poll_response_items`, plus platform-curated
+`poll_rating_scales` / `poll_rating_scale_points`.
+
+- **`App\Enums\Polls`** — `PollStatus`, `PollEligibility`, `PollResponseShape`,
+  `TallyMethod`. `PollResponseShape::allowedTallyMethods()` is the ONE
+  definition of which counting rules a ballot shape permits (the same
+  single-source pattern as `allowedInternalRoles()`); the creation UI reads it,
+  so no invalid pairing is reachable.
+- **`App\Models\Polls`** — domain predicates live here: `Poll::isOpen()`,
+  `isClosed()`, `isEntitled()`, `canRespond()`, `canBeEndedBy()`,
+  `isAmendable()`, `stateKey()`, `rosterIsVisible()`.
+- **`App\Support\Polls`** — `Tally`, `Ballot`, `Mark`, `PollResult`. PURE: no
+  Eloquent, no clock, no user identities. Same inputs always give the same
+  Result, which is what makes a frozen Result checkable years later.
+- **`VotingService`** (`App\Services\Circles\`) — the single write entry
+  point, as `ForumService` is for forums.
+- **`App\Livewire\Communities\Services\Polls\`** + matching views — the
+  per-service grouping convention.
+
+**The service key stays `voting`** (a stable handle, like `content_blocks.key`);
+the LABEL is "Polls". `services.name` is translatable — do not confuse the two.
+
+### Authorization
+
+Reuses existing primitives; no parallel mechanism.
+- Creating/managing groups and composing polls → `Circle::isManageableBy()`.
+- Conclude / Cancel → `Poll::canBeEndedBy()`: the Organiser **while they remain
+  a member**, or any circle manager unconditionally. Leaving the Circle ends an
+  Organiser's authority without unmaking them the Organiser. A circle admin can
+  END a poll they cannot READ — power over process, none over content.
+- Responding → `Poll::canRespond()`, re-checked inside `VotingService::respond`.
+  Eligibility is tested when a response is CAST, never at tally time, so no
+  published count moves after the fact.
+- Editing → `Poll::isAmendable()` (no responses yet). Publishing is NOT the
+  point of no return; the first response is.
+
+### Rating scales are platform vocabulary
+
+`poll_rating_scales` has no `circle_id` deliberately: scales are curated
+centrally and shared, so "Strongly Agree" means the same thing in two circles'
+results. Circle admins PICK, never mint. Seeded by
+`Database\Seeders\Polls\PollRatingScaleSeeder` (idempotent; matches points on
+`(scale, value)` and NEVER deletes one — a cast response references it and the
+FK is `restrictOnDelete`).
+
+### Tests — three seams
+
+- `tests/Unit/PollTallyTest.php` — the pure tally, no database. Instant-runoff
+  is tested exhaustively here, with every expected winner worked out by hand.
+- `tests/Feature/PollModelsTest.php` — model predicates.
+- `tests/Services/VotingServiceTest.php` — every state change.
+
+### Deferred by decision (not oversight)
+
+Majority-runoff and Borda tally methods (majority-runoff is not a Tally Method
+at all — it spawns a second poll rather than computing over the first),
+Surveys, completion actions, secret ballots, a publicly-viewable LIVE poll, a
+stored `kind` on polls, and NOTIFICATIONS (unresolved — see the end of
+`POLLING_SERVICE.md` and `.scratch/polls/issues/02`).
+
+---
+
 ## Circle Stewardship (Oversight)
 
 A layer ABOVE circle_admins for platform admins to watch queue health per circle.
@@ -1278,7 +1406,8 @@ On failure: silent.
 - Map view (SVG sourcing in progress)
 - User profile pages + saved locale preference
 - CommunityPage type-specific nested components
-- Notification, voting, social media, learning service implementations
+- Notification, social media, learning service implementations (voting IS
+  built — see the Polls section)
 - Real AI moderation backend — `CommentModerationCheckerContract` is bound to a
   deterministic stub; swap the binding for OpenAI/local LLM (see Comment
   Moderation). Also deferred: forum pin/lock toggle UI, discussion search,
@@ -1288,6 +1417,10 @@ On failure: silent.
 - API endpoints
 - In-app notification templates (email templates are built — see
   Email Templates section)
+- Poll notifications of any kind — nothing tells an eligible member that a poll
+  opened, closes soon, has a result, or was cancelled. Deferred as UNRESOLVED
+  rather than unwanted; the open questions are written up at the end of
+  POLLING_SERVICE.md
 
 ---
 
@@ -1362,6 +1495,28 @@ On failure: silent.
   and remember only Ai-sourced unresolved records quarantine, never User-sourced
 - Adding a stored `pending`/moderation boolean on `comments` — that state is
   derived from `comment_moderation_records` (`Comment::pendingAiReview()`)
+- Branching on `polls.status` to decide whether a poll accepts responses — it
+  records WHY a poll stopped early, never WHETHER it is open. Ask
+  `Poll::isOpen()` / `isClosed()`; and never add a stored `closed` case or a
+  cron to write one (ADR-0001)
+- Deriving a poll's electorate from `circle_memberships` because the log is
+  append-only — `internal_role_approved` is mutated in place and keeps no
+  history, so a past electorate cannot be reconstructed (ADR-0002). It is
+  snapshotted into `poll_electorate` at publish, on purpose
+- Filtering responses at TALLY time (e.g. dropping people who have since left
+  the circle) — eligibility is tested when a response is CAST, so a published
+  count never moves afterwards
+- Calling `Poll::roster()` without checking `rosterIsVisible()` — it THROWS by
+  design, because an empty roster is indistinguishable from "nobody responded"
+- Confusing `Mark::value` with `Mark::ratingScalePointId` — the first is the
+  numeric score a Tally averages, the second is what a response STORES. They
+  coincide only by luck
+- Calling a poll "anonymous" in UI or code — identity is always stored, so it
+  is not a secret ballot; the flag is `hide_voter_identities` and it is a
+  display rule
+- Giving `poll_response_items.rank` a non-null default — the
+  `(poll_response_id, rank)` unique index relies on NULLs not being compared,
+  which is what lets a rating response leave every rank null
 
 ---
 

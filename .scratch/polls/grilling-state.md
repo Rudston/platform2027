@@ -89,16 +89,14 @@ Commits, oldest first:
 
 | # | Ticket | Status |
 |---|--------|--------|
-| 01 | Document the Polls service in CLAUDE.md | ready-for-agent |
+| 01 | Document the Polls service in CLAUDE.md | **resolved** |
 | 02 | Decide the notification model | needs-triage |
 | 03 | Portuguese label for the Polls service | ready-for-human |
 | 04 | A result only freezes when someone visits the poll | needs-triage |
 | 05 | No way to reorder poll groups | ready-for-agent |
 
-Suggested order: **01 first** — it is what stops the settled decisions being
-unpicked by a session that has not seen this one. Then **02**, which is a
-decision pass rather than a build and is the largest remaining gap in the
-product. 03/04/05 are small and independent.
+01 is done. Suggested next: **02**, a decision pass rather than a build, and
+the largest remaining gap in the product. 03/04/05 are small and independent.
 
 ## Not outstanding — deferred by decision
 
