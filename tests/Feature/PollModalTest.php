@@ -203,6 +203,51 @@ class PollModalTest extends TestCase
             ->assertSee('SAST');
     }
 
+    public function test_a_qualifying_date_is_shown_only_when_it_differs_from_the_opening(): void
+    {
+        config(['app.timezone' => 'UTC', 'app.display_timezone' => 'Africa/Johannesburg']);
+        Carbon::setTestNow(Carbon::parse('2026-08-26 10:00:00', 'UTC'));
+
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+        $service = app(VotingService::class);
+
+        // Cut-off set a week before the poll opens: it decides WHO may respond,
+        // so it earns its own line.
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->set('qualifyingDate', '2026-08-19T09:00')
+            ->call('save');
+
+        $withCutoff = Poll::query()->latest('id')->firstOrFail();
+        $service->publish($withCutoff);
+
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $withCutoff->fresh(),
+        ])
+            ->assertSee(__('polls.timing.qualifying'))
+            ->assertSee('19 Aug 2026, 09:00');
+
+        // Left blank, publish() defaults it to the opening moment — repeating
+        // the line above would be noise, so it is not shown.
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Another poll')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->call('save');
+
+        $noCutoff = Poll::query()->latest('id')->firstOrFail();
+        $service->publish($noCutoff);
+
+        Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $noCutoff->fresh(),
+        ])->assertDontSee(__('polls.timing.qualifying'));
+
+        Carbon::setTestNow();
+    }
+
     public function test_a_poll_with_no_closing_time_says_so_rather_than_showing_nothing(): void
     {
         $group = $this->group('Alpha');

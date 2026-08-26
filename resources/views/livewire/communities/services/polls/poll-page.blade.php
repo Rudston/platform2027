@@ -207,6 +207,19 @@
                         @endif
                     </div>
 
+                    {{-- Only when it differs from the opening: a qualifying
+                         date defaults to the publish moment, so showing it then
+                         would just repeat the line above. When it IS earlier,
+                         it is the more consequential of the two — it decides
+                         who may respond at all, not merely when. --}}
+                    @if ($poll->qualifying_date && ! $poll->qualifying_date->equalTo($poll->opens_at))
+                        <div>
+                            <dt class="text-xs text-muted">{{ __('polls.timing.qualifying') }}</dt>
+                            <dd class="text-main">{{ $poll->qualifying_date->inDisplayZone()->format('d M Y, H:i') }}</dd>
+                            <dd class="mt-0.5 text-xs text-muted">{{ __('polls.timing.qualifying_help') }}</dd>
+                        </div>
+                    @endif
+
                     @if ($poll->isCancelled())
                         <p class="text-red-700">{{ __('polls.timing.cancelled') }}</p>
                     @endif

@@ -72,6 +72,8 @@ return [
         'closes' => 'Poll closes',
         'closed' => 'Poll closed',
         'no_close' => 'Runs until an organiser ends it',
+        'qualifying' => 'Membership cut-off',
+        'qualifying_help' => 'Only members who had joined by then may respond.',
         'not_published' => 'Not yet published',
         'cancelled' => 'Cancelled — these responses are never counted',
         'zone_note' => 'Times shown in :zone.',
