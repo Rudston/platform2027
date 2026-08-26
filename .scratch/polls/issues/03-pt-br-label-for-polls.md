@@ -57,8 +57,13 @@ Not blocking. `lang/en/polls.php` has ~119 keys and no translation, but the
 fallback to English means the UI works untranslated. Translating it is a
 separate, larger job.
 
-Note while checking: `config('app.supported_locales')` is `["en", "pt_BR"]` —
-**`pt` is NOT a supported locale**, even though `lang/pt/` exists with seven
-files. CLAUDE.md describes a "pt_BR → pt → en" fallback chain that the config
-does not implement (Laravel's `fallback_locale` is a single value, `en`). Left
-alone: it is unclear whether the config or the doc is the mistake. See issue 06.
+Note while checking, after an initial misreading on my part: the
+pt_BR → pt → en chain CLAUDE.md describes **is real**. Stock Laravel resolves
+only `[locale, fallback]`, but `AppServiceProvider::boot()` calls
+`Lang::determineLocalesUsing()` to insert each region locale's base language
+before the fallback. Verified at runtime: a key present only in `lang/pt/`
+resolves under locale `pt_BR`.
+
+So `pt` being absent from `supported_locales` is correct — it is a base LAYER,
+not a selectable locale — and `lang/pt/` is not dead weight. A Portuguese
+translation of Polls therefore belongs in `lang/pt/polls.php`. See issue 06.

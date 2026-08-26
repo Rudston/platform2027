@@ -865,7 +865,14 @@ A lightweight descriptive tagging layer over the existing `themes` vocabulary �
 - Keys: stable snake_case strings (NOT English sentences)
 - `lang/pt/` — shared Portuguese base
 - `lang/pt_BR/` — Brazilian Portuguese overrides only
-- Fallback chain: pt_BR → pt → en → key itself (visible = bug)
+- Fallback chain: pt_BR → pt → en → key itself (visible = bug).
+  NOT stock Laravel, which resolves only [locale, fallback_locale]. The base
+  language is inserted by `Lang::determineLocalesUsing()` in
+  `AppServiceProvider::boot()`. `pt` is therefore deliberately ABSENT from
+  `config('app.supported_locales')` (`["en","pt_BR"]`): it is a shared base
+  LAYER, not a selectable locale, so `lang/pt/` is loaded but never offered in
+  the switcher. A new translation goes in `lang/pt/`; `lang/pt_BR/` is for
+  Brazilian overrides only.
 
 ### What IS translated
 - All UI strings: labels, buttons, headings, empty states, modals
