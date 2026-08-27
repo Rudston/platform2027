@@ -5,7 +5,8 @@
 derivable, and a stored electorate looks like redundant denormalisation. It
 isn't. A Poll materialises its Electorate into `poll_electorate` (one row per
 user) at publish, filtered by the Poll's Qualifying Date, and that table is
-authoritative from then on.
+authoritative from then on — re-resolved only by an amendment that moves one of
+its two inputs, never derived on read (see Consequences).
 
 The reason lives in a different table than the one you would be tempted to
 delete: `circle_memberships.metadata.internal_role_approved` is **mutated in
@@ -45,4 +46,19 @@ turnout reads slightly low in a Circle with churn. This is accepted as honest:
 they were entitled when the Poll opened.
 
 The Qualifying Date must not be in the future, so materialisation always
-happens at publish and no scheduled job is needed.
+happens synchronously — and no scheduled job is needed.
+
+**The snapshot is RETAKEN when its own inputs move.** Amending the Qualifying
+Date or the eligibility rule re-resolves the Electorate from the membership log,
+through the same code as the original, so a Poll's stated cut-off and its real
+Electorate can never disagree. Without this, an amendment left a denominator
+nothing could reconstruct — which is this decision's whole premise, since the
+set cannot be derived after the fact.
+
+It is safe because amendment requires zero responses (`Poll::isAmendable`), so a
+re-snapshot disenfranchises nobody who has already acted; `snapshotElectorate`
+refuses outright to run on a Poll with any response, because it REPLACES the
+stored set (`sync`) and removing an exercised entitlement is the one thing this
+must never do. Any other amendment leaves the Electorate untouched — compared at
+the precision the compose form can express, since a `datetime-local` field
+cannot carry seconds and would otherwise report an edit on every save.

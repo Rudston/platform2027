@@ -522,4 +522,96 @@ class PollModalTest extends TestCase
             ->assertSet('opensAt', '2026-08-26T12:21')
             ->assertSet('closesAt', '2026-08-27T17:00');
     }
+
+    /**
+     * A datetime-local field cannot express seconds, so the form receives the
+     * stored Qualifying Date truncated to the minute and sends that copy back
+     * on every save. Taken literally, saving an unrelated edit would move the
+     * stated date up to 59 seconds earlier and re-resolve the Electorate for no
+     * reason — the very disagreement .scratch/polls/issues/11 is about.
+     */
+    public function test_an_unrelated_edit_moves_neither_the_qualifying_date_nor_the_electorate(): void
+    {
+        // A stored date with SECONDS on it, which the form cannot round-trip.
+        Carbon::setTestNow(Carbon::parse('2026-08-26 10:32:47', 'UTC'));
+
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->call('save');
+
+        $poll = app(VotingService::class)->publish(Poll::query()->latest('id')->firstOrFail());
+
+        $this->assertSame('2026-08-26 10:32:47', $poll->qualifying_date->toDateTimeString());
+        $electorate = $poll->electorate()->pluck('users.id')->sort()->values()->all();
+
+        // Someone joins after publication: they must NOT appear.
+        DB::table('circle_memberships')->insert([
+            'circle_id' => $this->circle->id,
+            'user_id' => User::forceCreate([
+                'name' => 'Late', 'email' => 'late@example.test', 'password' => 'x',
+            ])->id,
+            'joined_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id, 'pollId' => $poll->id])
+            ->set('title', 'Choose a steward, renamed')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $after = $poll->fresh();
+
+        $this->assertSame('Choose a steward, renamed', $after->title);
+        $this->assertSame(
+            '2026-08-26 10:32:47',
+            $after->qualifying_date->toDateTimeString(),
+            'the seconds the form could not carry are not an edit',
+        );
+        $this->assertSame(
+            $electorate,
+            $after->electorate()->pluck('users.id')->sort()->values()->all(),
+            'and the Electorate was not re-resolved',
+        );
+    }
+
+    /**
+     * Emptying the cut-off on a PUBLISHED poll is refused, because its stored
+     * Electorate was resolved from that date (.scratch/polls/issues/11). The
+     * refusal has to reach the organiser as a form error rather than a 500 —
+     * the modal catches the service's exceptions and surfaces the message.
+     *
+     * It lands on `title`, which is where every service refusal lands today;
+     * routing each one to its own field is issue 16's business.
+     */
+    public function test_emptying_the_cut_off_on_a_published_poll_is_refused_on_the_form(): void
+    {
+        $group = $this->group('Alpha');
+        $this->actingAs($this->admin());
+        $service = app(VotingService::class);
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('title', 'Choose a steward')
+            ->set('prompt', 'Select ONE from:')
+            ->set('options', ['Ada', 'Grace'])
+            ->set('qualifyingDate', '2026-08-19T09:00')
+            ->call('save');
+
+        $poll = $service->publish(Poll::query()->latest('id')->firstOrFail());
+        $electorate = $poll->electorate()->pluck('users.id')->all();
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id, 'pollId' => $poll->id])
+            ->set('qualifyingDate', '')
+            ->call('save')
+            ->assertHasErrors('title');
+
+        $this->assertSame(
+            $electorate,
+            $poll->fresh()->electorate()->pluck('users.id')->all(),
+            'a refused amendment leaves the Electorate alone',
+        );
+    }
 }

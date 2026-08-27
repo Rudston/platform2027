@@ -256,6 +256,38 @@ class VotingService implements CircleServiceContract
             $this->guardOptions($data['options']);
         }
 
+        // A Poll carries an Electorate from the moment it is published, so from
+        // then on its Qualifying Date has to stay resolvable. A Draft's is
+        // checked at publish instead, when it starts to mean something.
+        $qualifyingDate = $this->supplied($data, 'qualifying_date', $poll->qualifying_date);
+        $this->guardQualifyingDate($qualifyingDate, mustExist: ! $poll->isDraft());
+
+        // A datetime-local field cannot express seconds, so DisplayTime::toInput
+        // hands the form the stored date truncated to the minute and the form
+        // sends that copy back on EVERY save. Taken literally, saving an
+        // unrelated edit would shift the stated Qualifying Date up to 59
+        // seconds earlier and re-resolve the Electorate for no reason — so the
+        // same minute means unchanged, and the stored value is left alone.
+        $qualifyingDateMoved = $this->minute($qualifyingDate) !== $this->minute($poll->qualifying_date);
+
+        if (! $qualifyingDateMoved) {
+            unset($data['qualifying_date']);
+        }
+
+        // Changing who is entitled to respond must actually change who is
+        // entitled to respond. The Electorate is snapshotted BECAUSE it cannot
+        // be derived afterwards (docs/adr/0002), so moving either of its inputs
+        // and leaving the stored set as it was would give the Poll a
+        // denominator nothing can reconstruct. A Draft has no Electorate yet;
+        // publishing takes the first snapshot.
+        //
+        // Amendment requires zero responses (guardAmendable), so this
+        // disenfranchises nobody who has already acted.
+        $resnapshotElectorate = ! $poll->isDraft() && (
+            $qualifyingDateMoved
+            || $this->supplied($data, 'eligibility', $poll->eligibility) !== $poll->eligibility
+        );
+
         // Against the EFFECTIVE window: an amendment may move either end, or
         // only one of them.
         $this->guardWindow(
@@ -263,7 +295,9 @@ class VotingService implements CircleServiceContract
             $this->supplied($data, 'closes_at', $poll->closes_at),
         );
 
-        return DB::transaction(function () use ($poll, $question, $data, $shape, $method): Poll {
+        return DB::transaction(function () use (
+            $poll, $question, $data, $shape, $method, $resnapshotElectorate
+        ): Poll {
             // Only touch what the caller actually supplied — array_key_exists,
             // not ??, so `false` and an explicit null both come through.
             $changes = [];
@@ -288,6 +322,12 @@ class VotingService implements CircleServiceContract
             $changes['result_frozen_at'] = null;
 
             $poll->update($changes);
+
+            // Decided above, against the pre-write values; guardQualifyingDate
+            // has already established that a published poll has one.
+            if ($resnapshotElectorate && $poll->qualifying_date !== null) {
+                $this->snapshotElectorate($poll, $poll->qualifying_date);
+            }
 
             if ($question !== null) {
                 // rating_scale_id is the one field here an amendment may
@@ -340,12 +380,7 @@ class VotingService implements CircleServiceContract
 
         $qualifyingDate ??= $poll->qualifying_date ?? now();
 
-        if ($qualifyingDate->isFuture()) {
-            throw new InvalidArgumentException(
-                'A qualifying date may not be in the future: the Electorate is snapshotted at publish, '
-                .'so a future cut-off could never be resolved without a scheduled job.'
-            );
-        }
+        $this->guardQualifyingDate($qualifyingDate, mustExist: true);
 
         return DB::transaction(function () use ($poll, $qualifyingDate): Poll {
             $poll->update([
@@ -445,11 +480,23 @@ class VotingService implements CircleServiceContract
      * append-only. Approval of an internal role is NOT — metadata is mutated
      * in place — so an Internal poll is filtered in PHP through
      * hasApprovedInternalRole(), the one sanctioned way to judge a role, and
-     * accepts the known limitation that it reflects approval AT PUBLISH. That
-     * is exactly why the answer is written down here rather than recomputed.
+     * accepts the known limitation that it reflects approval AS OF THIS CALL —
+     * publication, or the amendment that last moved the Qualifying Date or the
+     * eligibility rule. That is exactly why the answer is written down here
+     * rather than recomputed on read.
      */
     protected function snapshotElectorate(Poll $poll, Carbon $qualifyingDate): void
     {
+        // This method REPLACES the stored set (see the sync below), so it must
+        // never run on a Poll anyone has answered. Both callers guarantee that;
+        // this makes the method safe on its own terms.
+        if ($poll->respondentCount() > 0) {
+            throw new RuntimeException(
+                "Poll [{$poll->getKey()}] already has responses, so its Electorate is fixed: "
+                .'re-snapshotting would remove entitlements that have already been exercised.'
+            );
+        }
+
         $memberIds = [];
 
         CircleMembership::query()
@@ -467,10 +514,12 @@ class VotingService implements CircleServiceContract
                 }
             });
 
-        // syncWithoutDetaching rather than sync: publishing is guarded to
-        // Drafts, so this only ever writes a fresh set, and never silently
-        // removes an entitlement.
-        $poll->electorate()->syncWithoutDetaching(array_keys($memberIds));
+        // sync, NOT syncWithoutDetaching: the Electorate must EQUAL what the
+        // rules produce as of the Qualifying Date. Re-snapshotting after the
+        // date moved earlier — or after eligibility narrowed to Internal —
+        // otherwise leaves entitlements the stated date denies. Safe only
+        // because of the guard above.
+        $poll->electorate()->sync(array_keys($memberIds));
     }
 
     /*
@@ -599,11 +648,6 @@ class VotingService implements CircleServiceContract
     */
 
     /**
-     * A poll may be amended only while no one has answered it. The rule itself
-     * lives on Poll::isAmendable() so the UI gates on exactly what this
-     * enforces; this is the write-side guard, not a second definition.
-     */
-    /**
      * The value the caller supplied for $key, or $current when they did not
      * mention it.
      *
@@ -618,6 +662,53 @@ class VotingService implements CircleServiceContract
         return array_key_exists($key, $data) ? $data[$key] : $current;
     }
 
+    /**
+     * A date reduced to the precision a datetime-local field can express, for
+     * comparing "did the organiser change this?" without reading a dropped
+     * seconds component as an edit.
+     */
+    protected function minute(?Carbon $date): ?int
+    {
+        return $date?->copy()->startOfMinute()->getTimestamp();
+    }
+
+    /**
+     * The Qualifying Date must be resolvable NOW, and a Poll that has already
+     * resolved an Electorate from one may never lose it.
+     *
+     * A date in the future could not be resolved without a scheduled job, and
+     * the Electorate is drawn from the membership log as it stood on that date
+     * (docs/adr/0002). Removing it from a published Poll would leave a stored
+     * Electorate with nothing stating what it was resolved from — the exact
+     * disagreement this guard exists to prevent.
+     */
+    protected function guardQualifyingDate(?Carbon $qualifyingDate, bool $mustExist): void
+    {
+        if ($qualifyingDate === null) {
+            if ($mustExist) {
+                throw new InvalidArgumentException(
+                    'A poll that has been published must keep a Qualifying Date: it is what its '
+                    .'Electorate was resolved from, and the two may never disagree.'
+                );
+            }
+
+            return;
+        }
+
+        if ($qualifyingDate->isFuture()) {
+            throw new InvalidArgumentException(
+                'A qualifying date may not be in the future: the Electorate is drawn from the '
+                .'membership log as it stood then, so a future date could never be resolved '
+                .'without a scheduled job.'
+            );
+        }
+    }
+
+    /**
+     * A poll may be amended only while no one has answered it. The rule itself
+     * lives on Poll::isAmendable() so the UI gates on exactly what this
+     * enforces; this is the write-side guard, not a second definition.
+     */
     protected function guardAmendable(Poll $poll): void
     {
         if (! $poll->isAmendable()) {

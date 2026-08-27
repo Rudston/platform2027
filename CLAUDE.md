@@ -688,7 +688,11 @@ something a reasonable person would try to "fix".
    is not: `metadata.internal_role_approved` is MUTATED IN PLACE and keeps no
    history, so deriving a past electorate answers with today's approvals — the
    wrong electorate on exactly the polls whose eligibility is most restrictive.
-   Written once at publish from the membership log as of `qualifying_date`.
+   Written at publish from the membership log as of `qualifying_date`, and
+   RETAKEN through the same code whenever an amendment moves `qualifying_date`
+   or `eligibility` — only possible while the poll has no responses, and the
+   reason `snapshotElectorate` uses `sync` and refuses to run once anyone has
+   answered. Never derived on read; never on a schedule.
 3. **`polls.poll_group_id` is NOT NULL with no default group** (ADR-0003).
    Every poll belongs to exactly one Poll Group; there is no "General" bucket.
    Groups are archived, never deleted (`restrictOnDelete`), because a Concluded

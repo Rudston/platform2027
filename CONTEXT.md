@@ -124,17 +124,23 @@ that grouping is structural: users never meet the word, and a Poll never has
 more than one.
 
 **Electorate**:
-The set of users entitled to respond to a Poll, drawn from Circle membership
-as it stood on the Qualifying Date and fixed when the Poll is published. It is
-the denominator of turnout, and it never shrinks: a member who later leaves
-stays in the Electorate and keeps any response already given.
+The set of users entitled to respond to a Poll, drawn from Circle membership as
+it stood on the Qualifying Date and resolved when the Poll is published. It is
+re-resolved if an amendment moves the Qualifying Date or the eligibility rule,
+which is possible only while nobody has responded. From the first response it
+never shrinks: a member who later leaves stays in the Electorate and keeps any
+response already given. It is the denominator of turnout.
 
 **Qualifying Date**:
 The cut-off that decides a Poll's Electorate. Defaults to the moment of
 publication and may be set earlier — so that joining a Circle after a Poll is
-announced confers no vote — but never later. Casting a response requires being
-in the Electorate *and* still being a member at that moment; both are tested
-when the response is given, never when the Poll is tallied.
+announced confers no vote — but never into the future, which could not be
+resolved without waiting. An amendment may move it either way while the Poll has
+no responses, and the Electorate is re-resolved with it; a published Poll may
+never lose it, since it is what the stored Electorate was resolved from. Casting
+a response requires being in the Electorate *and* still being a member at that
+moment; both are tested when the response is given, never when the Poll is
+tallied.
 
 **Roster**:
 The list of Electorate members who have responded to a Poll. Visible even when

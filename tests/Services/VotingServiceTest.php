@@ -672,6 +672,152 @@ class VotingServiceTest extends TestCase
         $this->assertSame($scale->id, $stored->rating_scale_id);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | The Electorate under amendment (.scratch/polls/issues/11)
+    |--------------------------------------------------------------------------
+    |
+    | The Electorate is snapshotted BECAUSE it cannot be derived afterwards
+    | (docs/adr/0002), so an amendment that moves the Qualifying Date or the
+    | eligibility rule without re-snapshotting leaves a denominator nothing can
+    | reconstruct: the Poll's stated date and its real Electorate disagree.
+    |
+    | Amendment requires zero responses, so re-snapshotting disenfranchises
+    | nobody who has already acted.
+    */
+
+    public function test_moving_the_qualifying_date_earlier_drops_a_member_who_joined_after_it(): void
+    {
+        $recent = $this->member('Recent', joinedAt: now()->subMonths(6)->toDateTimeString());
+        $poll = $this->service->publish($this->election());
+
+        $this->assertTrue($poll->isInElectorate($recent), 'the Qualifying Date defaulted to publication');
+
+        $amended = $this->service->updatePoll($poll, [
+            'qualifying_date' => now()->subYear()->addDay(),
+        ]);
+
+        $this->assertFalse(
+            $amended->isInElectorate($recent),
+            'a member who joined after the new Qualifying Date is no longer entitled',
+        );
+    }
+
+    public function test_widening_the_qualifying_date_admits_a_member_who_joined_after_the_old_one(): void
+    {
+        $recent = $this->member('Recent', joinedAt: now()->subMonths(6)->toDateTimeString());
+        $poll = $this->service->publish(
+            $this->election(['qualifying_date' => now()->subYear()->addDay()]),
+        );
+
+        $this->assertFalse($poll->isInElectorate($recent));
+
+        $amended = $this->service->updatePoll($poll, ['qualifying_date' => now()]);
+
+        $this->assertTrue($amended->isInElectorate($recent), 'the wider Qualifying Date enfranchises them');
+        $this->assertTrue($amended->isInElectorate($this->organiser));
+    }
+
+    /**
+     * The re-snapshot obeys the ORIGINAL rules, approved internal roles
+     * included — a claimed but unconfirmed role is never trusted.
+     */
+    public function test_amending_the_eligibility_rule_re_snapshots_the_electorate(): void
+    {
+        $approved = $this->member('Approved', 'organisation_member', 'approved');
+        $pending = $this->member('Pending', 'organisation_member', 'pending');
+        $plain = $this->member('Plain');
+
+        $poll = $this->service->publish($this->election());
+        $this->assertSame(4, $poll->electorateCount(), 'Private admits every member');
+
+        $internal = $this->service->updatePoll($poll, ['eligibility' => PollEligibility::Internal]);
+
+        $this->assertTrue($internal->isInElectorate($approved));
+        $this->assertFalse($internal->isInElectorate($pending), 'a claimed role is not trusted on a re-snapshot either');
+        $this->assertFalse($internal->isInElectorate($plain));
+        $this->assertSame(1, $internal->electorateCount());
+
+        // ...and back again: widening restores the members it had removed.
+        $private = $this->service->updatePoll($internal->fresh(), ['eligibility' => PollEligibility::Private]);
+
+        $this->assertSame(4, $private->electorateCount());
+        $this->assertTrue($private->isInElectorate($plain));
+    }
+
+    public function test_amending_anything_else_leaves_the_electorate_untouched(): void
+    {
+        $poll = $this->service->publish($this->election());
+        $before = $poll->electorate()->pluck('users.id')->sort()->values()->all();
+
+        // Someone joins AFTER publication: if an unrelated edit re-snapshotted,
+        // they would silently appear in the Electorate.
+        $late = $this->member('Late', joinedAt: now()->toDateTimeString());
+
+        $amended = $this->service->updatePoll($poll, [
+            'title' => 'Renamed',
+            'prompt' => 'Pick one:',
+            'options' => ['Ada', 'Grace'],
+        ]);
+
+        $this->assertSame($before, $amended->electorate()->pluck('users.id')->sort()->values()->all());
+        $this->assertFalse($amended->isInElectorate($late));
+    }
+
+    public function test_amending_a_draft_snapshots_nothing_because_publishing_does(): void
+    {
+        $poll = $this->election();
+
+        $amended = $this->service->updatePoll($poll, ['qualifying_date' => now()->subMonth()]);
+
+        $this->assertSame(0, $amended->electorateCount(), 'a Draft has no Electorate to keep honest');
+
+        $published = $this->service->publish($amended);
+        $this->assertTrue($published->isInElectorate($this->organiser));
+    }
+
+    /**
+     * guardAmendable admits a Concluded or Cancelled poll that nobody answered,
+     * and such a poll still carries an Electorate — so the re-snapshot is keyed
+     * on "has been published", not on status being Published.
+     */
+    public function test_a_concluded_poll_with_no_responses_still_re_snapshots(): void
+    {
+        $recent = $this->member('Recent', joinedAt: now()->subMonths(6)->toDateTimeString());
+
+        // Opened yesterday, so concluding now leaves a window guardWindow
+        // accepts. (A poll published and concluded in the same second has
+        // opens_at == closes_at and cannot be amended at all — unrelated to
+        // the Electorate, and left alone here.)
+        $poll = $this->service->conclude(
+            $this->service->publish($this->election(['opens_at' => now()->subDay()])),
+        );
+
+        $this->assertTrue($poll->isInElectorate($recent));
+
+        $amended = $this->service->updatePoll($poll, ['qualifying_date' => now()->subYear()->addDay()]);
+
+        $this->assertFalse($amended->isInElectorate($recent));
+    }
+
+    public function test_an_amendment_may_not_move_the_qualifying_date_into_the_future(): void
+    {
+        $poll = $this->service->publish($this->election());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/may not be in the future/');
+        $this->service->updatePoll($poll, ['qualifying_date' => now()->addWeek()]);
+    }
+
+    public function test_a_published_poll_may_not_have_its_qualifying_date_removed(): void
+    {
+        $poll = $this->service->publish($this->election());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must keep a Qualifying Date/');
+        $this->service->updatePoll($poll, ['qualifying_date' => null]);
+    }
+
     public function test_an_untouched_published_poll_may_return_to_draft_and_loses_its_electorate(): void
     {
         $this->member('Ann');
