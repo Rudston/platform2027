@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\CountsQueries;
 use Tests\Support\TestSchema;
 use Tests\TestCase;
 
@@ -29,6 +30,8 @@ use Tests\TestCase;
  */
 class VotingServiceTest extends TestCase
 {
+    use CountsQueries;
+
     private VotingService $service;
 
     private Circle $circle;
@@ -96,14 +99,38 @@ class VotingServiceTest extends TestCase
     }
 
     /**
-     * A rating poll and the scale it carries. Points are not needed here — these
-     * tests are about the question's shape and its scale reference, not tallying.
+     * A Rating Scale and its points, keyed by the VALUE a Tally averages —
+     * which is not the point id a response stores (they coincide only by luck).
+     *
+     * @param  list<array{0: string, 1: int}>  $points  label and value, in order
+     * @return array{0: PollRatingScale, 1: array<int, int>}
+     */
+    private function ratingScaleWithPoints(string $name, array $points = [['Low', 1], ['Mid', 3], ['High', 5]]): array
+    {
+        $scale = PollRatingScale::create(['name' => $name]);
+        $ids = [];
+
+        foreach ($points as $position => [$label, $value]) {
+            $ids[$value] = PollRatingScalePoint::create([
+                'poll_rating_scale_id' => $scale->id,
+                'label' => $label,
+                'value' => $value,
+                'position' => $position,
+            ])->id;
+        }
+
+        return [$scale, $ids];
+    }
+
+    /**
+     * A DRAFT rating poll and the scale it carries — for tests about the
+     * question's shape and its scale reference rather than tallying.
      *
      * @return array{0: Poll, 1: PollRatingScale}
      */
     private function ratingPoll(): array
     {
-        $scale = PollRatingScale::create(['name' => '5-point agreement']);
+        [$scale] = $this->ratingScaleWithPoints('5-point agreement');
 
         $poll = $this->election([
             'shape' => PollResponseShape::Rating,
@@ -112,6 +139,44 @@ class VotingServiceTest extends TestCase
         ]);
 
         return [$poll, $scale];
+    }
+
+    /**
+     * A published rating poll over Road and Water, answered by $respondents
+     * people. Scores ALTERNATE between 5 and 3 on Road so the average is real
+     * arithmetic rather than a repeated constant; Water is scored 1 by all.
+     *
+     * @return array{0: Poll, 1: array<string, int>} the poll and label => option id
+     */
+    private function publishedRatingPollAnsweredBy(int $respondents): array
+    {
+        [$scale, $points] = $this->ratingScaleWithPoints('Scale for '.$respondents);
+
+        $people = [];
+
+        for ($i = 0; $i < $respondents; $i++) {
+            $people[] = $this->member("Respondent {$respondents}.{$i}");
+        }
+
+        $poll = $this->service->publish($this->service->createPoll($this->group, $this->organiser, [
+            'title' => 'Rate the proposals',
+            'prompt' => 'Score each',
+            'shape' => PollResponseShape::Rating,
+            'tally_method' => TallyMethod::AverageScore,
+            'options' => ['Road', 'Water'],
+            'rating_scale_id' => $scale->id,
+        ]));
+
+        $options = $this->optionIds($poll);
+
+        foreach ($people as $i => $person) {
+            $this->service->respond($poll->fresh(), $person, [
+                Mark::scoredWithPoint($options['Road'], $points[$i % 2 === 0 ? 5 : 3]),
+                Mark::scoredWithPoint($options['Water'], $points[1]),
+            ]);
+        }
+
+        return [$poll->fresh(), $options];
     }
 
     private function optionIds(Poll $poll): array
@@ -427,17 +492,9 @@ class VotingServiceTest extends TestCase
 
     public function test_a_rating_response_stores_the_scale_point_and_tallies_its_value(): void
     {
-        $scale = PollRatingScale::create(['name' => '5-point agreement']);
-        $points = [];
-
-        foreach ([['Strongly Disagree', 1], ['Neutral', 3], ['Strongly Agree', 5]] as $position => [$label, $value]) {
-            $points[$value] = PollRatingScalePoint::create([
-                'poll_rating_scale_id' => $scale->id,
-                'label' => $label,
-                'value' => $value,
-                'position' => $position,
-            ])->id;
-        }
+        [$scale, $points] = $this->ratingScaleWithPoints('5-point agreement', [
+            ['Strongly Disagree', 1], ['Neutral', 3], ['Strongly Agree', 5],
+        ]);
 
         $ann = $this->member('Ann');
         $bob = $this->member('Bob');
@@ -470,12 +527,47 @@ class VotingServiceTest extends TestCase
         $this->assertSame($options['Road'], $result->winnerOptionId);
     }
 
+    /**
+     * The tally runs on every view of an open poll, and again when the Result
+     * freezes. Reading the scale point off each response ITEM made that one
+     * query per item — 200 respondents scoring 5 options is a thousand extra
+     * round trips (.scratch/polls/issues/12).
+     */
+    public function test_tallying_a_rating_poll_costs_the_same_queries_whatever_the_turnout(): void
+    {
+        [$few, $fewOptions] = $this->publishedRatingPollAnsweredBy(2);
+        [$many, $manyOptions] = $this->publishedRatingPollAnsweredBy(8);
+
+        $fewQueries = $this->queriesDuring(fn () => $this->service->tally($few));
+        $manyQueries = $this->queriesDuring(fn () => $this->service->tally($many));
+
+        $this->assertSame(
+            count($fewQueries),
+            count($manyQueries),
+            'tallying 8 respondents took '.count($manyQueries).' queries where 2 took '
+            .count($fewQueries).': the scale point must be loaded WITH the items, not per item',
+        );
+
+        // WHY it is flat: the points are fetched once, not once per item.
+        $this->assertSame(1, $this->queriesTouching($manyQueries, 'poll_rating_scale_points'));
+
+        // A query fix, not an arithmetic one. Road alternates 5 and 3, so both
+        // averages are 4.0 while Water stays 1.0 — the pure tally itself is
+        // pinned exhaustively in tests/Unit/PollTallyTest.php.
+        $fewResult = $this->service->tally($few);
+        $manyResult = $this->service->tally($many);
+
+        $this->assertSame(4.0, $fewResult->totals[$fewOptions['Road']]);
+        $this->assertSame(1.0, $fewResult->totals[$fewOptions['Water']]);
+        $this->assertSame(4.0, $manyResult->totals[$manyOptions['Road']]);
+        $this->assertSame(1.0, $manyResult->totals[$manyOptions['Water']]);
+        $this->assertSame(2, $fewResult->turnout);
+        $this->assertSame(8, $manyResult->turnout);
+    }
+
     public function test_a_rating_response_must_score_every_option_with_a_point_from_its_own_scale(): void
     {
-        $scale = PollRatingScale::create(['name' => 'Two point']);
-        $point = PollRatingScalePoint::create([
-            'poll_rating_scale_id' => $scale->id, 'label' => 'Yes', 'value' => 1, 'position' => 0,
-        ]);
+        [$scale, $points] = $this->ratingScaleWithPoints('Two point', [['Yes', 1]]);
 
         $ann = $this->member('Ann');
         $poll = $this->service->publish($this->service->createPoll($this->group, $this->organiser, [
@@ -486,7 +578,7 @@ class VotingServiceTest extends TestCase
         $options = $this->optionIds($poll);
 
         try {
-            $this->service->respond($poll, $ann, [Mark::scoredWithPoint($options['Road'], $point->id)]);
+            $this->service->respond($poll, $ann, [Mark::scoredWithPoint($options['Road'], $points[1])]);
             $this->fail('a partial scoring should be refused');
         } catch (InvalidArgumentException $e) {
             $this->assertStringContainsString('score every option', $e->getMessage());

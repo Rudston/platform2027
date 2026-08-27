@@ -596,8 +596,11 @@ class VotingService implements CircleServiceContract
 
         $optionIds = $question->options()->pluck('id')->all();
 
+        // items.ratingScalePoint, not items: a Mark carries the point's VALUE, so
+        // reading it off each item lazily cost one query PER ITEM, on a path
+        // that runs on every view of an open poll and again at freeze.
         $ballots = $question->responses()
-            ->with('items')
+            ->with('items.ratingScalePoint')
             ->get()
             ->map(fn (PollResponse $response): Ballot => new Ballot(
                 $response->items

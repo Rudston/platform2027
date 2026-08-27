@@ -1643,6 +1643,10 @@ On failure: silent.
   was removed (ADR-0004). Attribution as a per-poll choice needs its own decision
 - Passing a Poll to `PollResponse::isChoiceVisibleTo()` — it takes only the
   viewer, on purpose: there is no condition to consult
+- Reading `ratingScalePoint` off each response item — eager-load
+  `items.ratingScalePoint` in `VotingService::tally()`. The tally runs on every
+  view of an open poll and again at freeze, so a per-item read is one query per
+  item (200 respondents scoring 5 options = 1,000 of them)
 - Giving `poll_response_items.rank` a non-null default — the
   `(poll_response_id, rank)` unique index relies on NULLs not being compared,
   which is what lets a rating response leave every rank null
