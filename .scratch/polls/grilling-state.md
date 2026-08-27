@@ -85,26 +85,43 @@ Commits, oldest first:
   179e7ca  edit an unanswered poll
   70bbca2  notifications recorded as deferred-unresolved
 
-## Outstanding — one ticket each in ./issues/
+## Tickets — one file each in ./issues/
 
-| # | Ticket | Status |
-|---|--------|--------|
-| 01 | Document the Polls service in CLAUDE.md | **resolved** |
-| 02 | Decide the notification model | needs-info (blocked: messaging service) |
-| 03 | Portuguese label for the Polls service | **resolved** (keep Votações) |
-| 04 | A result only freezes when someone visits the poll | **resolved** |
-| 05 | No way to reorder poll groups | **resolved** |
-| 06 | Polls has no Portuguese translation | ready-for-human (placeholder in place) |
-| 07 | Extract the shared test schema builder | ready-for-agent (PREFACTOR — gates 08–16) |
-| 08 | A visitor cannot read an open Poll | ready-for-agent |
-| 09 | Attribution cannot be switched off | ready-for-agent |
-| 10 | Amending cannot strand a rating scale | ready-for-agent |
-| 11 | Amending cannot orphan the Electorate | ready-for-agent |
-| 12 | Tally reads scale points in one query | ready-for-agent |
-| 13 | One home for circle-scoped slug helpers | ready-for-agent |
-| 14 | Star rating stops assuming its host | ready-for-agent |
-| 15 | Elements hidden with x-cloak flash | ready-for-agent |
-| 16 | Service errors reach the UI untranslated | ready-for-agent |
+**Status lives in the ticket files, not here.** This index carries only titles
+and blocking edges, so there is nothing to keep in sync: a `Status:` line has
+exactly one home, and reading this table can never contradict it.
+
+The states are the ones `docs/agents/issue-tracker.md` defines — the triage
+labels before work starts (`needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`), then `claimed` while someone is on it and
+`resolved` when the answer is appended under an `## Answer` heading.
+
+**The frontier** (issue-tracker.md, Wayfinding operations): files that are open,
+unblocked and unclaimed — a ticket is unblocked when every file it lists under
+"Blocked by" is `resolved` — lowest number first.
+
+```
+grep -H '^\*\*Status:\*\*\|^Status:' .scratch/polls/issues/*.md
+```
+
+| # | Ticket | Blocked by |
+|---|--------|------------|
+| 01 | Document the Polls service in CLAUDE.md | — |
+| 02 | Decide the notification model for polls | — |
+| 03 | Portuguese label for the Polls service | — |
+| 04 | A result only freezes when someone visits the poll | — |
+| 05 | No way to reorder poll groups | — |
+| 06 | Polls has no Portuguese translation | — |
+| 07 | Extract the shared test schema builder | — |
+| 08 | A visitor cannot read an open Poll | 07 (shared test schema builder) |
+| 09 | Attribution cannot be switched off | 07 (shared test schema builder) |
+| 10 | Amending a Poll cannot strand a rating scale | 07 (shared test schema builder) |
+| 11 | Amending a Poll cannot orphan its Electorate | 07 (shared test schema builder) |
+| 12 | Tallying a rating Poll stops querying per response item | 07 (shared test schema builder) |
+| 13 | One home for circle-scoped slug helpers | 07 (shared test schema builder) |
+| 14 | The star rating component stops assuming its host | 07 (shared test schema builder) |
+| 15 | Elements hidden with x-cloak flash before Alpine boots | 07 (shared test schema builder) |
+| 16 | Service errors reach the UI untranslated | 07 (shared test schema builder) |
 
 Tickets 07–16 came from the two-axis code review of `3d54349...HEAD` and were
 published with `/to-tickets`. 07 is prefactor and gates the rest; 08–16 are
