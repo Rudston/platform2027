@@ -83,8 +83,17 @@ class VotingService implements CircleServiceContract
     {
         $group->update([
             'name' => $data['name'] ?? $group->name,
+            // `isset`, so an explicit null keeps the existing slug rather than
+            // clearing it. Deliberate, unlike description: both routes bind a
+            // group BY slug, so a null one makes its page unreachable and
+            // throws while rendering the whole tab. Nothing sends null today
+            // (PollGroupModal falls back to the name); whether the column
+            // should be NOT NULL is raised by ticket 13.
             'slug' => isset($data['slug']) ? $this->slugFor($data['slug']) : $group->slug,
-            'description' => $data['description'] ?? $group->description,
+            // Nullable, and PollGroupModal sends an explicit null for an
+            // emptied field — with `??` a description was typeable but never
+            // removable.
+            'description' => $this->supplied($data, 'description', $group->description),
             'position' => $data['position'] ?? $group->position,
         ]);
 
@@ -239,9 +248,7 @@ class VotingService implements CircleServiceContract
         if ($shape !== null) {
             $this->guardRatingScale(
                 $shape,
-                array_key_exists('rating_scale_id', $data)
-                    ? $data['rating_scale_id']
-                    : $question?->rating_scale_id,
+                $this->supplied($data, 'rating_scale_id', $question?->rating_scale_id),
             );
         }
 
@@ -252,8 +259,8 @@ class VotingService implements CircleServiceContract
         // Against the EFFECTIVE window: an amendment may move either end, or
         // only one of them.
         $this->guardWindow(
-            array_key_exists('opens_at', $data) ? $data['opens_at'] : $poll->opens_at,
-            array_key_exists('closes_at', $data) ? $data['closes_at'] : $poll->closes_at,
+            $this->supplied($data, 'opens_at', $poll->opens_at),
+            $this->supplied($data, 'closes_at', $poll->closes_at),
         );
 
         return DB::transaction(function () use ($poll, $question, $data, $shape, $method): Poll {
@@ -283,12 +290,21 @@ class VotingService implements CircleServiceContract
             $poll->update($changes);
 
             if ($question !== null) {
+                // rating_scale_id is the one field here an amendment may
+                // CLEAR — the compose form sends an explicit null whenever the
+                // shape changes (PollModal::updatedShape) — hence supplied().
+                // The others keep `??`: a null is meaningless for them (all
+                // NOT NULL), and `??` still passes `false`, so the form's
+                // shape-change reset of require_full_ranking arrives intact.
+                // The `?? $question->…` on type/tally_method is vestigial:
+                // $shape/$method were resolved from this same question above,
+                // and $question is non-null in this branch.
                 $question->update([
                     'text' => $data['prompt'] ?? $question->text,
                     'type' => ($shape ?? $question->type)->value,
                     'tally_method' => ($method ?? $question->tally_method)->value,
                     'require_full_ranking' => $data['require_full_ranking'] ?? $question->require_full_ranking,
-                    'rating_scale_id' => $data['rating_scale_id'] ?? $question->rating_scale_id,
+                    'rating_scale_id' => $this->supplied($data, 'rating_scale_id', $question->rating_scale_id),
                 ]);
 
                 if (array_key_exists('options', $data)) {
@@ -587,6 +603,21 @@ class VotingService implements CircleServiceContract
      * lives on Poll::isAmendable() so the UI gates on exactly what this
      * enforces; this is the write-side guard, not a second definition.
      */
+    /**
+     * The value the caller supplied for $key, or $current when they did not
+     * mention it.
+     *
+     * array_key_exists, NOT `??`: on an amendment path an explicit null is a
+     * VALUE — "clear this field" — and must not be read as an omission. That
+     * mistake is what let a shape change keep its rating scale, storing a
+     * single-choice question carrying one, which guardRatingScale refuses to
+     * create. Use this for every nullable field an amendment may clear.
+     */
+    protected function supplied(array $data, string $key, mixed $current): mixed
+    {
+        return array_key_exists($key, $data) ? $data[$key] : $current;
+    }
+
     protected function guardAmendable(Poll $poll): void
     {
         if (! $poll->isAmendable()) {

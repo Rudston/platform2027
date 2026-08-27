@@ -10,6 +10,7 @@ use App\Enums\Polls\TallyMethod;
 use App\Models\Circles\Circle;
 use App\Models\Polls\Poll;
 use App\Models\Polls\PollGroup;
+use App\Models\Polls\PollQuestion;
 use App\Models\Polls\PollRatingScale;
 use App\Models\Polls\PollRatingScalePoint;
 use App\Models\User;
@@ -92,6 +93,25 @@ class VotingServiceTest extends TestCase
             'tally_method' => TallyMethod::Plurality,
             'options' => ['Ada', 'Grace', 'Bo'],
         ], $extra));
+    }
+
+    /**
+     * A rating poll and the scale it carries. Points are not needed here — these
+     * tests are about the question's shape and its scale reference, not tallying.
+     *
+     * @return array{0: Poll, 1: PollRatingScale}
+     */
+    private function ratingPoll(): array
+    {
+        $scale = PollRatingScale::create(['name' => '5-point agreement']);
+
+        $poll = $this->election([
+            'shape' => PollResponseShape::Rating,
+            'tally_method' => TallyMethod::AverageScore,
+            'rating_scale_id' => $scale->id,
+        ]);
+
+        return [$poll, $scale];
     }
 
     private function optionIds(Poll $poll): array
@@ -545,19 +565,111 @@ class VotingServiceTest extends TestCase
 
         // createPoll has always guarded this; updatePoll must too, or an
         // amendment can strand a rating poll with no scale.
+        $before = PollQuestion::findOrFail($poll->question->getKey())->toArray();
+
         try {
             $this->service->updatePoll($poll->fresh(), [
                 'shape' => PollResponseShape::Rating,
                 'tally_method' => TallyMethod::AverageScore,
+                'title' => 'Renamed',
             ]);
             $this->fail('a rating poll with no scale should be refused');
         } catch (InvalidArgumentException $e) {
             $this->assertStringContainsString('needs a rating scale', $e->getMessage());
         }
 
+        // A refusal is never a partial write: every guard runs before the
+        // transaction opens, so neither the question nor the title moved.
+        $this->assertSame($before, PollQuestion::findOrFail($poll->question->getKey())->toArray());
+        $this->assertSame('Choose a steward', $poll->fresh()->title);
+
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/Only a rating poll/');
         $this->service->updatePoll($poll->fresh(), ['rating_scale_id' => 1]);
+    }
+
+    /**
+     * The same `??` mistake, one method away: PollGroupModal sends an explicit
+     * null to clear a description (it stores '' as null), and updateGroup
+     * discarded it, so a description could be typed but never removed. Found by
+     * the audit .scratch/polls/issues/10 asked for, not the reported symptom.
+     */
+    public function test_clearing_a_group_description_is_not_silently_ignored(): void
+    {
+        $group = $this->service->createGroup($this->circle, $this->organiser, [
+            'name' => 'Budget',
+            'description' => 'Everything about the 2027 budget',
+        ]);
+
+        $this->service->updateGroup($group, ['description' => null]);
+
+        $this->assertNull(
+            PollGroup::findOrFail($group->getKey())->description,
+            'an explicit null clears the description',
+        );
+
+        // An omitted key still means "leave it alone".
+        $this->service->updateGroup($group->fresh(), ['description' => 'Restored']);
+        $this->service->updateGroup($group->fresh(), ['name' => 'Budget 2027']);
+
+        $restored = PollGroup::findOrFail($group->getKey());
+        $this->assertSame('Budget 2027', $restored->name);
+        $this->assertSame('Restored', $restored->description);
+    }
+
+    /**
+     * Amending OFF rating must clear the scale. The compose form sends an
+     * explicit null when the shape changes (PollModal::updatedShape), and the
+     * write path must respect it: keeping the old value stores a single-choice
+     * question carrying a rating scale — precisely the combination
+     * guardRatingScale refuses to CREATE.
+     */
+    public function test_switching_a_poll_off_rating_clears_its_scale(): void
+    {
+        [$poll, $scale] = $this->ratingPoll();
+        $this->assertSame($scale->id, $poll->question->rating_scale_id);
+
+        $amended = $this->service->updatePoll($poll, [
+            'shape' => PollResponseShape::SingleChoice,
+            'tally_method' => TallyMethod::Plurality,
+            'rating_scale_id' => null,
+        ]);
+
+        // The STORED question, read back fresh — not merely the absence of an
+        // exception, which is what let this through in the first place.
+        $stored = PollQuestion::findOrFail($amended->question->getKey());
+
+        $this->assertSame(PollResponseShape::SingleChoice, $stored->type);
+        $this->assertSame(TallyMethod::Plurality, $stored->tally_method);
+        $this->assertNull($stored->rating_scale_id, 'the scale must not be silently restored');
+    }
+
+    public function test_a_rating_poll_that_keeps_its_shape_keeps_its_scale(): void
+    {
+        [$poll, $scale] = $this->ratingPoll();
+
+        $amended = $this->service->updatePoll($poll, ['title' => 'Renamed, same ballot']);
+        $stored = PollQuestion::findOrFail($amended->question->getKey());
+
+        $this->assertSame('Renamed, same ballot', $amended->title);
+        $this->assertSame(PollResponseShape::Rating, $stored->type);
+        $this->assertSame($scale->id, $stored->rating_scale_id, 'an unrelated edit must not drop the scale');
+    }
+
+    public function test_switching_a_poll_to_rating_stores_the_chosen_scale(): void
+    {
+        $poll = $this->election();
+        $scale = PollRatingScale::create(['name' => '1-10 priority']);
+
+        $amended = $this->service->updatePoll($poll, [
+            'shape' => PollResponseShape::Rating,
+            'tally_method' => TallyMethod::AverageScore,
+            'rating_scale_id' => $scale->id,
+        ]);
+        $stored = PollQuestion::findOrFail($amended->question->getKey());
+
+        $this->assertSame(PollResponseShape::Rating, $stored->type);
+        $this->assertSame($scale->id, $stored->rating_scale_id);
     }
 
     public function test_an_untouched_published_poll_may_return_to_draft_and_loses_its_electorate(): void
