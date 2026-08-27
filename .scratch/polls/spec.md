@@ -376,16 +376,46 @@ for any of them. All were requested during the build and are accepted:
 - **The forum back-link rework.** The same defect fixed for polls existed in
   forums, having been copied from there.
 
-### Still open from the review
+### Decided: neither open question was one
 
-Not decided here; to be raised as tickets:
+Both items the review raised as policy turned out to be settled already, so
+both are DEFECTS rather than decisions, and all remaining findings go to
+tickets as build work.
 
-- Two defects: `updatePoll` restoring a rating scale onto a non-rating question
-  (`??` where the rule is `array_key_exists`), and the Electorate drifting when
-  `qualifying_date` or `eligibility` is amended without re-snapshotting.
-- Two policy questions: whether a visitor may see an open poll (US42 says no,
-  the code allows it), and whether an Organiser may switch Attribution off at
-  all (Q3a settled only what happens when the flag is on).
-- The Standards axis's judgement calls: duplicated slug helpers, an N+1 in the
-  tally path, the star component's hardcoded `scores.` property, and the shared
-  test schema scaffolding.
+- **A visitor must not see an open Poll.** Nothing to decide: US42 says so,
+  Out of Scope independently forbids "a publicly viewable LIVE poll", and Q11
+  settled results-only publishing during design. Three documents agree and the
+  code does not enforce it.
+- **Attribution is unconditional.** The rule in CONTEXT.md stands as written —
+  withheld from EVERYONE, the sole exception being a user viewing their own
+  response — so the compose modal's `hide_voter_identities` checkbox is the
+  defect. US35 asks for "a real guarantee and not a courtesy", and a guarantee
+  an Organiser can untick is exactly a courtesy.
+
+  The fix carries one sub-question for the ticket: keep the column and remove
+  only the control, or drop the column as well. Recommended: DROP it. A column
+  that may only ever hold one value misrepresents what is configurable, and
+  nothing then prevents it being flipped directly in the database. An open
+  ballot, if ever wanted, deserves its own decision rather than a checkbox that
+  quietly already exists.
+
+### Still open from the review — all of it build work
+
+To be raised as tickets; none blocks another:
+
+1. A visitor can read an open Poll's prompt, options and turnout (US42).
+2. An Organiser can switch Attribution off (US35, CONTEXT.md).
+3. `updatePoll` restores a rating scale onto a non-rating question (`??` where
+   the method's own rule is `array_key_exists`), defeating `guardRatingScale`.
+4. The Electorate drifts: `updatePoll` writes `qualifying_date` and
+   `eligibility` on a published poll without re-running `snapshotElectorate`,
+   so the frozen Electorate stops matching the poll's stated cut-off — the
+   denominator ADR-0002 exists to protect.
+5. Standards judgement calls: duplicated slug helpers (`VotingService` vs
+   `ForumService`), an N+1 in the tally path (`with('items.ratingScalePoint')`),
+   the star component hardcoding the host's `scores.` property, and the circles
+   schema hand-rolled in five new test setups.
+
+Not carried forward: the `x-cloak` finding and the untranslated exception
+strings are real (Standards 1 and 3) but predate and outlive Polls — they are
+platform-wide patterns, not defects in this diff.
