@@ -95,6 +95,20 @@ Commits, oldest first:
 | 04 | A result only freezes when someone visits the poll | **resolved** |
 | 05 | No way to reorder poll groups | **resolved** |
 | 06 | Polls has no Portuguese translation | ready-for-human (placeholder in place) |
+| 07 | Extract the shared test schema builder | ready-for-agent (PREFACTOR — gates 08–16) |
+| 08 | A visitor cannot read an open Poll | ready-for-agent |
+| 09 | Attribution cannot be switched off | ready-for-agent |
+| 10 | Amending cannot strand a rating scale | ready-for-agent |
+| 11 | Amending cannot orphan the Electorate | ready-for-agent |
+| 12 | Tally reads scale points in one query | ready-for-agent |
+| 13 | One home for circle-scoped slug helpers | ready-for-agent |
+| 14 | Star rating stops assuming its host | ready-for-agent |
+| 15 | Elements hidden with x-cloak flash | ready-for-agent |
+| 16 | Service errors reach the UI untranslated | ready-for-agent |
+
+Tickets 07–16 came from the two-axis code review of `3d54349...HEAD` and were
+published with `/to-tickets`. 07 is prefactor and gates the rest; 08–16 are
+otherwise independent of one another, so after 07 the whole frontier is open.
 
 Only 02 and 06 remain, and neither is code work: 02 waits on the messaging
 service, 06 wants a Portuguese speaker.
