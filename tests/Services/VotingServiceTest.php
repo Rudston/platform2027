@@ -15,12 +15,11 @@ use App\Models\Polls\PollRatingScalePoint;
 use App\Models\User;
 use App\Services\Circles\VotingService;
 use App\Support\Polls\Mark;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use RuntimeException;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\TestSchema;
 use Tests\TestCase;
 
 /**
@@ -41,35 +40,10 @@ class VotingServiceTest extends TestCase
     {
         parent::setUp();
 
-        // Only the tables these tests need — the full migration set cannot run
-        // on sqlite (a demography backfill references a missing `countries`).
-        (include database_path('migrations/0001_01_01_000000_create_users_table.php'))->up();
-        (include database_path('migrations/2026_06_20_132319_create_permission_tables.php'))->up();
-        (include database_path('migrations/2026_06_20_140000_make_circle_id_nullable_on_permission_pivots.php'))->up();
-
-        Schema::create('circles', function (Blueprint $table): void {
-            $table->id();
-            $table->string('circleable_type')->nullable();
-            $table->unsignedBigInteger('circleable_id')->nullable();
-            $table->string('locatable_type')->nullable();
-            $table->unsignedBigInteger('locatable_id')->nullable();
-            $table->unsignedBigInteger('parent_id')->nullable();
-            $table->string('path')->nullable();
-            $table->integer('depth')->default(0);
-            $table->string('name')->nullable();
-            $table->json('description')->nullable();
-            $table->string('status')->default('active');
-            $table->softDeletes();
-            $table->timestamps();
-        });
-
-        (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
-
-        // Matched by NAME, not by date: a poll migration added later must
-        // be picked up here too, or the tests run against a stale schema.
-        foreach (glob(database_path('migrations/*_poll*.php')) as $migration) {
-            (include $migration)->up();
-        }
+        TestSchema::make()
+            ->permissions()
+            ->memberships()
+            ->polls();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId(null);
 

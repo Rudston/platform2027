@@ -1486,8 +1486,18 @@ On failure: silent.
 - Test DB is sqlite `:memory:` with `MAIL_MAILER=array` (phpunit.xml)
 - NEVER use `RefreshDatabase` — the full migration set fails on sqlite
   (a demography backfill references a `countries` table that no migration
-  creates). Build only the tables a test needs by running their specific
-  migrations' `up()` in `setUp()`
+  creates). Build only the tables a test needs
+- **`Tests\Support\TestSchema`** is that builder:
+  `TestSchema::make()->permissions()->memberships()->tagging()->polls();`.
+  Opt-ins are `users`, `permissions`, `circles`, `memberships`, `tagging`,
+  `polls`, `pollRatingScales` — each applies immediately, is a no-op if that
+  builder already did it, and pulls in the tables its foreign keys need. ONE
+  builder per test (the bookkeeping is per-instance). Poll migrations are matched by
+  NAME (`*_poll*.php`), so a later one is picked up rather than the tests
+  running against a stale schema. Adding an opt-in is one method there. The six
+  poll test files use it; the ~18 older tests still hand-roll their own blocks
+  (migrating them is outstanding). A NEW test uses the builder — do not copy a
+  `Schema::create('circles', …)` block out of an older one
 - Tests never hit MailHog: `array` mailer + `Mail::fake()`
 
 ---

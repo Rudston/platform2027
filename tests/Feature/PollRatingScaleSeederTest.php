@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Polls\PollRatingScale;
 use App\Models\Polls\PollRatingScalePoint;
 use Database\Seeders\Polls\PollRatingScaleSeeder;
+use Tests\Support\TestSchema;
 use Tests\TestCase;
 
 /**
@@ -19,13 +20,9 @@ class PollRatingScaleSeederTest extends TestCase
     {
         parent::setUp();
 
-        // Only the tables the seeder touches — the full migration set cannot
-        // run on sqlite (see the Testing notes in CLAUDE.md). Matched by NAME
-        // so a later rating-scale migration is picked up here too, rather than
-        // the test silently running against a stale schema.
-        foreach (glob(database_path('migrations/*_poll_rating_scale*.php')) as $migration) {
-            (include $migration)->up();
-        }
+        // Only the tables the seeder touches — the scales are platform
+        // vocabulary with no circle_id, so they stand alone.
+        TestSchema::make()->pollRatingScales();
     }
 
     public function test_it_seeds_the_starting_scales_with_ordered_points(): void
