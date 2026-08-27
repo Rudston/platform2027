@@ -1,6 +1,12 @@
 # Polls service
 
-Status: ready-for-agent
+Status: implemented; amended after review — see **Amendments** at the end.
+
+The body below is the spec AS WRITTEN BEFORE the code, and is deliberately left
+that way: it is the baseline a spec review is measured against, and editing the
+stories to match what was built would make that review meaningless. Decisions
+taken after the review are recorded as amendments instead, so both the original
+intent and the outcome survive.
 
 Authoritative background, which this spec does not restate:
 `POLLING_SERVICE.md` (schema), `CONTEXT.md` (vocabulary — every capitalised
@@ -320,3 +326,66 @@ is the exact failure ADR-0002 exists to prevent.
 Sequencing this into reviewable stages, given the project's one-step-at-a-time
 rule: migrations and enums; then models with their predicates; then the pure
 tally computation; then the service handler; then the UI.
+
+---
+
+## Amendments
+
+Recorded 2026-08-27, after a two-axis code review of `3d54349...HEAD`. Each entry
+supersedes part of the body above; the body itself is unchanged.
+
+### Withdrawn
+
+- **US2** — *"name a Poll Group inline while writing my first Poll, so that I am
+  not forced through a separate setup step."* Withdrawn: creating a group first
+  is acceptable. The story was wrong, not the implementation.
+
+### Superseded
+
+- **US10** — *"add, reorder, edit and remove options while the Poll is a Draft."*
+  The **reorder** half is superseded. What is wanted instead is reordering a
+  POLL within its group, mirroring the group reordering already built.
+
+  Note this is not the cheaper change: `poll_groups.position` exists, but
+  `polls` has no `position` column, so it needs a migration. Option reordering
+  within a draft is NOT being built; options keep the order they are entered.
+
+### Deferred, not dropped
+
+- **US41** — *"publish a closed Poll's Result outside the Circle."* The plumbing
+  exists (`publish_results`, `Poll::resultIsPublic()`) and is tested, but nothing
+  reads it: there is no surface where a non-member sees a published Result.
+  Left deliberately until there is a consumer.
+
+### Accepted beyond the original scope
+
+Each was flagged by the review as scope creep, correctly — the spec did not ask
+for any of them. All were requested during the build and are accepted:
+
+- **Borda count.** The Out of Scope section deferred it on the grounds that
+  "nothing currently needs it". Real use produced the requirement: a ranked
+  election where the candidate every voter placed second was eliminated first by
+  instant runoff. That section is superseded for Borda only; majority runoff
+  remains deferred.
+- **A platform-wide display timezone** (`App\Support\DisplayTime`,
+  `app.display_timezone`, `Carbon::inDisplayZone()`, Filament). Polls was the
+  first feature to accept and show absolute times, which exposed the gap rather
+  than creating it.
+- **`RatingScalePresentation`** and the star widget, so a scale declares how it
+  is drawn instead of being recognised by its name.
+- **The forum back-link rework.** The same defect fixed for polls existed in
+  forums, having been copied from there.
+
+### Still open from the review
+
+Not decided here; to be raised as tickets:
+
+- Two defects: `updatePoll` restoring a rating scale onto a non-rating question
+  (`??` where the rule is `array_key_exists`), and the Electorate drifting when
+  `qualifying_date` or `eligibility` is amended without re-snapshotting.
+- Two policy questions: whether a visitor may see an open poll (US42 says no,
+  the code allows it), and whether an Organiser may switch Attribution off at
+  all (Q3a settled only what happens when the flag is on).
+- The Standards axis's judgement calls: duplicated slug helpers, an N+1 in the
+  tally path, the star component's hardcoded `scores.` property, and the shared
+  test schema scaffolding.

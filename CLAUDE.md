@@ -839,9 +839,12 @@ A lightweight descriptive tagging layer over the existing `themes` vocabulary �
 - **taggables** polymorphic pivot (`theme_id` + `taggable_type`/`taggable_id`,
   unique per triple). **HasTags trait** (`app/Models/Concerns/HasTags.php`):
   `tags()` morphToMany(Theme, 'taggable', 'taggables') — applied to **Circle,
-  ForumGroup, ForumDiscussion ONLY** (Organisation is NOT taggable — tag its
-  OrganisationCommunity Circle). Inverses on `Theme`: `circles()`,
-  `forumGroups()`, `forumDiscussions()` (morphedByMany). ⚠️ These are DISTINCT
+  ForumGroup, ForumDiscussion and Poll ONLY** (Organisation is NOT taggable —
+  tag its OrganisationCommunity Circle). Inverses on `Theme`: `circles()`,
+  `forumGroups()`, `forumDiscussions()`, `polls()` (morphedByMany).
+  Applying the trait is NOT enough to make a model taggable through the UI:
+  `TagPicker::ALLOWED` is a real gate and `mount()` aborts on anything absent
+  from it, so a new taggable must be added there too. ⚠️ These are DISTINCT
   from `Theme::themeCommunities()` (the theme_id-FK Circle-instantiation
   relation — added this pass; the belongsTo half already existed).
 - **Tagging authorization** — uniform `canBeTaggedBy(?User)` on each taggable
@@ -850,6 +853,7 @@ A lightweight descriptive tagging layer over the existing `themes` vocabulary �
   - ForumGroup → owning circle's `isManageableBy()`.
   - ForumDiscussion → the discussion's author (created_by) OR owning group's
     circle `isManageableBy()`.
+  - Poll → owning circle's `isManageableBy()`.
 - **theme_suggestions** + `ThemeSuggestion` model (status enum
   `App\Enums\ThemeSuggestionStatus`): a user's proposed tag. `approve(reviewer,
   ?note)` → `Theme::firstOrCreate` by slug (dedupe, not error), mark reviewed,

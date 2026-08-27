@@ -510,6 +510,13 @@ one obligation that is genuinely uncomfortable to leave undone.
   job may send messages but never write poll STATE, and a result notice should
   freeze the Result before sending.
 
+- **Reordering polls within a group.** Poll groups can already be reordered on
+  the Polls tab; the polls inside a group cannot, and currently list by recency.
+  Note the asymmetry in cost: `poll_groups.position` exists, but `polls` has NO
+  `position` column, so this needs a migration as well as the controls. Replaces
+  the option-reordering asked for in the spec's US10, which is not being built —
+  a draft's options keep the order they were entered.
+
 - **Candidates chosen from members, via a searchable dropdown.** Today a
   `poll_options.label` is free text, which is right for a proposition but wrong
   for an election: an organiser retypes a name that already exists, nothing
