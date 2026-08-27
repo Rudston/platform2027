@@ -7,6 +7,7 @@ use App\Enums\Polls\PollStatus;
 use App\Models\Circles\Circle;
 use App\Models\Concerns\HasTags;
 use App\Models\User;
+use App\Support\Circles\CircleViewer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -321,13 +322,92 @@ class Poll extends Model
     }
 
     /**
-     * May this Poll's Result be seen from outside its Circle? Only a Closed
-     * Poll's Result is ever published; the Poll itself is never externally
-     * visible while it runs, and a Cancelled Poll has no Result at all.
+     * Has this Poll's Result been RELEASED outside its Circle? Closed, not
+     * Cancelled, and the Organiser chose to publish it.
+     *
+     * Deliberately does NOT wait for the Result to be FROZEN. A Poll that runs
+     * out its clock keeps status `published` and freezes on first read after
+     * close, or hourly (docs/adr/0001) — so between closing and freezing its
+     * Result is released but not yet written. Gating a visitor's READ on the
+     * freeze would 404 a published Result for up to an hour, and because the
+     * page freezes AFTER the read gate, no visitor could ever heal it: the
+     * first member to look would have to.
+     */
+    public function resultIsReleased(): bool
+    {
+        return $this->publish_results && $this->isClosed() && ! $this->isCancelled();
+    }
+
+    /**
+     * Is there a published Result to SHOW from outside the Circle? Released,
+     * and frozen — a figure computed on the fly is not the settled decision.
+     * Composed from resultIsReleased() so the two cannot drift: this is the
+     * narrower of the pair, and the read gate uses the wider one.
      */
     public function resultIsPublic(): bool
     {
-        return $this->publish_results && $this->hasResult() && ! $this->isCancelled();
+        return $this->resultIsReleased() && $this->hasResult();
+    }
+
+    // ------------------------------------------------------------ who may read
+
+    /**
+     * May this viewer READ this Poll at all? US42: a Circle's deliberation
+     * stays internal while it runs, so the only thing anyone outside the Circle
+     * ever sees is a CLOSED Poll's published Result.
+     *
+     *   Draft                          → managers only (unfinished work)
+     *   Scheduled / Open               → members and managers
+     *   Closed, Result published       → anyone, including a logged-out visitor
+     *   Closed, Result not published   → members and managers
+     *   Cancelled                      → members and managers (never a Result)
+     *
+     * The gate is HERE, on the Poll, and never on the Poll Group: a group is
+     * organisational only and never gates what is inside it (docs/adr/0003).
+     * The group page filters what it LISTS with this same predicate.
+     *
+     * Takes the viewer's standing in the Circle rather than a User: a listing
+     * resolves it ONCE for the page instead of once per row, and nothing here
+     * touches the database, which is what makes it safe inside a filter. The
+     * standing derives both facts from the Circle and the User (see
+     * CircleViewer), so a caller cannot assert authority it does not have.
+     */
+    public function isReadableBy(CircleViewer $viewer): bool
+    {
+        if ($viewer->managesCircle) {
+            return true;
+        }
+
+        if ($this->isDraft()) {
+            return false;
+        }
+
+        // The one thing that reaches outside the Circle, and only because an
+        // Organiser chose to publish it after the Poll had Closed. Asks whether
+        // the Result is RELEASED, not whether it is frozen yet — see
+        // resultIsReleased(); the page freezes it on this very read.
+        if ($this->resultIsReleased()) {
+            return true;
+        }
+
+        return $viewer->isMember();
+    }
+
+    /**
+     * May this viewer see WHO responded? Everything rosterIsVisible() requires
+     * of the Poll, and standing in the Circle from the viewer.
+     *
+     * The Roster is what lets a MEMBER trust a Result — it is not part of the
+     * Result, and the Result is the only thing publishable outside the Circle
+     * (Q11). So a visitor reading a published Result learns the totals and the
+     * turnout, never who responded.
+     *
+     * Named apart from rosterIsVisible() on purpose: that one is roster()'s
+     * throw-precondition, about the Poll's state alone.
+     */
+    public function rosterNamesAreVisibleTo(CircleViewer $viewer): bool
+    {
+        return $this->rosterIsVisible() && ($viewer->managesCircle || $viewer->isMember());
     }
 
     // ----------------------------------------------------------- authorization

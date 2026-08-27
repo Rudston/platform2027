@@ -7,6 +7,7 @@ use App\Models\Circles\CircleMembership;
 use App\Models\Polls\Poll;
 use App\Models\Polls\PollGroup;
 use App\Services\Circles\VotingService;
+use App\Support\Circles\CircleViewer;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -17,8 +18,10 @@ use Livewire\Component;
  * A Poll Group's page: the polls it holds, with each one's derived state.
  *
  * There is no view gate here, unlike the forum equivalent: a Poll Group has no
- * visibility of its own (docs/adr/0003). Drafts are the exception — they are
- * an organiser's unfinished work and are hidden from everyone else.
+ * visibility of its own (docs/adr/0003), so the page stays reachable and simply
+ * lists less. Each Poll answers for itself (Poll::isReadableBy) — a Draft is
+ * managers-only, a running Poll members-only, and a visitor sees only a Closed
+ * Poll whose Result was published.
  */
 #[Layout('layouts.main')]
 class PollGroupPage extends Component
@@ -56,23 +59,37 @@ class PollGroupPage extends Component
         return $this->circle->isManageableBy(auth()->user());
     }
 
+    /** The viewer's standing in this Circle, resolved once for the whole list. */
+    #[Computed]
+    public function viewer(): CircleViewer
+    {
+        return CircleViewer::for($this->circle, auth()->user());
+    }
+
     /**
-     * The group's polls, newest first. Drafts are visible only to managers —
-     * an unpublished poll is work in progress, not a decision anyone should
-     * see. Every other state is public to whoever can reach the page; whether
-     * a viewer may RESPOND is a separate question the poll answers.
+     * The group's polls, newest first, filtered to those this viewer may open
+     * (Poll::isReadableBy — Drafts are managers-only, a running Poll is
+     * members-only, and a visitor sees only a Closed Poll whose Result was
+     * published). Whether a viewer may RESPOND is a separate question.
+     *
+     * The group page itself is NOT gated: a Poll Group has no visibility of its
+     * own (docs/adr/0003), so it stays reachable and simply lists less. The
+     * membership and manage checks are resolved once, above the loop, so the
+     * filter costs no query per row.
      *
      * @return Collection<int, Poll>
      */
     #[Computed]
     public function polls(): Collection
     {
+        $viewer = $this->viewer();
+
         return $this->group->polls()
             ->with(['organiser', 'tags'])
             ->withCount('electorate')
             ->orderByDesc('created_at')
             ->get()
-            ->filter(fn (Poll $poll): bool => ! $poll->isDraft() || $this->canManage)
+            ->filter(fn (Poll $poll): bool => $poll->isReadableBy($viewer))
             ->values();
     }
 

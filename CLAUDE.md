@@ -753,6 +753,29 @@ Reuses existing primitives; no parallel mechanism.
   a member**, or any circle manager unconditionally. Leaving the Circle ends an
   Organiser's authority without unmaking them the Organiser. A circle admin can
   END a poll they cannot READ — power over process, none over content.
+- Reading → **`Poll::isReadableBy(CircleViewer)`** — the ONE definition of who
+  may open a poll at all (US42). Draft → managers only; Scheduled/Open → members
+  and managers; Closed with the Result released → anyone, visitors included;
+  Closed unreleased, and Cancelled → members and managers. 404, never 403, so an
+  unreadable poll's existence is not confirmed. Gates `PollPage::mount()` and
+  filters `PollGroupPage::polls()`. The gate is on the POLL: a Poll Group has no
+  visibility (ADR-0003), so its page stays reachable and lists less.
+  - **`Poll::rosterNamesAreVisibleTo(CircleViewer)`** — the Roster is a member's
+    accountability device and NOT part of the publishable Result, so a visitor
+    reading a published Result sees totals and turnout, never who responded.
+    Distinct from `rosterIsVisible()`, which is `roster()`'s throw-precondition
+    (poll state only).
+  - **`resultIsReleased()` vs `resultIsPublic()`** — released = Closed, not
+    Cancelled, `publish_results`. Public = released AND frozen. The READ gate
+    asks the wider one: a poll that runs out its clock is released before
+    anything freezes it (freezing is on-read or hourly, ADR-0001), and the page
+    freezes AFTER the gate, so gating on `resultIsPublic()` 404s a published
+    Result for up to an hour with no way for a visitor to heal it.
+  - **`App\Support\Circles\CircleViewer`** — a viewer's standing in ONE circle
+    (`membership`, `managesCircle`), resolved once via `CircleViewer::for($circle,
+    $user)`. Gates that run over a LIST take this, not a `?User`: it costs no
+    query per row, and because it DERIVES both facts it cannot be handed
+    authority a caller made up.
 - Responding → `Poll::canRespond()`, re-checked inside `VotingService::respond`.
   Eligibility is tested when a response is CAST, never at tally time, so no
   published count moves after the fact.
@@ -1577,7 +1600,14 @@ On failure: silent.
   the circle) — eligibility is tested when a response is CAST, so a published
   count never moves afterwards
 - Calling `Poll::roster()` without checking `rosterIsVisible()` — it THROWS by
-  design, because an empty roster is indistinguishable from "nobody responded"
+  design, because an empty roster is indistinguishable from "nobody responded".
+  For DISPLAY the gate is `rosterNamesAreVisibleTo()`, which also asks for
+  standing in the circle
+- Gating a poll READ on `resultIsPublic()` — that needs the Result frozen, and a
+  clock-closed poll is not frozen until someone reads it or the hourly command
+  runs. Use `resultIsReleased()`
+- Giving a poll gate a bare `bool $canManage` or looking membership up inside a
+  predicate a listing calls per row — pass a `CircleViewer`
 - Confusing `Mark::value` with `Mark::ratingScalePointId` — the first is the
   numeric score a Tally averages, the second is what a response STORES. They
   coincide only by luck

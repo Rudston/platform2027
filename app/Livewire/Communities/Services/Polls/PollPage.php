@@ -7,6 +7,7 @@ use App\Models\Circles\Circle;
 use App\Models\Polls\Poll;
 use App\Models\Polls\PollGroup;
 use App\Services\Circles\VotingService;
+use App\Support\Circles\CircleViewer;
 use App\Support\Polls\Mark;
 use App\Support\Polls\PollResult;
 use Illuminate\Database\Eloquent\Collection;
@@ -52,9 +53,11 @@ class PollPage extends Component
         $this->group = $pollGroup;
         $this->poll = $poll;
 
-        // A Draft is an organiser's unfinished work — invisible to everyone
-        // else, exactly as on the group listing.
-        abort_if($poll->isDraft() && ! $poll->isManageableBy(auth()->user()), 404);
+        // US42: a Poll is internal while it runs. A visitor reaches only a
+        // Closed Poll whose Result the Organiser published; a Draft stays with
+        // its managers. One predicate answers for every state, and 404 rather
+        // than 403 so an unreadable Poll's existence is not confirmed.
+        abort_unless($poll->isReadableBy($this->viewer()), 404);
 
         // A poll whose window has passed freezes its Result on first read. This
         // is why no scheduled job is needed: closing is derived, and freezing
@@ -102,6 +105,28 @@ class PollPage extends Component
     public function canManage(): bool
     {
         return $this->poll->isManageableBy(auth()->user());
+    }
+
+    /**
+     * The viewer's standing in this Circle, resolved once per request: the read
+     * gate and the Roster gate both ask for it, and mount() needs it before any
+     * of the page is built.
+     */
+    #[Computed]
+    public function viewer(): CircleViewer
+    {
+        return CircleViewer::for($this->circle, auth()->user());
+    }
+
+    /**
+     * The Roster names Respondents, which is a member's accountability device
+     * and not part of the publishable Result — so a visitor reading a published
+     * Result never sees it.
+     */
+    #[Computed]
+    public function canSeeRoster(): bool
+    {
+        return $this->poll->rosterNamesAreVisibleTo($this->viewer());
     }
 
     /** Tags on this poll — what it is ABOUT, comparable across circles. */
@@ -326,7 +351,7 @@ class PollPage extends Component
     {
         unset($this->canRespond, $this->hasResponded, $this->blockedReason,
             $this->respondentCount, $this->result, $this->canEnd, $this->canManage,
-            $this->canAmend);
+            $this->canAmend, $this->canSeeRoster);
     }
 
     private function resolveBackUrl(mixed $from): string

@@ -305,9 +305,11 @@
     </div>
 
     {{-- The Roster: names only once Closed, so a live poll is never a list of
-         who has yet to comply. roster() THROWS if called early — hence the
-         rosterIsVisible() guard rather than a truthiness check. --}}
-    @if ($poll->rosterIsVisible())
+         who has yet to comply. roster() THROWS if called early, so the guard is
+         canSeeRoster (rosterIsVisible + standing in the Circle) rather than a
+         truthiness check — a visitor reading a published Result sees the
+         totals, never who responded. --}}
+    @if ($this->canSeeRoster)
         <div class="mt-6 rounded-lg border border-border-muted bg-surface p-5 shadow-sm">
             <h2 class="font-medium text-main">{{ __('polls.result.roster_heading') }}</h2>
             <p class="mt-1 text-xs text-muted">{{ __('polls.result.roster_note') }}</p>
