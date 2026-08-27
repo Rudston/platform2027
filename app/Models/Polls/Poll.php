@@ -48,7 +48,6 @@ class Poll extends Model
         'archived_at' => 'datetime',
         'result_frozen_at' => 'datetime',
         'allow_response_update' => 'boolean',
-        'hide_voter_identities' => 'boolean',
         'publish_results' => 'boolean',
         'result' => 'array',
         'settings' => 'array',
@@ -293,8 +292,9 @@ class Poll extends Model
      * A Poll with no question yet (a half-built Draft) is never visible, so
      * that case is caught by the same guard.
      *
-     * The Roster reveals WHO responded, never WHAT they chose — that is
-     * withheld from everyone (see hide_voter_identities).
+     * The Roster reveals WHO responded, never WHAT they chose — that is withheld
+     * from everyone unconditionally (PollResponse::isChoiceVisibleTo,
+     * docs/adr/0004).
      *
      * @return Collection<int, User>
      *

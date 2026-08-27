@@ -67,12 +67,15 @@ polls
   allow_response_update  bool, default false
                         -- can a Respondent change their submitted
                         -- response before the poll closes?
-  hide_voter_identities  bool, default true
-                        -- display rule ONLY: identity is always stored.
-                        -- Withheld from EVERYONE — members, the
-                        -- organiser, platform admins, superadmins — the
-                        -- sole exception being a user viewing their own
-                        -- response. NOT a secret ballot; see CONTEXT.md.
+                        -- (There is deliberately NO attribution column.
+                        -- Who chose what is withheld from EVERYONE
+                        -- unconditionally — members, the organiser,
+                        -- platform admins, superadmins — the sole
+                        -- exception being a user viewing their own
+                        -- response. hide_voter_identities was DROPPED:
+                        -- a guarantee with a switch beside it is a
+                        -- courtesy. See docs/adr/0004. Still NOT a
+                        -- secret ballot; identity is always stored.)
   publish_results        bool, default false
                         -- once CLOSED, may the Result be seen from outside
                         -- the circle? The poll itself is never visible
@@ -310,7 +313,7 @@ not a schema change or a scattered rewrite.
 
 ## Results, the roster and what a member can verify
 
-Attribution is withheld from everyone — see `hide_voter_identities` above — so
+Attribution is withheld from everyone, unconditionally (docs/adr/0004), so
 the platform owes members another way to trust a Result. Three things provide
 it, and they only work together:
 

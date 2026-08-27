@@ -12,9 +12,9 @@
 //    "Participant". Keep them distinct in Portuguese too.
 //  * 'poll.prompt' is the instruction above the options — a prompt, not a
 //    "question". "Question" never surfaces in this UI by design.
-//  * Never render 'poll.hide_voter_identities' as "anónimo"/"anônimo".
-//    Identity is always stored; this is not a secret ballot. The English says
-//    "Hide who chose what" for that reason.
+//  * Never describe a Poll as "anónimo"/"anônimo" anywhere. Who chose what is
+//    withheld from everyone, but identity is always stored — it is not a
+//    secret ballot, and there is no setting that makes it one.
 //  * 'result.irv_note' explains that totals are FIRST PREFERENCES and the
 //    winner may not be the largest number. That explanation carries the
 //    meaning; a literal translation that loses it is worse than none.
@@ -106,8 +106,6 @@ return [
         'no_rating_scales' => 'No rating scales have been set up on the platform yet.',
         'require_full_ranking' => 'Require every option to be ranked',
         'allow_response_update' => 'Let respondents change their answer while the poll is open',
-        'hide_voter_identities' => 'Hide who chose what',
-        'hide_help' => 'Results show totals only. Identity is still stored — this is not a secret ballot.',
         'publish_results' => 'Publish the result outside this community once it closes',
         'opens_at' => 'Opens',
         'closes_at' => 'Closes',

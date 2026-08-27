@@ -139,13 +139,8 @@
 
         {{-- Flags --}}
         <div class="space-y-2">
-            <label class="flex items-start gap-2 text-sm text-main">
-                <input type="checkbox" wire:model="hideVoterIdentities" class="mt-0.5 rounded border-border-muted">
-                <span>
-                    {{ __('polls.poll.hide_voter_identities') }}
-                    <span class="block text-xs text-muted">{{ __('polls.poll.hide_help') }}</span>
-                </span>
-            </label>
+            {{-- No attribution control by design: who chose what is withheld
+                 from everyone, unconditionally (docs/adr/0004). --}}
             <label class="flex items-start gap-2 text-sm text-main">
                 <input type="checkbox" wire:model="allowResponseUpdate" class="mt-0.5 rounded border-border-muted">
                 <span>{{ __('polls.poll.allow_response_update') }}</span>

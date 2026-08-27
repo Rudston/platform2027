@@ -166,7 +166,6 @@ class VotingService implements CircleServiceContract
      *     require_full_ranking?: bool,
      *     rating_scale_id?: ?int,
      *     allow_response_update?: bool,
-     *     hide_voter_identities?: bool,
      *     publish_results?: bool,
      *     opens_at?: ?Carbon,
      *     closes_at?: ?Carbon,
@@ -193,7 +192,6 @@ class VotingService implements CircleServiceContract
                 'eligibility' => ($data['eligibility'] ?? PollEligibility::Private)->value,
                 'qualifying_date' => $data['qualifying_date'] ?? null,
                 'allow_response_update' => $data['allow_response_update'] ?? false,
-                'hide_voter_identities' => $data['hide_voter_identities'] ?? true,
                 'publish_results' => $data['publish_results'] ?? false,
                 'opens_at' => $data['opens_at'] ?? null,
                 'closes_at' => $data['closes_at'] ?? null,
@@ -264,7 +262,7 @@ class VotingService implements CircleServiceContract
             $changes = [];
 
             foreach (['title', 'description', 'qualifying_date', 'opens_at', 'closes_at',
-                'allow_response_update', 'hide_voter_identities', 'publish_results'] as $field) {
+                'allow_response_update', 'publish_results'] as $field) {
                 if (array_key_exists($field, $data)) {
                     $changes[$field] = $data[$field];
                 }

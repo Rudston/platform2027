@@ -8,9 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * One Respondent's answer. Identity is ALWAYS stored, even when the Poll
- * withholds Attribution — that flag governs display, not storage, which is
- * precisely why no Poll here is a secret ballot.
+ * One Respondent's answer. Identity is ALWAYS stored — withholding Attribution
+ * governs display, not storage, which is precisely why no Poll here is a secret
+ * ballot and must never be described as one.
  *
  * One row per Respondent per question, enforced by a unique index. When the
  * Poll allows revision this row is updated in place and submitted_at
@@ -40,18 +40,17 @@ class PollResponse extends Model
     }
 
     /**
-     * Whether $user may see WHAT this response chose. Only the Respondent
-     * themselves, and only when the Poll withholds Attribution — no role,
-     * including the Organiser and superadmin, is granted another user's
-     * choice. When Attribution is not withheld, results are attributed and
-     * anyone who can see the Result can see this.
+     * Whether $user may see WHAT this response chose: the Respondent
+     * themselves, and no one else. Not the Organiser, not a circle admin, not a
+     * platform admin, not a superadmin.
+     *
+     * There is deliberately no Poll argument and no flag to consult — US35 asks
+     * for "a real guarantee and not a courtesy", and a guarantee with a switch
+     * beside it is a courtesy (docs/adr/0004). If Attribution is ever wanted as
+     * a per-Poll choice, it needs its own decision, not a condition here.
      */
-    public function isChoiceVisibleTo(?User $user, Poll $poll): bool
+    public function isChoiceVisibleTo(?User $user): bool
     {
-        if (! $poll->hide_voter_identities) {
-            return true;
-        }
-
         return $user !== null && $user->getKey() === $this->user_id;
     }
 }

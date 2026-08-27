@@ -664,9 +664,9 @@ Other defined terms: Poll (the genus — an Election or Proposition is a
 *description*, never stored), Response Shape vs Tally Method, Electorate,
 Qualifying Date, Roster, Result, Organiser, Poll Group.
 
-### THREE DECISIONS THAT LOOK LIKE BUGS WITHOUT THEIR ADR
+### FOUR DECISIONS THAT LOOK LIKE BUGS WITHOUT THEIR ADR
 
-Read `docs/adr/0001`–`0003` before changing any of this. Each describes
+Read `docs/adr/0001`–`0004` before changing any of this. Each describes
 something a reasonable person would try to "fix".
 
 1. **There is no `closed` status, and a finished poll still says `published`**
@@ -693,14 +693,29 @@ something a reasonable person would try to "fix".
    Every poll belongs to exactly one Poll Group; there is no "General" bucket.
    Groups are archived, never deleted (`restrictOnDelete`), because a Concluded
    poll is a record of a community decision.
+4. **There is no attribution setting, and the column that held one is gone**
+   (ADR-0004). Every neighbouring behaviour has a flag — `publish_results`,
+   `allow_response_update` — so the absence reads as an oversight. It is not:
+   `hide_voter_identities` was dropped along with its checkbox, because a
+   guarantee an Organiser can untick is a courtesy (US35). Withholding is still
+   a DISPLAY rule and no poll is a secret ballot.
 
 ### Attribution — verifiable without surveillance
 
-`hide_voter_identities` is a DISPLAY rule, not storage: `poll_responses.user_id`
-is always written. It is withheld from EVERYONE — members, the Organiser,
-platform admins and superadmins alike — the sole exception being a user viewing
-their own response. **This is NOT a secret ballot** and must never be described
-as one.
+Who chose what is withheld from EVERYONE — members, the Organiser, platform
+admins and superadmins alike — the sole exception being a user viewing their own
+response. **`PollResponse::isChoiceVisibleTo(?User)`** is the gate — it takes no
+Poll and consults no flag, because there is none — and it guards the ONE place
+in the application that reads what somebody chose
+(`PollPage::hydrateExistingResponse`, whose query is already viewer-scoped; the
+predicate is the belt to that braces). The guarantee is structural as well: the
+tally maps responses into `Ballot`/`Mark`, which carry option ids and drop
+identity, and `Poll::roster()` selects `user_id` only, never items. Attribution is
+unconditional, a property of the platform rather than a setting on a Poll
+(ADR-0004) — do NOT re-add `hide_voter_identities` or any per-poll control.
+
+It is a DISPLAY rule, not storage: `poll_responses.user_id` is always written.
+**This is NOT a secret ballot** and must never be described as one.
 
 What lets a member trust a result anyway, and why all four parts matter:
 - the **Electorate** is fixed at publish, so the denominator cannot move;
@@ -800,12 +815,18 @@ points valued 1..5. Defaults to `select`, so every scale keeps the dropdown
 unless it asks otherwise. Adding a widget = a case on the enum plus a branch in
 the respond form; the scale DATA never changes.
 
-### Tests — three seams
+### Tests — the seams
 
 - `tests/Unit/PollTallyTest.php` — the pure tally, no database. Instant-runoff
   is tested exhaustively here, with every expected winner worked out by hand.
 - `tests/Feature/PollModelsTest.php` — model predicates.
 - `tests/Services/VotingServiceTest.php` — every state change.
+- `tests/Feature/PollVisibilityTest.php` — who may READ a poll: one state
+  matrix driving both `isReadableBy` and an HTTP sweep through the routes.
+- `tests/Feature/PollAttributionTest.php` — the Attribution guarantee, asserted
+  against the Organiser, a platform admin and a superadmin (ADR-0004).
+- `tests/Feature/PollGroupOrderingTest.php`, `PollModalTest.php`,
+  `PollNavigationTest.php`, `PollRatingScaleSeederTest.php` — UI and seeder.
 
 ### Deferred by decision (not oversight)
 
@@ -1611,9 +1632,13 @@ On failure: silent.
 - Confusing `Mark::value` with `Mark::ratingScalePointId` — the first is the
   numeric score a Tally averages, the second is what a response STORES. They
   coincide only by luck
-- Calling a poll "anonymous" in UI or code — identity is always stored, so it
-  is not a secret ballot; the flag is `hide_voter_identities` and it is a
-  display rule
+- Calling a poll "anonymous" in UI or code — identity is always stored, so it is
+  not a secret ballot; withholding who chose what is a display rule
+- Adding a per-poll attribution setting (or restoring `hide_voter_identities`) —
+  a guarantee with a switch beside it is a courtesy, which is the defect that
+  was removed (ADR-0004). Attribution as a per-poll choice needs its own decision
+- Passing a Poll to `PollResponse::isChoiceVisibleTo()` — it takes only the
+  viewer, on purpose: there is no condition to consult
 - Giving `poll_response_items.rank` a non-null default — the
   `(poll_response_id, rank)` unique index relies on NULLs not being compared,
   which is what lets a rating response leave every rank null

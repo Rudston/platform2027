@@ -33,9 +33,11 @@ Settled in CONTEXT.md and issue 03; do not re-decide them in translation:
 - A poll answerer is a **Respondent** — a distinct word from the forum
   "Participant" in English. Portuguese should keep them distinct too.
 - The instruction above the options is a **Prompt**, not a "question".
-- Never render `hide_voter_identities` as "anónimo"/"anônimo". Identity is
-  stored; it is not a secret ballot. The English copy says "Hide who chose
-  what" for exactly this reason.
+- Never describe a poll as "anónimo"/"anônimo" anywhere. Who chose what is
+  withheld from everyone, but identity is stored — it is not a secret ballot,
+  and since ticket 09 there is no setting that could make it one. (The
+  `poll.hide_voter_identities` / `poll.hide_help` keys were REMOVED with the
+  control; do not translate them if you find them in an older copy.)
 - The instant-runoff result note explains that totals are FIRST PREFERENCES and
   the winner may not be the largest number. That explanation carries the
   meaning — a literal translation that loses it is worse than none.

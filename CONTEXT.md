@@ -41,13 +41,17 @@ _Avoid_: treating Eligibility and Participation as different rules; today they
 resolve identically.
 
 **Attribution**:
-Whether a Poll's results show which user chose which option. Withholding
-attribution is a *display* rule — the platform always records who responded —
-and it is withheld from EVERYONE: ordinary members, the organiser who created
-the Poll, platform admins and superadmins alike. No role reveals another
-user's choice in the interface. The sole exception is a user viewing their
-own response. It never conceals *that* a user responded — see Roster.
+Which user chose which option. It is withheld from EVERYONE: ordinary members,
+the organiser who created the Poll, platform admins and superadmins alike. No
+role reveals another user's choice in the interface. The sole exception is a
+user viewing their own response.
+
+This is unconditional — a property of the platform, not a setting on a Poll.
+There is nothing to untick and no column to flip (see ADR-0004). Withholding is
+still a *display* rule: the platform always records who responded, so this is
+not a Secret Ballot. It never conceals *that* a user responded — see Roster.
 _Avoid_: "Anonymous" — it promises a secrecy the platform does not provide.
+_Avoid_: describing it as configurable, or adding a per-Poll switch.
 
 **Secret Ballot**:
 A Poll in which a response cannot be linked to the user who cast it, even with

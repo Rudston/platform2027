@@ -52,8 +52,6 @@ class PollModal extends ModalComponent
 
     public bool $allowResponseUpdate = false;
 
-    public bool $hideVoterIdentities = true;
-
     public bool $publishResults = false;
 
     public ?int $ratingScaleId = null;
@@ -101,7 +99,6 @@ class PollModal extends ModalComponent
         $this->description = (string) $poll->description;
         $this->eligibility = $poll->eligibility->value;
         $this->allowResponseUpdate = $poll->allow_response_update;
-        $this->hideVoterIdentities = $poll->hide_voter_identities;
         $this->publishResults = $poll->publish_results;
 
         // Rendered in the DISPLAY timezone, so reopening the form shows the
@@ -232,7 +229,6 @@ class PollModal extends ModalComponent
             'require_full_ranking' => $this->requireFullRanking,
             'rating_scale_id' => $this->ratingScaleId,
             'allow_response_update' => $this->allowResponseUpdate,
-            'hide_voter_identities' => $this->hideVoterIdentities,
             'publish_results' => $this->publishResults,
             // A datetime-local field carries a WALL CLOCK with no zone. Read it
             // in the display timezone, not the app's — parsing "12:21" as UTC

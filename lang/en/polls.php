@@ -87,8 +87,6 @@ return [
         'no_rating_scales' => 'No rating scales have been set up on the platform yet.',
         'require_full_ranking' => 'Require every option to be ranked',
         'allow_response_update' => 'Let respondents change their answer while the poll is open',
-        'hide_voter_identities' => 'Hide who chose what',
-        'hide_help' => 'Results show totals only. Identity is still stored — this is not a secret ballot.',
         'publish_results' => 'Publish the result outside this community once it closes',
         'opens_at' => 'Opens',
         'closes_at' => 'Closes',

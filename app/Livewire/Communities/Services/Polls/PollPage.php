@@ -313,7 +313,11 @@ class PollPage extends Component
 
         $response = $this->question()->responses()->where('user_id', $user->getKey())->with('items')->first();
 
-        if ($response === null) {
+        // The query already narrows to the viewer; the predicate AUTHORISES.
+        // Belt and braces on purpose: this is the only place in the
+        // application that reads what somebody chose, so if the query above is
+        // ever widened, this is what still refuses (docs/adr/0004).
+        if ($response === null || ! $response->isChoiceVisibleTo($user)) {
             return;
         }
 
