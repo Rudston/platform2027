@@ -1374,8 +1374,9 @@ dev DB but is NOT in the seeder yet.
 - Non-collapsible: renders `ContentBlock::get()` directly (`{!! !!}` when
   `is_html`, else escaped)
 - Collapsible: Alpine disclosure — title left, +/- toggle right, body via
-  `x-show` + `x-collapse` (Livewire's bundled Alpine). Initial state is
-  server-rendered to avoid FOUC (project has no `x-cloak` CSS)
+  `x-show` + `x-collapse` (Livewire's bundled Alpine). Elements that must stay
+  hidden until Alpine boots use `x-cloak` (the project ships the
+  `[x-cloak] { display: none !important }` rule in `resources/css/app.css`)
 - Renders nothing when empty and the viewer cannot edit
 - Inline edit pencil (top-right, on hover) for admin/superadmin only
 - Used on the Explore page (`explore.welcome_banner`) and in the Add Community
