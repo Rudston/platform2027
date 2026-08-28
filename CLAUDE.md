@@ -876,6 +876,17 @@ points valued 1..5. Defaults to `select`, so every scale keeps the dropdown
 unless it asks otherwise. Adding a widget = a case on the enum plus a branch in
 the respond form; the scale DATA never changes.
 
+**`<x-polls.star-rating>` takes the property it writes to** — `property="scores.
+<option id>"`, which reads like the `wire:model` on the select it stands in for.
+It does NOT take an option id and build the path itself: it did, hardcoded to
+`scores.<optionId>`, which made a shared component work in exactly one form and
+fail SILENTLY in any other — a click still lit the stars, because that is local
+Alpine state, while the write landed on a property the host did not have
+(`.scratch/polls/issues/14`). The path is interpolated with `@js()`, never
+concatenated, so a quote in it cannot break the handler. Props: `points`,
+`property`, `selected` (the chosen POINT ID — the component translates it to a
+star position), `label`, `disabled` (read-only: no hover wiring, no writes).
+
 ### Tests — the seams
 
 - `tests/Unit/PollTallyTest.php` — the pure tally, no database. Instant-runoff
@@ -886,6 +897,9 @@ the respond form; the scale DATA never changes.
   matrix driving both `isReadableBy` and an HTTP sweep through the routes.
 - `tests/Feature/PollAttributionTest.php` — the Attribution guarantee, asserted
   against the Organiser, a platform admin and a superadmin (ADR-0004).
+- `tests/Feature/PollStarRatingTest.php` — the star widget as a SHARED
+  component: rendered under a property name its own form never uses, to prove
+  the host names the target. The repo's first `$this->blade()` component test.
 - `tests/Feature/PollGroupOrderingTest.php`, `PollModalTest.php`,
   `PollNavigationTest.php`, `PollRatingScaleSeederTest.php` — UI and seeder.
 

@@ -1,7 +1,7 @@
-@props(['points', 'optionId', 'selected' => null, 'label' => null, 'disabled' => false])
+@props(['points', 'property', 'selected' => null, 'label' => null, 'disabled' => false])
 @php
     /** @var \Illuminate\Support\Collection $points  ordered scale points, lowest first */
-    /** @var int $optionId          the poll option being scored */
+    /** @var string $property        the Livewire property path this writes to */
     /** @var int|string|null $selected  the currently chosen point id, if any */
     /** @var string|null $label      accessible name for the group */
     /** @var bool $disabled          render read-only (no hover, no writes) */
@@ -20,7 +20,16 @@
 {{-- Hover fills left-to-right and previews a score without committing it;
      leaving the row falls back to whatever is actually chosen. The write goes
      straight to the Livewire property, so this stays a drop-in replacement for
-     the select it stands in for. --}}
+     the select it stands in for.
+
+     The HOST names that property: the rating form passes
+     property="scores.<the option id>", which reads the same as the wire:model
+     on the select it replaces in the other branch of that @if.
+
+     It used to be hardcoded to scores.<optionId>, which made a shared component
+     work in exactly one form and fail SILENTLY in any other — a click still lit
+     the stars up, because that is local Alpine state, while the write landed on
+     a property the host did not have (.scratch/polls/issues/14). --}}
 <div x-data="{ hover: null, chosen: @js($chosenPosition) }"
      @unless ($disabled) x-on:mouseleave="hover = null" @endunless
      role="radiogroup"
@@ -38,7 +47,7 @@
                     x-on:mouseenter="hover = {{ $position }}"
                     x-on:focus="hover = {{ $position }}"
                     x-on:blur="hover = null"
-                    x-on:click="chosen = {{ $position }}; $wire.set('scores.{{ $optionId }}', {{ $point->id }})"
+                    x-on:click="chosen = {{ $position }}; $wire.set(@js($property), {{ $point->id }})"
                 @endunless
                 class="rounded p-0.5 transition disabled:cursor-default"
                 :class="((hover ?? chosen) ?? 0) >= {{ $position }} ? 'text-amber-500' : 'text-border-muted'">

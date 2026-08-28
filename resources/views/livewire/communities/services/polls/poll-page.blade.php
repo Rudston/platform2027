@@ -152,7 +152,7 @@
                             @if ($this->ratingScale?->rendersAsStars())
                                 <x-polls.star-rating
                                     :points="$this->scalePoints"
-                                    :option-id="$option->id"
+                                    property="scores.{{ $option->id }}"
                                     :selected="$scores[$option->id] ?? null"
                                     :label="$option->label" />
                             @else
