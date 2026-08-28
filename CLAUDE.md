@@ -959,9 +959,25 @@ A lightweight descriptive tagging layer over the existing `themes` vocabulary �
   - ForumDiscussion → the discussion's author (created_by) OR owning group's
     circle `isManageableBy()`.
   - Poll → owning circle's `isManageableBy()`.
+- **`Theme::slugFor(string $name): string`** — the ONE derivation for theme
+  slugs (used by `Theme::booted()` and `ThemeSuggestion::approve()`). **NEVER
+  returns empty — the OPPOSITE of `DerivesScopedSlugs::slugFor`, on purpose.**
+  A group slug IS the URL, so an unslugabble name is refused in the compose form
+  and the person picks another; a theme slug appears in NO route, is an internal
+  dedupe key nobody sees or types, and refusing would reject a perfectly good
+  tag (a non-Latin name is a real tag name). Empty was never safe: `themes.slug`
+  is UNIQUE, so every unslugabble tag collided onto the first one. The fallback
+  (`t-` + a hash of the lower-cased, trimmed name) is DERIVED, so the same tag
+  suggested twice still dedupes, case-insensitively as `Str::slug` already was.
 - **theme_suggestions** + `ThemeSuggestion` model (status enum
   `App\Enums\ThemeSuggestionStatus`): a user's proposed tag. `approve(reviewer,
-  ?note)` → `Theme::firstOrCreate` by slug (dedupe, not error), mark reviewed,
+  ?note)` dedupes on **EITHER unique key** — `where(name)->orWhere(slug)`, then
+  create. Both columns are unique and either may be the one that already exists:
+  slug catches `Housing`/`housing`; NAME catches a theme whose slug was edited
+  by hand and no longer derives from it (`Social Justice` carries
+  `justice-and-crime`). Matching on slug alone missed such a theme, tried to
+  insert a second row with the same name, and 500'd out of Approve on the name
+  constraint. Then mark reviewed,
   auto-attach to the origin entity if one was recorded, email
   `theme_suggestion_approved`. `reject(reviewer, note)` (note required) → email
   `theme_suggestion_rejected`. Emails are best-effort (never roll back review).
@@ -1700,6 +1716,13 @@ On failure: silent.
   was removed (ADR-0004). Attribution as a per-poll choice needs its own decision
 - Passing a Poll to `PollResponse::isChoiceVisibleTo()` — it takes only the
   viewer, on purpose: there is no condition to consult
+- Assuming the two slug rules are the same — they are deliberately opposite.
+  `DerivesScopedSlugs::slugFor` may return `''` and writes REFUSE it (the slug
+  is a URL); `Theme::slugFor` never returns `''` and falls back (the slug is an
+  invisible dedupe key). Copying either rule onto the other's table is a bug
+- Deduping a Theme on slug alone — `themes.name` is unique too, so a
+  hand-edited slug makes the lookup miss and the insert violate the name
+  constraint. Match on either key (see Tagging)
 - Writing a slug with `DerivesScopedSlugs::slugFor()` — it returns `''` for a
   non-Latin or punctuation-only name, and an empty slug is unroutable. Writes
   use `requireSlugFor()` (throws); `slugFor()` is for asking, in the compose

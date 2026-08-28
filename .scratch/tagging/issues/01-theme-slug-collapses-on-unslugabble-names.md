@@ -44,8 +44,76 @@ Not fixed there — different subsystem, and the fix needs the decision above.
 
 **Blocked by:** None.
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] An unslugabble suggestion cannot return an unrelated Theme
-- [ ] Existing `themes` rows with an empty slug are dealt with (audit or backfill)
-- [ ] The rejection lands on whoever can act on it, decided explicitly
+- [x] An unslugabble suggestion cannot return an unrelated Theme
+- [x] Existing `themes` rows with an empty slug are dealt with (audit or backfill)
+- [x] The rejection lands on whoever can act on it, decided explicitly
+
+## Answer
+
+### There is no rejection — and that is the decision
+
+The ticket asked where the refusal belongs: the suggestion form, or approval.
+Neither. That framing came from `.scratch/polls/issues/13`, where refusing was
+right, and the two cases only look alike.
+
+A forum or poll group's slug **IS the URL**. Nobody may be handed a generated
+one they never chose, so an unslugabble name is refused in the compose form and
+the person picks another — they are present, and they can fix it.
+
+`themes.slug` appears in **no route** (verified: no reference in `routes/web.php`,
+and the only reads are the model's own derivation). It is an internal dedupe
+key that nobody sees or types. There is no one to refuse and nothing to explain,
+and refusing would throw away a perfectly good tag: a name in a non-Latin script
+is a real tag name, not a mistake. So `Theme::slugFor()` NEVER returns empty —
+the exact opposite rule to `DerivesScopedSlugs::slugFor()`, deliberately, and
+both docblocks now say why so neither gets "fixed" into the other.
+
+The fallback is `t-` plus a hash of the lower-cased, trimmed name: DERIVED, so
+the same tag suggested twice still dedupes, and case-insensitive, matching what
+`Str::slug` already did for Latin names.
+
+One home, two callers: `Theme::booted()` (which had its own bare `Str::slug`)
+and `ThemeSuggestion::approve()`.
+
+### A second bug, found while fixing the first
+
+The ticket's closing note — "`Theme` is matched by slug rather than by name" —
+turned out to be live, not theoretical. `themes.name` is UNIQUE as well as
+`themes.slug`, so a theme whose slug was edited by hand can never be
+re-suggested: `firstOrCreate` misses on slug, tries to insert a second row with
+the same name, and dies on the name constraint. The admin gets a 500 out of
+Approve and the suggestion can never be actioned.
+
+This is reproducible in the dev database today: **Theme #12 "Social Justice"
+carries the slug `justice-and-crime`.** Probed live (inside a rolled-back
+transaction) before the fix: `UniqueConstraintViolationException`, SQLSTATE
+23000. After: resolves to theme #12, override intact.
+
+`approve()` now matches on EITHER unique key —
+`where('name', …)->orWhere('slug', …)->first() ?? create(…)`. Slug keeps
+`Housing`/`housing` as one tag; name catches the hand-edited case.
+
+### Data
+
+No backfill needed. 141 themes, **0 with an empty slug** — the collapse had not
+been triggered yet, because the only suggestion ever raised
+("Environmental Conservation") slugs normally. One theme's slug does not derive
+from its name, and that is the deliberate override above, left alone.
+
+### Tests
+
+Four in `ThemeTaggingTest`, each verified red before the fix:
+- two distinct unslugabble names produce two distinct Themes, and each origin
+  gets its OWN tag rather than the other person's;
+- the same unslugabble name still dedupes to one Theme (the fallback stays
+  derived, never random);
+- ordinary Latin names are untouched, `Housing`/`housing` included;
+- a hand-edited slug is still found by name.
+
+The file's hand-rolled `themes` table was also tightened to `unique()` on both
+name and slug, matching the real schema — the collapse is only reproducible
+against that, and the looser test table would have hidden it.
+
+Full suite: 340 passed, 1200 assertions.

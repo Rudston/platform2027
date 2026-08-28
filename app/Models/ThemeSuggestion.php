@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -58,11 +57,27 @@ class ThemeSuggestion extends Model
     public function approve(User $reviewer, ?string $note = null): Theme
     {
         $theme = DB::transaction(function () use ($reviewer, $note): Theme {
-            // Dedupe by slug rather than erroring on an existing tag.
-            $theme = Theme::firstOrCreate(
-                ['slug' => Str::slug($this->name)],
-                ['name' => $this->name],
-            );
+            // Dedupe rather than erroring on an existing tag — matching on
+            // EITHER unique key, because themes.name and themes.slug are both
+            // unique and either can be the one that already exists:
+            //
+            // - by slug, so 'Housing' and 'housing' stay one tag. The
+            //   derivation must be Theme::slugFor, never a bare Str::slug —
+            //   that returns '' for a non-Latin or punctuation-only name, and
+            //   with a UNIQUE slug column every such tag matched the FIRST one,
+            //   handing the suggester a Theme they never proposed.
+            // - by name, because a theme's slug may have been edited by hand
+            //   and no longer derive from its name ('Social Justice' carries
+            //   'justice-and-crime'). Matching on slug alone missed it, tried
+            //   to create a second row with the same name, and died on the name
+            //   constraint — a 500 out of Approve, and a suggestion that could
+            //   never be actioned.
+            //
+            // Both from .scratch/tagging/issues/01.
+            $slug = Theme::slugFor($this->name);
+
+            $theme = Theme::where('name', $this->name)->orWhere('slug', $slug)->first()
+                ?? Theme::create(['name' => $this->name, 'slug' => $slug]);
 
             $this->update([
                 'status' => ThemeSuggestionStatus::Approved,

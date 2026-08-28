@@ -37,10 +37,12 @@ class ThemeTaggingTest extends TestCase
         (include database_path('migrations/2026_06_20_140000_make_circle_id_nullable_on_permission_pivots.php'))->up();
         (include database_path('migrations/2026_07_06_000001_create_email_templates_table.php'))->up();
 
+        // name and slug are BOTH unique in the real schema — the collapse this
+        // file pins is only reproducible against that.
         Schema::create('themes', function ($t): void {
             $t->id();
-            $t->string('name');
-            $t->string('slug')->nullable();
+            $t->string('name')->unique();
+            $t->string('slug')->unique();
             $t->unsignedBigInteger('parent_id')->nullable();
             $t->timestamps();
         });
@@ -233,6 +235,102 @@ class ThemeTaggingTest extends TestCase
         $this->assertSame(1, Theme::where('slug', 'energy')->count());
     }
 
+    /**
+     * Str::slug transliterates to ASCII and returns '' for a name in a
+     * non-Latin script or one made only of punctuation, and themes.slug is
+     * UNIQUE — so approving a second such suggestion used to match the FIRST
+     * one's empty slug and hand the second suggester somebody else's Theme:
+     * the wrong tag silently attached to their content, and an "approved"
+     * email about a tag they never proposed (.scratch/tagging/issues/01).
+     */
+    public function test_two_unslugabble_suggestions_do_not_collapse_into_one_theme(): void
+    {
+        $reviewer = User::factory()->create();
+        $circleA = $this->makeCircle();
+        $circleB = $this->makeCircle();
+
+        $suggest = fn (string $name, Circle $origin) => ThemeSuggestion::create([
+            'name' => $name,
+            'requested_by' => User::factory()->create()->id,
+            'origin_taggable_type' => Circle::class,
+            'origin_taggable_id' => $origin->id,
+        ]);
+
+        $first = $suggest('中文名字', $circleA)->approve($reviewer);
+        $second = $suggest('日本語', $circleB)->approve($reviewer);
+
+        $this->assertNotSame($first->id, $second->id, 'distinct names collapsed onto one Theme');
+        $this->assertSame('中文名字', $first->name);
+        $this->assertSame('日本語', $second->name);
+
+        // Neither may hold the empty slug that caused the collapse.
+        $this->assertNotSame('', $first->slug);
+        $this->assertNotSame('', $second->slug);
+        $this->assertNotSame($first->slug, $second->slug);
+
+        // Each origin got ITS OWN tag, not the other person's.
+        $this->assertTrue($circleA->tags()->whereKey($first->id)->exists());
+        $this->assertFalse($circleA->tags()->whereKey($second->id)->exists());
+        $this->assertTrue($circleB->tags()->whereKey($second->id)->exists());
+        $this->assertFalse($circleB->tags()->whereKey($first->id)->exists());
+    }
+
+    /**
+     * The fallback must stay DERIVED from the name, or the same tag suggested
+     * twice would stop deduping and quietly fork into two Themes.
+     */
+    public function test_the_same_unslugabble_name_still_dedupes(): void
+    {
+        $reviewer = User::factory()->create();
+
+        $make = fn (string $name) => ThemeSuggestion::create([
+            'name' => $name,
+            'requested_by' => User::factory()->create()->id,
+        ])->approve($reviewer);
+
+        $this->assertSame($make('中文名字')->id, $make('中文名字')->id);
+        $this->assertSame(1, Theme::where('name', '中文名字')->count());
+    }
+
+    /** Latin names are untouched, including the case-insensitive dedupe. */
+    public function test_slug_derivation_is_unchanged_for_ordinary_names(): void
+    {
+        $reviewer = User::factory()->create();
+
+        $make = fn (string $name) => ThemeSuggestion::create([
+            'name' => $name,
+            'requested_by' => User::factory()->create()->id,
+        ])->approve($reviewer);
+
+        $this->assertSame('water-sanitation', $make('Water & Sanitation')->slug);
+        $this->assertSame('agua-e-saude', $make('Água e Saúde')->slug);
+
+        // "Housing" and "housing" are the same tag, as they always were.
+        $this->assertSame($make('Housing')->id, $make('housing')->id);
+    }
+    /**
+     * A Theme whose slug was overridden by hand must still dedupe by NAME.
+     *
+     * themes.name is UNIQUE as well as themes.slug, so looking a suggestion up
+     * by slug ALONE misses such a theme, tries to create a second one with the
+     * same name, and dies on the name constraint — the admin gets a 500 from
+     * Approve and the suggestion can never be actioned. Live example at the
+     * time of writing: "Social Justice" carries the slug "justice-and-crime"
+     * (.scratch/tagging/issues/01).
+     */
+    public function test_a_theme_with_a_hand_edited_slug_is_still_found_by_name(): void
+    {
+        $existing = Theme::create(['name' => 'Social Justice', 'slug' => 'justice-and-crime']);
+
+        $theme = ThemeSuggestion::create([
+            'name' => 'Social Justice',
+            'requested_by' => User::factory()->create()->id,
+        ])->approve(User::factory()->create());
+
+        $this->assertSame($existing->id, $theme->id, 'the hand-edited theme was not reused');
+        $this->assertSame('justice-and-crime', $theme->fresh()->slug, 'the override was overwritten');
+        $this->assertSame(1, Theme::where('name', 'Social Justice')->count());
+    }
     public function test_tag_list_component_renders_alphabetically(): void
     {
         $circle = $this->makeCircle();
