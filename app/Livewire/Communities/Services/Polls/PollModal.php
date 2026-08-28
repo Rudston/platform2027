@@ -10,6 +10,7 @@ use App\Models\Polls\PollGroup;
 use App\Models\Polls\PollRatingScale;
 use App\Services\Circles\VotingService;
 use App\Support\DisplayTime;
+use App\Support\Polls\RefusalMessage;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use RuntimeException;
@@ -250,7 +251,7 @@ class PollModal extends ModalComponent
         } catch (InvalidArgumentException|RuntimeException $e) {
             // The service is the authority on legal combinations; surface its
             // refusal rather than duplicating the rule here.
-            $this->addError('title', $e->getMessage());
+            $this->addError('title', RefusalMessage::for($e));
 
             return;
         }

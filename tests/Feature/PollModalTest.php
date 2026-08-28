@@ -618,8 +618,9 @@ class PollModalTest extends TestCase
      * refusal has to reach the organiser as a form error rather than a 500 —
      * the modal catches the service's exceptions and surfaces the message.
      *
-     * It lands on `title`, which is where every service refusal lands today;
-     * routing each one to its own field is issue 16's business.
+     * It lands on `title`, which is where every service refusal lands, and
+     * what lands there is the refusal's lang key, translated — never the
+     * exception's own text (.scratch/polls/issues/16).
      */
     public function test_emptying_the_cut_off_on_a_published_poll_is_refused_on_the_form(): void
     {
@@ -647,5 +648,94 @@ class PollModalTest extends TestCase
             $poll->fresh()->electorate()->pluck('users.id')->all(),
             'a refused amendment leaves the Electorate alone',
         );
+    }
+
+    /**
+     * Issue 16: a user-triggerable refusal reaches the UI as its lang key,
+     * translated — not as the exception's own developer-facing text.
+     *
+     * The modal path: a rating poll with no scale is refused by
+     * guardRatingScale, and the error on `title` is the translation of
+     * polls.refusals.rating_scale_required.
+     *
+     * The respond path proves the message is not the exception text verbatim:
+     * a rating response that scores only some options throws "A rating
+     * response must score every option." but the respondent reads
+     * "Score every option." — the key's text, not the exception's.
+     */
+    public function test_a_service_refusal_renders_its_lang_key_not_the_exception_text(): void
+    {
+        $group = $this->group('Alpha');
+        $admin = $this->admin();
+        $this->actingAs($admin);
+
+        $component = Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('shape', PollResponseShape::Rating->value)
+            ->set('tallyMethod', TallyMethod::AverageScore->value)
+            ->set('title', 'Rate the proposals')
+            ->set('prompt', 'Score each one:')
+            ->set('options', ['Road repairs', 'Water pressure'])
+            ->call('save')
+            ->assertHasErrors('title');
+
+        $this->assertSame(
+            __('polls.refusals.rating_scale_required'),
+            $component->errors()->get('title')[0],
+        );
+
+        // The exception itself keeps its developer-facing detail for logs.
+        try {
+            app(VotingService::class)->createPoll($group, $admin, [
+                'title' => 'x', 'prompt' => 'y',
+                'shape' => PollResponseShape::Rating,
+                'tally_method' => TallyMethod::AverageScore,
+                'options' => ['a', 'b'],
+                'rating_scale_id' => null,
+            ]);
+            $this->fail('expected a refusal');
+        } catch (\App\Support\Polls\InvalidPollInput $e) {
+            $this->assertSame('polls.refusals.rating_scale_required', $e->translationKey());
+            $this->assertStringContainsString('needs a rating scale', $e->getMessage());
+        }
+
+        // The respond path, where the key's text and the exception's differ.
+        $scale = PollRatingScale::create(['name' => '5-point agreement']);
+        $point = PollRatingScalePoint::create([
+            'poll_rating_scale_id' => $scale->id, 'label' => 'Neutral', 'value' => 3, 'position' => 0,
+        ]);
+
+        Livewire::test(PollModal::class, ['groupId' => $group->id])
+            ->set('shape', PollResponseShape::Rating->value)
+            ->set('tallyMethod', TallyMethod::AverageScore->value)
+            ->set('ratingScaleId', $scale->id)
+            ->set('title', 'Rate the proposals')
+            ->set('prompt', 'Score each one:')
+            ->set('options', ['Road repairs', 'Water pressure'])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $poll = Poll::query()->latest('id')->firstOrFail();
+        app(VotingService::class)->publish($poll);
+
+        DB::table('circle_memberships')->insert([
+            'circle_id' => $this->circle->id, 'user_id' => $admin->id,
+            'joined_at' => now()->subYear(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $poll->fresh()->electorate()->syncWithoutDetaching([$admin->id]);
+
+        $options = $poll->question->options()->pluck('id', 'label')->all();
+
+        $page = Livewire::test(PollPage::class, [
+            'circle' => $this->circle, 'pollGroup' => $group, 'poll' => $poll->fresh(),
+        ]);
+
+        $page->set('scores', [$options['Road repairs'] => $point->id])
+            ->call('submit')
+            ->assertHasErrors('response');
+
+        $message = $page->errors()->get('response')[0];
+
+        $this->assertSame(__('polls.refusals.rate_every_option'), $message);
+        $this->assertStringNotContainsString('A rating response must score every option.', $message);
     }
 }

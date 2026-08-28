@@ -814,7 +814,15 @@ Always gate on `rosterIsVisible()`.
   Eloquent, no clock, no user identities. Same inputs always give the same
   Result, which is what makes a frozen Result checkable years later.
 - **`VotingService`** (`App\Services\Circles\`) — the single write entry
-  point, as `ForumService` is for forums.
+  point, as `ForumService` is for forums. A refusal a user can trigger is
+  thrown as `App\Support\Polls\PollRefusal` (a `RuntimeException`) or
+  `InvalidPollInput` (an `InvalidArgumentException`) — both implement
+  `TranslatableRefusal`, carrying a `lang/polls.php` `refusals.*` key NEXT TO
+  the developer-facing message. The Livewire components render the KEY,
+  translated, via the single helper `App\Support\Polls\RefusalMessage::for()`;
+  the exception's own message (which names ids and rules) is for logs and is
+  never rendered into a form error. A refusal with no key is an invariant,
+  and the helper falls back to `polls.refusals.generic`.
 - **`App\Livewire\Communities\Services\Polls\`** + matching views — the
   per-service grouping convention.
 

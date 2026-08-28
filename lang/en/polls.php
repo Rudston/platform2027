@@ -169,6 +169,34 @@ return [
         'not_amendable' => 'Someone has responded, so the ballot can no longer be changed. Cancel this poll and publish a replacement instead.',
     ],
 
+    /*
+     * What the UI renders when the service refuses an act. The exception's own
+     * message is developer-facing (it names ids and rules) and goes to logs;
+     * these keys are what a respondent or organiser reads. Thrown as
+     * App\Support\Polls\TranslatableRefusal by VotingService.
+     */
+    'refusals' => [
+        'generic' => 'That change was refused. If it keeps happening, ask an organiser.',
+        'publish_not_draft' => 'This poll has already been published.',
+        'publish_no_question' => 'This poll has no question and cannot be published.',
+        'conclude_not_published' => 'Only a published poll can be ended early.',
+        'already_ended' => 'This poll has already ended.',
+        'cannot_respond' => 'You cannot respond to this poll right now.',
+        'qualifying_date_required' => 'A published poll must keep its membership cut-off: it is what the electorate was resolved from.',
+        'qualifying_date_future' => 'The membership cut-off may not be in the future.',
+        'tally_shape_mismatch' => 'That counting method is not valid for this answer style.',
+        'rating_scale_required' => 'A rating poll needs a rating scale.',
+        'rating_scale_not_allowed' => 'Only a rating poll may carry a rating scale.',
+        'option_not_on_ballot' => 'That option is not on this ballot.',
+        'single_choice_one' => 'Choose exactly one option.',
+        'rank_at_least_one' => 'Rank at least one option.',
+        'rank_distinct' => 'Every ranked option needs its own distinct rank.',
+        'rank_no_gaps' => 'Ranks must run 1, 2, 3… with no gaps.',
+        'rank_all_required' => 'This poll requires every option to be ranked.',
+        'rate_every_option' => 'Score every option.',
+        'rate_scale_point' => 'Each option must be scored with a point from this poll\'s rating scale.',
+    ],
+
     'group' => [
         'name' => 'Name',
         'name_placeholder' => 'e.g. 2027 Budget Consultation',

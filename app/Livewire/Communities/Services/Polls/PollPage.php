@@ -10,6 +10,7 @@ use App\Services\Circles\VotingService;
 use App\Support\Circles\CircleViewer;
 use App\Support\Polls\Mark;
 use App\Support\Polls\PollResult;
+use App\Support\Polls\RefusalMessage;
 use Illuminate\Database\Eloquent\Collection;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
@@ -237,7 +238,7 @@ class PollPage extends Component
             $user = auth()->user();
             $this->service()->respond($this->poll, $user, $this->marksFromForm($question->type));
         } catch (InvalidArgumentException|RuntimeException $e) {
-            $this->addError('response', $e->getMessage());
+            $this->addError('response', RefusalMessage::for($e));
 
             return;
         }
@@ -254,7 +255,7 @@ class PollPage extends Component
         try {
             $this->poll = $this->service()->publish($this->poll);
         } catch (InvalidArgumentException|RuntimeException $e) {
-            $this->addError('lifecycle', $e->getMessage());
+            $this->addError('lifecycle', RefusalMessage::for($e));
 
             return;
         }
@@ -266,7 +267,14 @@ class PollPage extends Component
     {
         abort_unless($this->canEnd, 403);
 
-        $this->poll = $this->service()->conclude($this->poll);
+        try {
+            $this->poll = $this->service()->conclude($this->poll);
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            $this->addError('lifecycle', RefusalMessage::for($e));
+
+            return;
+        }
+
         $this->forgetState();
     }
 
@@ -274,7 +282,14 @@ class PollPage extends Component
     {
         abort_unless($this->canEnd, 403);
 
-        $this->poll = $this->service()->cancel($this->poll);
+        try {
+            $this->poll = $this->service()->cancel($this->poll);
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            $this->addError('lifecycle', RefusalMessage::for($e));
+
+            return;
+        }
+
         $this->forgetState();
     }
 

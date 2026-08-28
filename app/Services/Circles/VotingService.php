@@ -17,7 +17,9 @@ use App\Models\Polls\PollResponse;
 use App\Models\User;
 use App\Services\Circles\Concerns\DerivesScopedSlugs;
 use App\Support\Polls\Ballot;
+use App\Support\Polls\InvalidPollInput;
 use App\Support\Polls\Mark;
+use App\Support\Polls\PollRefusal;
 use App\Support\Polls\PollResult;
 use App\Support\Polls\Tally;
 use Illuminate\Support\Carbon;
@@ -375,11 +377,11 @@ class VotingService implements CircleServiceContract
     public function publish(Poll $poll, ?Carbon $qualifyingDate = null): Poll
     {
         if (! $poll->isDraft()) {
-            throw new RuntimeException("Poll [{$poll->getKey()}] is not a Draft and cannot be published again.");
+            throw new PollRefusal('polls.refusals.publish_not_draft', "Poll [{$poll->getKey()}] is not a Draft and cannot be published again.");
         }
 
         if ($poll->question === null) {
-            throw new RuntimeException("Poll [{$poll->getKey()}] has no question and cannot be published.");
+            throw new PollRefusal('polls.refusals.publish_no_question', "Poll [{$poll->getKey()}] has no question and cannot be published.");
         }
 
         $qualifyingDate ??= $poll->qualifying_date ?? now();
@@ -431,7 +433,7 @@ class VotingService implements CircleServiceContract
     public function conclude(Poll $poll): Poll
     {
         if ($poll->status !== PollStatus::Published) {
-            throw new RuntimeException("Only a published poll can be concluded; poll [{$poll->getKey()}] is {$poll->status->value}.");
+            throw new PollRefusal('polls.refusals.conclude_not_published', "Only a published poll can be concluded; poll [{$poll->getKey()}] is {$poll->status->value}.");
         }
 
         $poll->update([
@@ -450,7 +452,7 @@ class VotingService implements CircleServiceContract
     public function cancel(Poll $poll): Poll
     {
         if (in_array($poll->status, [PollStatus::Concluded, PollStatus::Cancelled], true)) {
-            throw new RuntimeException("Poll [{$poll->getKey()}] has already ended.");
+            throw new PollRefusal('polls.refusals.already_ended', "Poll [{$poll->getKey()}] has already ended.");
         }
 
         $poll->update([
@@ -542,7 +544,8 @@ class VotingService implements CircleServiceContract
     public function respond(Poll $poll, User $user, array $marks): PollResponse
     {
         if (! $poll->canRespond($user)) {
-            throw new RuntimeException(
+            throw new PollRefusal(
+                'polls.refusals.cannot_respond',
                 "User [{$user->getKey()}] may not respond to poll [{$poll->getKey()}] right now: "
                 .'the poll must be Open, and they must be in the Electorate, still a member, and '
                 .'either not yet responded or permitted to revise.'
@@ -693,7 +696,8 @@ class VotingService implements CircleServiceContract
     {
         if ($qualifyingDate === null) {
             if ($mustExist) {
-                throw new InvalidArgumentException(
+                throw new InvalidPollInput(
+                    'polls.refusals.qualifying_date_required',
                     'A poll that has been published must keep a Qualifying Date: it is what its '
                     .'Electorate was resolved from, and the two may never disagree.'
                 );
@@ -703,7 +707,8 @@ class VotingService implements CircleServiceContract
         }
 
         if ($qualifyingDate->isFuture()) {
-            throw new InvalidArgumentException(
+            throw new InvalidPollInput(
+                'polls.refusals.qualifying_date_future',
                 'A qualifying date may not be in the future: the Electorate is drawn from the '
                 .'membership log as it stood then, so a future date could never be resolved '
                 .'without a scheduled job.'
@@ -719,7 +724,8 @@ class VotingService implements CircleServiceContract
     protected function guardAmendable(Poll $poll): void
     {
         if (! $poll->isAmendable()) {
-            throw new RuntimeException(
+            throw new PollRefusal(
+                'polls.actions.not_amendable',
                 "Poll [{$poll->getKey()}] already has responses and can no longer be amended: changing "
                 .'the ballot would record people as having voted on something they never saw. Cancel it '
                 .'and publish a replacement instead.'
@@ -738,7 +744,8 @@ class VotingService implements CircleServiceContract
     protected function guardWindow(?Carbon $opensAt, ?Carbon $closesAt): void
     {
         if ($opensAt !== null && $closesAt !== null && $closesAt->lessThanOrEqualTo($opensAt)) {
-            throw new InvalidArgumentException(
+            throw new InvalidPollInput(
+                'polls.poll.closes_before_opens',
                 'A poll cannot close before it opens: '
                 ."closing {$closesAt->toDateTimeString()} is not after opening {$opensAt->toDateTimeString()}."
             );
@@ -748,7 +755,8 @@ class VotingService implements CircleServiceContract
     protected function guardPairing(PollResponseShape $shape, TallyMethod $method): void
     {
         if (! $shape->allows($method)) {
-            throw new InvalidArgumentException(
+            throw new InvalidPollInput(
+                'polls.refusals.tally_shape_mismatch',
                 "Tally method [{$method->value}] is not legal for response shape [{$shape->value}]."
             );
         }
@@ -757,11 +765,11 @@ class VotingService implements CircleServiceContract
     protected function guardRatingScale(PollResponseShape $shape, ?int $ratingScaleId): void
     {
         if ($shape === PollResponseShape::Rating && $ratingScaleId === null) {
-            throw new InvalidArgumentException('A rating poll needs a rating scale.');
+            throw new InvalidPollInput('polls.refusals.rating_scale_required', 'A rating poll needs a rating scale.');
         }
 
         if ($shape !== PollResponseShape::Rating && $ratingScaleId !== null) {
-            throw new InvalidArgumentException('Only a rating poll may carry a rating scale.');
+            throw new InvalidPollInput('polls.refusals.rating_scale_not_allowed', 'Only a rating poll may carry a rating scale.');
         }
     }
 
@@ -769,7 +777,7 @@ class VotingService implements CircleServiceContract
     protected function guardOptions(array $options): void
     {
         if (count($options) < 2) {
-            throw new InvalidArgumentException('A poll needs at least two options.');
+            throw new InvalidPollInput('polls.poll.min_options', 'A poll needs at least two options.');
         }
     }
 
@@ -787,7 +795,7 @@ class VotingService implements CircleServiceContract
 
         foreach ($marks as $mark) {
             if (! in_array($mark->optionId, $optionIds, true)) {
-                throw new InvalidArgumentException("Option [{$mark->optionId}] is not on this ballot.");
+                throw new InvalidPollInput('polls.refusals.option_not_on_ballot', "Option [{$mark->optionId}] is not on this ballot.");
             }
         }
 
@@ -802,7 +810,7 @@ class VotingService implements CircleServiceContract
     protected function validateSingleChoice(array $marks): array
     {
         if (count($marks) !== 1) {
-            throw new InvalidArgumentException('A single-choice response must mark exactly one option.');
+            throw new InvalidPollInput('polls.refusals.single_choice_one', 'A single-choice response must mark exactly one option.');
         }
 
         return [new Mark($marks[0]->optionId)];
@@ -812,23 +820,23 @@ class VotingService implements CircleServiceContract
     protected function validateRanking(PollQuestion $question, array $marks, array $optionIds): array
     {
         if ($marks === []) {
-            throw new InvalidArgumentException('A ranked response must rank at least one option.');
+            throw new InvalidPollInput('polls.refusals.rank_at_least_one', 'A ranked response must rank at least one option.');
         }
 
         $ranks = array_map(fn (Mark $m): ?int => $m->rank, $marks);
 
         if (in_array(null, $ranks, true) || count(array_unique($ranks)) !== count($ranks)) {
-            throw new InvalidArgumentException('Every ranked option needs its own distinct rank.');
+            throw new InvalidPollInput('polls.refusals.rank_distinct', 'Every ranked option needs its own distinct rank.');
         }
 
         sort($ranks);
 
         if ($ranks !== range(1, count($ranks))) {
-            throw new InvalidArgumentException('Ranks must run 1..N with no gaps.');
+            throw new InvalidPollInput('polls.refusals.rank_no_gaps', 'Ranks must run 1..N with no gaps.');
         }
 
         if ($question->require_full_ranking && count($marks) !== count($optionIds)) {
-            throw new InvalidArgumentException('This poll requires every option to be ranked.');
+            throw new InvalidPollInput('polls.refusals.rank_all_required', 'This poll requires every option to be ranked.');
         }
 
         return array_map(fn (Mark $m): Mark => new Mark($m->optionId, rank: $m->rank), $marks);
@@ -838,14 +846,14 @@ class VotingService implements CircleServiceContract
     protected function validateRating(PollQuestion $question, array $marks, array $optionIds): array
     {
         if (count($marks) !== count($optionIds)) {
-            throw new InvalidArgumentException('A rating response must score every option.');
+            throw new InvalidPollInput('polls.refusals.rate_every_option', 'A rating response must score every option.');
         }
 
         $pointIds = $question->ratingScale?->points()->pluck('id')->all() ?? [];
 
         foreach ($marks as $mark) {
             if ($mark->ratingScalePointId === null || ! in_array($mark->ratingScalePointId, $pointIds, true)) {
-                throw new InvalidArgumentException("Each option must be scored with a point from this poll's rating scale.");
+                throw new InvalidPollInput('polls.refusals.rate_scale_point', "Each option must be scored with a point from this poll's rating scale.");
             }
         }
 
