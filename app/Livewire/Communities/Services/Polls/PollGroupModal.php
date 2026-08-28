@@ -61,8 +61,23 @@ class PollGroupModal extends ModalComponent
 
         $slugSource = $this->slug !== '' ? $this->slug : $this->name;
 
+        // Str::slug can legitimately yield NOTHING — a name in a non-Latin
+        // script, or one made only of punctuation. Both group routes bind by
+        // slug, so storing an empty one would make this group unreachable and
+        // throw while rendering the whole Polls tab. Ask for something usable
+        // instead, exactly as ForumGroupModal does.
+        if ($this->service()->slugFor($slugSource) === '') {
+            $this->addError('slug', __('polls.group.slug_required'));
+
+            return;
+        }
+
         if ($this->service()->groupSlugTaken($circle, $slugSource, $this->groupId)) {
-            $this->addError('name', __('polls.group.slug_taken'));
+            // Against the field the person actually typed: the URL slug if they
+            // supplied one, else the name it was derived from. Reporting a
+            // typed-slug clash under Name sends them off renaming a name that
+            // is not the problem.
+            $this->addError($this->slug !== '' ? 'slug' : 'name', __('polls.group.slug_taken'));
 
             return;
         }

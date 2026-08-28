@@ -16,6 +16,7 @@ use App\Models\Polls\PollRatingScalePoint;
 use App\Models\User;
 use App\Services\Circles\VotingService;
 use App\Support\Polls\Mark;
+use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
@@ -199,6 +200,104 @@ class VotingServiceTest extends TestCase
         $this->assertFalse($this->group->fresh()->isArchived());
     }
 
+    /**
+     * Slugs are unique per CIRCLE, not globally — two communities may each run
+     * a group called News. The unique index is (circle_id, slug).
+     */
+    public function test_group_slug_uniqueness_is_scoped_to_the_circle(): void
+    {
+        $otherId = DB::table('circles')->insertGetId([
+            'circleable_type' => CommunityType::LocationCommunity->value,
+            'name' => 'Ward 8', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $other = Circle::findOrFail($otherId);
+
+        $this->service->createGroup($this->circle, $this->organiser, ['name' => 'News']);
+
+        $this->assertTrue($this->service->groupSlugTaken($this->circle, 'News'));
+        $this->assertFalse($this->service->groupSlugTaken($this->circle, 'Events'));
+        $this->assertFalse($this->service->groupSlugTaken($other, 'News'), 'same name, different circle');
+    }
+
+    /**
+     * Editing a group must not report its OWN slug as taken, or saving a group
+     * without renaming it would fail the collision check.
+     */
+    public function test_a_group_being_edited_does_not_collide_with_itself(): void
+    {
+        $group = $this->service->createGroup($this->circle, $this->organiser, ['name' => 'News']);
+
+        $this->assertTrue($this->service->groupSlugTaken($this->circle, 'News'));
+        $this->assertFalse($this->service->groupSlugTaken($this->circle, 'News', $group->getKey()));
+        $this->assertFalse($this->service->groupSlugExists($this->circle, 'news', $group->getKey()));
+
+        // Another group's slug is still taken, ignoring this one.
+        $this->service->createGroup($this->circle, $this->organiser, ['name' => 'Events']);
+        $this->assertTrue($this->service->groupSlugTaken($this->circle, 'Events', $group->getKey()));
+    }
+
+    /**
+     * slugFor MAY return an empty string: Str::slug transliterates to ASCII and
+     * legitimately yields nothing for a name in a non-Latin script or one made
+     * only of punctuation. Every caller has to reject that rather than store
+     * it, because both group routes bind by slug — an empty one is unroutable
+     * and building the link throws, taking the whole Polls tab with it. The
+     * rejection lives in the compose form, where it can be fixed
+     * (.scratch/polls/issues/13).
+     */
+    public function test_slug_derivation_can_yield_nothing_which_callers_must_reject(): void
+    {
+        $this->assertSame('2027-budget', $this->service->slugFor('2027 Budget'));
+        $this->assertSame('agua-e-saude', $this->service->slugFor('Água e Saúde'));
+
+        foreach (['中文名字', '???', '...', '   '] as $name) {
+            $this->assertSame('', $this->service->slugFor($name), "[$name] should yield no slug");
+        }
+
+        // Proof the rejection matters: an empty slug cannot even be linked.
+        $this->expectException(UrlGenerationException::class);
+        route('communities.polls.show', ['circle' => $this->circle, 'pollGroup' => '']);
+    }
+
+    /**
+     * The compose form pre-checks with slugFor() and answers with a friendly
+     * message; the SERVICE refuses outright. Belt and braces on purpose: a
+     * caller that is not a compose form — a seeder, an importer, a Filament
+     * action — must fail loudly here rather than quietly store a group whose
+     * own page throws while rendering the whole Polls tab.
+     */
+    public function test_the_service_refuses_a_group_slug_that_derives_to_nothing(): void
+    {
+        $good = $this->service->createGroup($this->circle, $this->organiser, ['name' => 'Budget']);
+        $before = $this->circle->pollGroups()->orderBy('id')->pluck('name')->all();
+
+        $attempts = [
+            'create, derived from the name' => fn () => $this->service->createGroup(
+                $this->circle,
+                $this->organiser,
+                ['name' => '中文名字'],
+            ),
+            'create, explicit slug' => fn () => $this->service->createGroup(
+                $this->circle,
+                $this->organiser,
+                ['name' => 'Budget Talk', 'slug' => '???'],
+            ),
+            'update, explicit slug' => fn () => $this->service->updateGroup($good, ['slug' => '...']),
+        ];
+
+        foreach ($attempts as $case => $attempt) {
+            try {
+                $attempt();
+                $this->fail("[$case] stored an unroutable empty slug");
+            } catch (InvalidArgumentException $e) {
+                $this->assertStringContainsString('no usable slug', $e->getMessage(), $case);
+            }
+        }
+
+        // The refusal is total: nothing new written, the good group untouched.
+        $this->assertSame($before, $this->circle->pollGroups()->orderBy('id')->pluck('name')->all());
+        $this->assertSame('budget', $good->fresh()->slug);
+    }
     public function test_reordering_rewrites_positions_as_a_clean_sequence(): void
     {
         // Every group starts at position 0, so a scheme that only swapped

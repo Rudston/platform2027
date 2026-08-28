@@ -15,6 +15,7 @@ use App\Models\Forums\ForumGroup;
 use App\Models\User;
 use App\Services\Circles\ForumService;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
@@ -119,6 +120,106 @@ class ForumGroupsTest extends TestCase
         $this->assertFalse($service->slugTaken($other, 'News')); // same name, different circle
     }
 
+    /**
+     * Editing a group must not report its OWN slug as taken, or saving without
+     * renaming would fail the collision check.
+     */
+    public function test_a_group_being_edited_does_not_collide_with_itself(): void
+    {
+        $service = app(ForumService::class);
+        $circle = $this->makeCircle();
+        $group = $service->createGroup($circle, User::factory()->create(), ['name' => 'News']);
+
+        $this->assertTrue($service->slugTaken($circle, 'News'));
+        $this->assertFalse($service->slugTaken($circle, 'News', $group->getKey()));
+        $this->assertFalse($service->slugExists($circle, 'news', $group->getKey()));
+
+        $service->createGroup($circle, User::factory()->create(), ['name' => 'Events']);
+        $this->assertTrue($service->slugTaken($circle, 'Events', $group->getKey()));
+    }
+
+    /**
+     * A name that yields no slug is REFUSED, not stored: the route binds by
+     * slug, so an empty one is unroutable and would take the whole Forums tab
+     * down. This behaviour already existed here — pinned now because the shared
+     * concern makes it tempting to "fix" slugFor into never returning empty,
+     * which would silently turn this message into a generated URL
+     * (.scratch/polls/issues/13).
+     */
+    public function test_a_group_name_that_yields_no_slug_is_refused_with_a_message(): void
+    {
+        $circle = $this->makeCircle();
+        $admin = User::factory()->create();
+        $this->grantGlobalRole($admin, 'admin');
+        $this->actingAs($admin->fresh());
+
+        foreach (['中文名字', '???'] as $name) {
+            Livewire::test(ForumGroupModal::class, ['circleId' => $circle->id])
+                ->set('name', $name)
+                ->call('save')
+                ->assertHasErrors('slug');
+        }
+
+        $this->assertSame(0, ForumGroup::where('circle_id', $circle->id)->count());
+
+        // The escape hatch: supply the URL slug yourself and the name is free.
+        Livewire::test(ForumGroupModal::class, ['circleId' => $circle->id])
+            ->set('name', '中文名字')
+            ->set('slug', 'budget-talk')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('forum_groups', ['circle_id' => $circle->id, 'slug' => 'budget-talk']);
+    }
+
+    /**
+     * The same refusal on the forums side, across all three writes. The modals
+     * pre-check and say so nicely; the service is the belt to those braces, so
+     * a non-modal caller cannot store an unroutable slug (see
+     * DerivesScopedSlugs::requireSlugFor).
+     */
+    public function test_the_service_refuses_a_slug_that_derives_to_nothing(): void
+    {
+        $service = app(ForumService::class);
+        $circle = $this->makeCircle();
+        $creator = User::factory()->create();
+        $good = $service->createGroup($circle, $creator, ['name' => 'News']);
+
+        $attempts = [
+            'group create, derived from the name' => fn () => $service->createGroup(
+                $circle,
+                $creator,
+                ['name' => '中文名字'],
+            ),
+            'group create, explicit slug' => fn () => $service->createGroup(
+                $circle,
+                $creator,
+                ['name' => 'Budget Talk', 'slug' => '???'],
+            ),
+            'group update, explicit slug' => fn () => $service->updateGroup(
+                $good,
+                ['name' => 'News', 'slug' => '...'],
+            ),
+            'discussion create, derived from the title' => fn () => $service->createDiscussion(
+                $good,
+                $creator,
+                ['title' => '中文名字'],
+            ),
+        ];
+
+        foreach ($attempts as $case => $attempt) {
+            try {
+                $attempt();
+                $this->fail("[$case] stored an unroutable empty slug");
+            } catch (InvalidArgumentException $e) {
+                $this->assertStringContainsString('no usable slug', $e->getMessage(), $case);
+            }
+        }
+
+        $this->assertSame(['News'], ForumGroup::where('circle_id', $circle->id)->pluck('name')->all());
+        $this->assertSame('news', $good->fresh()->slug);
+        $this->assertSame(0, ForumDiscussion::where('forum_group_id', $good->id)->count());
+    }
     public function test_deactivate_group(): void
     {
         $circle = $this->makeCircle();

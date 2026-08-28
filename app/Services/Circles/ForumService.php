@@ -12,10 +12,12 @@ use App\Enums\Forums\ForumDiscussionStatus;
 use App\Models\Forums\ForumDiscussion;
 use App\Models\Forums\ForumGroup;
 use App\Models\User;
-use Illuminate\Support\Str;
+use App\Services\Circles\Concerns\DerivesScopedSlugs;
 
 class ForumService implements CircleServiceContract
 {
+    use DerivesScopedSlugs;
+
     public function boot(Circle $circle): void
     {
         //
@@ -51,7 +53,7 @@ class ForumService implements CircleServiceContract
             'created_by' => $creator->getKey(),
             'name' => $data['name'],
             // Explicit slug when given, else derived from the name.
-            'slug' => $this->slugFor($data['slug'] ?? $data['name']),
+            'slug' => $this->requireSlugFor($data['slug'] ?? $data['name']),
             'description' => $data['description'] ?? null,
             'visibility' => $data['visibility'] ?? ForumGroupVisibility::Public->value,
             'status' => ForumGroupStatus::Active->value,
@@ -65,7 +67,7 @@ class ForumService implements CircleServiceContract
     {
         $group->update([
             'name' => $data['name'],
-            'slug' => isset($data['slug']) ? $this->slugFor($data['slug']) : $group->slug,
+            'slug' => isset($data['slug']) ? $this->requireSlugFor($data['slug']) : $group->slug,
             'description' => $data['description'] ?? null,
             'visibility' => $data['visibility'] ?? $group->visibility->value,
         ]);
@@ -91,7 +93,7 @@ class ForumService implements CircleServiceContract
         return $group->discussions()->create([
             'created_by' => $creator->getKey(),
             'title' => $data['title'],
-            'slug' => $this->slugFor($data['slug'] ?? $data['title']),
+            'slug' => $this->requireSlugFor($data['slug'] ?? $data['title']),
             'content' => $data['content'] ?? '',
             'status' => ForumDiscussionStatus::Active->value,
             'moderation_status' => ForumDiscussionModerationStatus::Approved->value,
@@ -114,16 +116,7 @@ class ForumService implements CircleServiceContract
     /** Whether a discussion slug already exists in a group (optionally ignoring one). */
     public function discussionSlugExists(ForumGroup $group, string $slug, ?int $ignoreId = null): bool
     {
-        return $group->discussions()
-            ->where('slug', $slug)
-            ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists();
-    }
-
-    /** Slug derived from a group name. */
-    public function slugFor(string $name): string
-    {
-        return Str::slug($name);
+        return $this->slugExistsAmong($group->discussions(), $slug, $ignoreId);
     }
 
     /** Whether a name's slug already exists in this circle (optionally ignoring one group). */
@@ -135,9 +128,6 @@ class ForumService implements CircleServiceContract
     /** Whether an exact slug already exists in this circle (optionally ignoring one group). */
     public function slugExists(Circle $circle, string $slug, ?int $ignoreId = null): bool
     {
-        return $circle->forumGroups()
-            ->where('slug', $slug)
-            ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists();
+        return $this->slugExistsAmong($circle->forumGroups(), $slug, $ignoreId);
     }
 }

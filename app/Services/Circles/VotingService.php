@@ -15,13 +15,13 @@ use App\Models\Polls\PollGroup;
 use App\Models\Polls\PollQuestion;
 use App\Models\Polls\PollResponse;
 use App\Models\User;
+use App\Services\Circles\Concerns\DerivesScopedSlugs;
 use App\Support\Polls\Ballot;
 use App\Support\Polls\Mark;
 use App\Support\Polls\PollResult;
 use App\Support\Polls\Tally;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -40,6 +40,8 @@ use RuntimeException;
  */
 class VotingService implements CircleServiceContract
 {
+    use DerivesScopedSlugs;
+
     public function boot(Circle $circle): void
     {
         //
@@ -72,7 +74,7 @@ class VotingService implements CircleServiceContract
         return $circle->pollGroups()->create([
             'created_by' => $creator->getKey(),
             'name' => $data['name'],
-            'slug' => $this->slugFor($data['slug'] ?? $data['name']),
+            'slug' => $this->requireSlugFor($data['slug'] ?? $data['name']),
             'description' => $data['description'] ?? null,
             'position' => $data['position'] ?? 0,
         ]);
@@ -86,10 +88,12 @@ class VotingService implements CircleServiceContract
             // `isset`, so an explicit null keeps the existing slug rather than
             // clearing it. Deliberate, unlike description: both routes bind a
             // group BY slug, so a null one makes its page unreachable and
-            // throws while rendering the whole tab. Nothing sends null today
-            // (PollGroupModal falls back to the name); whether the column
-            // should be NOT NULL is raised by ticket 13.
-            'slug' => isset($data['slug']) ? $this->slugFor($data['slug']) : $group->slug,
+            // throws while rendering the whole tab. Nothing sends null
+            // (PollGroupModal falls back to the name), and the column STAYS
+            // nullable by decision — a NOT NULL migration would guard a state
+            // no code produces. The reachable hazard was the EMPTY slug, and
+            // that is rejected in the compose form (see DerivesScopedSlugs).
+            'slug' => isset($data['slug']) ? $this->requireSlugFor($data['slug']) : $group->slug,
             // Nullable, and PollGroupModal sends an explicit null for an
             // emptied field — with `??` a description was typeable but never
             // removable.
@@ -861,18 +865,10 @@ class VotingService implements CircleServiceContract
         }
     }
 
-    public function slugFor(string $name): string
-    {
-        return Str::slug($name);
-    }
-
     /** Whether a group slug already exists in this circle (optionally ignoring one). */
     public function groupSlugExists(Circle $circle, string $slug, ?int $ignoreId = null): bool
     {
-        return $circle->pollGroups()
-            ->where('slug', $slug)
-            ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists();
+        return $this->slugExistsAmong($circle->pollGroups(), $slug, $ignoreId);
     }
 
     /** Whether a name's slug is already taken in this circle. */

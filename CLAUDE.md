@@ -236,6 +236,45 @@ translation. `key` is the stable handle and never changes; the label may.
   circles (chunkById, idempotent, adds only; skips non-implementers; reports a
   count). Manual/occasional; NOT scheduled.
 
+### DerivesScopedSlugs (`app/Services/Circles/Concerns/`)
+
+The slug rule shared by `ForumService` and `VotingService` — one home, since
+both had it line for line.
+- **`slugFor(string $name): string`** — MAY RETURN AN EMPTY STRING, and every
+  caller MUST reject that rather than store it. `Str::slug` transliterates to
+  ASCII and legitimately comes back empty for a non-Latin name (`中文名字`) or one
+  made only of punctuation (`???`); every group route binds by slug, so an empty
+  one is unroutable and building the link throws `UrlGenerationException`,
+  taking the whole service tab down. The rejection lives in the COMPOSE FORM —
+  `ForumGroupModal`, `ForumDiscussionModal` and `PollGroupModal` each add a
+  `slug` error and return — because that is where the person can fix it, by
+  giving a usable name or typing the URL slug themselves. A generated fallback
+  (`g-` + a hash of the name) was tried and REVERTED: it hands someone a
+  meaningless URL they never chose, and silences a message the forum modals
+  already had.
+- **`requireSlugFor(string $name): string`** — the slug to STORE. Derives, and
+  throws `InvalidArgumentException` on an empty result. EVERY write goes through
+  this, never `slugFor()` directly: `createGroup`/`updateGroup` on both services
+  and `createDiscussion`. The compose forms still pre-check with `slugFor()` and
+  answer with a friendly translated message, so nobody reaches the exception —
+  it is there so a caller that is NOT a compose form (a seeder, an importer, a
+  Filament action) fails loudly at the insert instead of quietly writing a
+  record whose own page throws. `slugFor()` stays the read/ask half, used by the
+  forms' pre-check and by `slugTaken`/`groupSlugTaken`, which must answer rather
+  than throw.
+- **`slugExistsAmong(Relation $siblings, string $slug, ?int $ignoreId)`** —
+  uniqueness is per CIRCLE, never global (the index is `(circle_id, slug)`), and
+  `$ignoreId` is the record being edited, without which saving an unrenamed
+  group would collide with itself.
+- The services keep their own public names (`groupSlugTaken`,
+  `discussionSlugExists`) because those read in the language of what they own;
+  what is shared is the mechanism, not the vocabulary.
+- **`forum_groups.slug` and `poll_groups.slug` stay NULLABLE by decision** — the
+  services always derive one, so the app cannot write null, and a NOT NULL
+  migration on two tables would guard a state nothing produces. The reachable
+  hazard was the EMPTY slug above, which is why the fix went into the compose
+  forms instead.
+
 ### CoordinateData::nearest(float $lat, float $lng): ?static
 Nearest-neighbour lookup:
 1. Bounding box ±0.5° + squared Euclidean ORDER BY LIMIT 1
@@ -426,7 +465,9 @@ forums/` — the per-service grouping convention (each service keeps its files
 together). `ForumService` (the handler) stays under `App\Services\Circles\`.
 - **ForumService** (the `CircleServiceContract` handler) holds the writes:
   `createGroup`/`updateGroup` (accept an optional explicit `slug`, else derived
-  from name), `deactivateGroup`, `slugFor`, `slugExists`/`slugTaken`.
+  from name — and REFUSE a slug that derives to nothing), `deactivateGroup`,
+  `slugFor`, `slugExists`/`slugTaken` — the last three composed from the shared
+  `DerivesScopedSlugs` concern (see above).
 - **ForumServiceContainer** (the Forums tab): stats (Total Groups, Participants
   [hardcoded 0 — later], real Total Discussions — all scoped to `viewableGroups`),
   search + status filter (default = active only), group grid. Create/Manage/
@@ -1643,6 +1684,11 @@ On failure: silent.
   was removed (ADR-0004). Attribution as a per-poll choice needs its own decision
 - Passing a Poll to `PollResponse::isChoiceVisibleTo()` — it takes only the
   viewer, on purpose: there is no condition to consult
+- Writing a slug with `DerivesScopedSlugs::slugFor()` — it returns `''` for a
+  non-Latin or punctuation-only name, and an empty slug is unroutable. Writes
+  use `requireSlugFor()` (throws); `slugFor()` is for asking, in the compose
+  forms' pre-check and the `*SlugTaken` lookups. Never "fix" `slugFor` into
+  never returning empty (see DerivesScopedSlugs)
 - Reading `ratingScalePoint` off each response item — eager-load
   `items.ratingScalePoint` in `VotingService::tally()`. The tally runs on every
   view of an open poll and again at freeze, so a per-item read is one query per

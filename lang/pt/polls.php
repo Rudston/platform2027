@@ -198,5 +198,6 @@ return [
         'create_title' => 'Create Poll Group',
         'edit_title' => 'Edit Poll Group',
         'slug_taken' => 'A group with a similar name already exists in this community.',
+        'slug_required' => 'Please provide a name or URL slug.',
     ],
 ];

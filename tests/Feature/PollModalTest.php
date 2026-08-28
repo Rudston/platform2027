@@ -118,6 +118,40 @@ class PollModalTest extends TestCase
             ->assertDispatched('closeModal');
     }
 
+    /**
+     * slugFor may legitimately return NOTHING — a name in a non-Latin script,
+     * or one made only of punctuation — and the group route binds by slug, so
+     * storing an empty one would make the group unreachable and throw while
+     * rendering the whole Polls tab. The modal refuses it and says so, which is
+     * where the person can actually fix it (.scratch/polls/issues/13).
+     */
+    public function test_a_group_name_that_yields_no_slug_is_refused_with_a_message(): void
+    {
+        $this->actingAs($this->admin());
+
+        foreach (['中文名字', '???'] as $name) {
+            Livewire::test(PollGroupModal::class, ['circleId' => $this->circle->id])
+                ->set('name', $name)
+                ->call('save')
+                ->assertHasErrors('slug')
+                ->assertNotDispatched('poll-groups-changed');
+        }
+
+        $this->assertSame(0, $this->circle->pollGroups()->count());
+
+        // The escape hatch: supply the URL slug yourself and the name is free.
+        Livewire::test(PollGroupModal::class, ['circleId' => $this->circle->id])
+            ->set('name', '中文名字')
+            ->set('slug', 'budget-talk')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('poll_groups', [
+            'circle_id' => $this->circle->id,
+            'slug' => 'budget-talk',
+        ]);
+    }
+
     public function test_a_typed_opening_time_is_read_as_local_wall_clock_not_utc(): void
     {
         // The reported bug: an organiser in SAST set the poll to open at 12:21,
