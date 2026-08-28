@@ -50,6 +50,7 @@ class ForumGroupsTest extends TestCase
 
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
+        (include database_path('migrations/2026_08_28_000001_add_unique_slug_index_to_forum_discussions_table.php'))->up();
 
         // The overview eager-loads group tags, so the tagging tables must exist.
         Schema::create('themes', function ($t): void {

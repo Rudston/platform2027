@@ -67,6 +67,7 @@ class ThemeTaggingTest extends TestCase
 
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
+        (include database_path('migrations/2026_08_28_000001_add_unique_slug_index_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_17_000001_create_taggables_table.php'))->up();
         (include database_path('migrations/2026_07_17_000002_create_theme_suggestions_table.php'))->up();
 

@@ -16,6 +16,7 @@ use App\Models\Forums\ForumGroup;
 use App\Models\Moderation\CommentModerationRecord;
 use App\Models\User;
 use App\Services\Circles\ForumService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -50,6 +51,7 @@ class ForumDiscussionsTest extends TestCase
         (include database_path('migrations/2026_07_16_000001_create_circle_memberships_table.php'))->up();
         (include database_path('migrations/2026_07_16_000002_create_forum_groups_table.php'))->up();
         (include database_path('migrations/2026_07_16_000003_create_forum_discussions_table.php'))->up();
+        (include database_path('migrations/2026_08_28_000001_add_unique_slug_index_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000001_add_content_edited_at_to_forum_discussions_table.php'))->up();
         (include database_path('migrations/2026_07_21_000002_create_comments_table.php'))->up();
         (include database_path('migrations/2026_07_21_000005_add_delete_edit_columns_to_comments_table.php'))->up();
@@ -198,6 +200,48 @@ class ForumDiscussionsTest extends TestCase
         $this->assertSame(1, ForumDiscussion::where('forum_group_id', $group->id)->count());
     }
 
+    /**
+     * The database is the backstop under discussionSlugExists().
+     *
+     * The modal check above is the friendly path, but it runs read-then-write:
+     * two people posting the same title in one group at the same moment both
+     * saw "free" and both inserted, and because the route binds by slug one of
+     * the two discussions then became permanently unreachable. Nothing in the
+     * UI showed it. The index scoped to the GROUP is what makes that race lose
+     * at the database instead (.scratch/forums/issues/01).
+     *
+     * Written with the query builder on purpose: it has to bypass the service
+     * to test the constraint rather than the check in front of it.
+     */
+    public function test_a_duplicate_discussion_slug_is_refused_by_the_database(): void
+    {
+        $circle = $this->makeCircle();
+        $creator = User::factory()->create();
+        $group = $this->makeGroup($circle, $creator);
+        $other = $this->makeGroup($circle, $creator);
+
+        $row = fn (int $groupId) => [
+            'forum_group_id' => $groupId,
+            'created_by' => $creator->id,
+            'title' => 'Welcome',
+            'content' => 'Body',
+            'slug' => 'welcome',
+            'status' => 'active',
+            'moderation_status' => 'approved',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        DB::table('forum_discussions')->insert($row($group->id));
+
+        // Same slug in ANOTHER group is fine — uniqueness is per group, not global.
+        DB::table('forum_discussions')->insert($row($other->id));
+        $this->assertSame(2, DB::table('forum_discussions')->where('slug', 'welcome')->count());
+
+        // Same slug in the SAME group is not.
+        $this->expectException(QueryException::class);
+        DB::table('forum_discussions')->insert($row($group->id));
+    }
     public function test_modal_forbidden_for_non_creator(): void
     {
         $circle = $this->makeCircle();

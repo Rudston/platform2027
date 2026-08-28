@@ -269,9 +269,23 @@ both had it line for line.
 - The services keep their own public names (`groupSlugTaken`,
   `discussionSlugExists`) because those read in the language of what they own;
   what is shared is the mechanism, not the vocabulary.
-- **`forum_groups.slug` and `poll_groups.slug` stay NULLABLE by decision** — the
+- **A slug uniqueness check needs an index under it.** `forum_groups`
+  `(circle_id, slug)`, `poll_groups` `(circle_id, slug)`, `forum_discussions`
+  `(forum_group_id, slug)` — each scoped to what the matching `*SlugExists`
+  method queries. The PHP check is read-then-write, so without the index two
+  simultaneous saves both pass it and both insert; every one of these routes
+  binds by slug, so the loser becomes unreachable with nothing shown in the UI.
+  `forum_discussions` was missing its index until `2026_08_28_000001`
+  (`.scratch/forums/issues/01`).
+  **`deleted_at` is deliberately NOT in these indexes** even though all three
+  tables soft-delete: a trashed record keeps its slug (and a restored one keeps
+  a valid URL), and adding the column would DISABLE the constraint — every live
+  row has `deleted_at` NULL, and MySQL never treats a NULL-bearing tuple as
+  equal to another, so duplicates among live rows would all be accepted.
+- **`forum_groups.slug`, `poll_groups.slug` and `forum_discussions.slug` stay
+  NULLABLE by decision** — the
   services always derive one, so the app cannot write null, and a NOT NULL
-  migration on two tables would guard a state nothing produces. The reachable
+  migration on all three would guard a state nothing produces. The reachable
   hazard was the EMPTY slug above, which is why the fix went into the compose
   forms instead.
 
@@ -431,7 +445,9 @@ deferred.
   deletes. **Unique (circle_id, slug)** — slugs are per-circle, NOT global.
   belongsTo Circle + creator (User); hasMany discussions.
 - **forum_discussions** (`ForumDiscussion`): `forum_group_id` (FK cascade),
-  `created_by` (nullable FK), `title`, `content`, `slug`, `is_pinned`,
+  `created_by` (nullable FK), `title`, `content`, `slug` (nullable, **unique
+  (forum_group_id, slug)** — per GROUP, never global; `2026_08_28_000001`),
+  `is_pinned`,
   `is_locked`, `status`, `moderation_status`, `moderation_reason`, soft deletes,
   FULLTEXT(title, content) **MySQL-only** (guarded — sqlite tests skip it). No UI
   reads/writes it yet; it exists so the discussion-count stats are real now.
